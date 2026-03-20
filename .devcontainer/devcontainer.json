@@ -1,0 +1,22 @@
+{
+  "name": "GhostDesk",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "ghostdesk",
+  "workspaceFolder": "/workspaces/ghostdesk",
+  "remoteUser": "vscode",
+  "forwardPorts": [3000, 5900, 6080],
+  "portsAttributes": {
+    "3000": { "label": "MCP Server" },
+    "5900": { "label": "VNC" },
+    "6080": { "label": "noVNC (Desktop)" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff"
+      ]
+    }
+  },
+  "postCreateCommand": "uv sync"
+}
