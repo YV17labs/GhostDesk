@@ -1,11 +1,15 @@
 # Copyright (c) 2026 YV17 — MIT License
 """GhostDesk — MCP server entry point."""
 
+import logging
 import os
+import time
 
 from mcp.server.fastmcp import FastMCP
 
 from ghostdesk.tools import keyboard, mouse, screenshot, shell
+
+logger = logging.getLogger("ghostdesk")
 
 _INSTRUCTIONS = """
 You control a virtual Linux desktop (X11, display :99, resolution 1280×800).
@@ -51,9 +55,34 @@ mouse.register(mcp)
 keyboard.register(mcp)
 shell.register(mcp)
 
+# Wrap call_tool to log every tool invocation with name, args, and duration.
+_original_call_tool = mcp.call_tool
+
+
+async def _logged_call_tool(name: str, arguments: dict) -> object:
+    args_summary = ", ".join(f"{k}={v!r}" for k, v in arguments.items())
+    t0 = time.monotonic()
+    try:
+        result = await _original_call_tool(name, arguments)
+        elapsed = time.monotonic() - t0
+        logger.info("%s(%s) → OK (%.1fs)", name, args_summary, elapsed)
+        return result
+    except Exception:
+        elapsed = time.monotonic() - t0
+        logger.exception("%s(%s) → ERROR (%.1fs)", name, args_summary, elapsed)
+        raise
+
+
+mcp.call_tool = _logged_call_tool  # type: ignore[method-assign]
+
 
 def main() -> None:
     """Start the MCP server with Streamable HTTP transport."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s  %(levelname)-5s  %(name)s  %(message)s",
+        datefmt="%H:%M:%S",
+    )
     mcp.run(transport="streamable-http")
 
 

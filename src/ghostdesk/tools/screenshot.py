@@ -1,6 +1,7 @@
 # Copyright (c) 2026 YV17 — MIT License
 """Screen capture tools — with cursor overlay and window metadata."""
 
+import asyncio
 import os
 import tempfile
 
@@ -30,11 +31,13 @@ def register(mcp: FastMCP) -> None:
         Call with no arguments for a full-screen capture, or pass x, y,
         width, and height to capture a specific region.
         """
+        region = all(v is not None for v in (x, y, width, height))
+
         fd, path = tempfile.mkstemp(suffix=".png")
         os.close(fd)
         try:
             cmd = ["maim", "--format=png"]
-            if all(v is not None for v in (x, y, width, height)):
+            if region:
                 cmd += ["-g", f"{width}x{height}+{x}+{y}"]
             cmd.append(path)
             await run(cmd)
@@ -42,16 +45,16 @@ def register(mcp: FastMCP) -> None:
             with open(path, "rb") as f:
                 raw_png = f.read()
 
-            # Draw cursor on the image
-            cx, cy = await get_cursor_position()
-            if all(v is not None for v in (x, y, width, height)):
-                # Adjust cursor coords relative to the captured region
+            # Cursor position and window metadata in parallel
+            (cx, cy), win_info = await asyncio.gather(
+                get_cursor_position(), get_window_info(),
+            )
+
+            if region:
                 cx -= x  # type: ignore[operator]
                 cy -= y  # type: ignore[operator]
-            png_with_cursor = draw_cursor(raw_png, cx, cy)
 
-            # Gather window metadata (best-effort)
-            win_info = await get_window_info()
+            png_with_cursor = draw_cursor(raw_png, cx, cy)
 
             return [
                 Image(data=png_with_cursor, format="png"),
@@ -62,8 +65,10 @@ def register(mcp: FastMCP) -> None:
                 },
             ]
         finally:
-            if os.path.exists(path):
+            try:
                 os.unlink(path)
+            except FileNotFoundError:
+                pass
 
     @mcp.tool()
     async def get_screen_size() -> dict[str, int]:

@@ -19,8 +19,7 @@ def draw_cursor(
     current cursor position regardless of background.
     """
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
+    draw = ImageDraw.Draw(img)
 
     half = size // 2
 
@@ -40,7 +39,7 @@ def draw_cursor(
         fill=color,
     )
 
-    result = Image.alpha_composite(img, overlay).convert("RGB")
+    result = img.convert("RGB")
     buf = io.BytesIO()
     result.save(buf, format="PNG")
     return buf.getvalue()
