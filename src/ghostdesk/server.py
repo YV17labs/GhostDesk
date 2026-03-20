@@ -7,7 +7,7 @@ import time
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk.tools import keyboard, mouse, screenshot, shell
+from ghostdesk.tools import accessibility, keyboard, mouse, screenshot, shell
 
 logger = logging.getLogger("ghostdesk")
 
@@ -15,26 +15,39 @@ _INSTRUCTIONS = """
 You control a virtual Linux desktop (X11, display :99, resolution 1280×800).
 
 ## Tools
+
+### Accessibility (preferred — fast, no vision needed)
+- list_elements(role?) — list interactive UI elements with names and coordinates.
+- click_element(text, role?) — find an element by name and click it.
+
+### Vision (fallback — when accessibility tree is insufficient)
+- screenshot() — capture the screen with a red crosshair showing cursor position.
+- mouse_click(x, y) — click at exact screen coordinates.
+
+### Input
+- type_text(text) — type in the focused field.
+- press_key(keys) — press a key combination (e.g. "ctrl+a", "Return").
+
+### System
 - exec(command) — run a shell command, returns stdout/stderr/returncode.
 - launch(command) — launch a GUI app (fire-and-forget), returns immediately.
-- screenshot() — capture the screen with a red crosshair showing cursor position.
-- mouse_click(x, y) — click on a screen element.
-- type_text(text) — type in the focused field.
-- press_key(keys) — press a key combination.
 - wait(milliseconds) — pause between actions.
 
 ## Workflow
-1. launch("firefox https://...") — open a website in Firefox
+1. launch("firefox https://...") — open a website
 2. wait(3000) — let the page load
-3. screenshot() — see the screen
-4. mouse_click(x, y) — click on the element you want
-5. screenshot() — verify the result
-6. type_text("...") — type in the focused field
-7. screenshot() — verify
+3. list_elements() — discover what is on screen
+4. click_element("Inbox") — click by name (preferred over coordinates)
+5. list_elements() — verify the result
+6. screenshot() — only if you need to see the visual layout
 
 ## Rules
+- **Prefer list_elements + click_element over screenshot + mouse_click(x, y).**
+  Accessibility tools are faster and more reliable than visual coordinate guessing.
+- Use screenshot() when you need the visual layout, or when the accessibility
+  tree does not expose the element you need.
 - Use launch() for GUI apps (firefox, gedit, vlc...). Use exec() for CLI commands.
-- After every action, take a screenshot to verify the effect.
+- After every action, verify the effect (list_elements or screenshot).
 - If a click has no visible effect, do not retry — scroll or reassess.
 - Install software with exec("sudo apt-get install -y <package>").
 
@@ -54,6 +67,7 @@ screenshot.register(mcp)
 mouse.register(mcp)
 keyboard.register(mcp)
 shell.register(mcp)
+accessibility.register(mcp)
 
 # Wrap call_tool to log every tool invocation with name, args, and duration.
 # FastMCP's _setup_handlers captures a reference to the original call_tool before
@@ -95,11 +109,33 @@ def main() -> None:
     os.environ.setdefault("LC_ALL", "en_US.utf8")
     os.environ.setdefault("LANG", "en_US.utf8")
 
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s  %(levelname)-5s  %(name)s  %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    # Unify log format across all sources (app, MCP SDK's RichHandler, uvicorn).
+    # 1) Replace the RichHandler that FastMCP.__init__ installed on the root logger.
+    # 2) Patch uvicorn's LOGGING_CONFIG so its dictConfig call at startup uses our
+    #    format instead of its own — setting handlers before mcp.run() is futile
+    #    because uvicorn's Config.configure_logging() overwrites them via dictConfig.
+    import uvicorn.config
+
+    LOG_FMT = "%(asctime)s  %(levelname)-5s  %(name)s  %(message)s"
+    LOG_DATEFMT = "%H:%M:%S"
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(LOG_FMT, datefmt=LOG_DATEFMT))
+
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+
+    fmt_cfg = {"fmt": LOG_FMT, "datefmt": LOG_DATEFMT}
+    if "formatters" not in uvicorn.config.LOGGING_CONFIG:
+        logger.warning(
+            "uvicorn.config.LOGGING_CONFIG missing 'formatters' key; "
+            "log format may not be unified across all output"
+        )
+    else:
+        for formatter in uvicorn.config.LOGGING_CONFIG["formatters"].values():
+            formatter.update(fmt_cfg)
+
     mcp.run(transport="streamable-http")
 
 
