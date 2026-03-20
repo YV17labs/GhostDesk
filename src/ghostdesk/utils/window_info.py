@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from ghostdesk.utils.xdotool import run
 
 
@@ -23,23 +25,26 @@ async def get_window_info() -> dict:
     except Exception:
         pass
 
-    # Visible windows
+    # Visible windows — fetch name+geometry in parallel per window
     try:
         wids_raw = await run(["xdotool", "search", "--onlyvisible", "--name", ""])
-        for wid in wids_raw.strip().splitlines():
-            wid = wid.strip()
-            if not wid:
-                continue
+        wids = [w.strip() for w in wids_raw.strip().splitlines() if w.strip()]
+
+        async def _get_window(wid: str) -> dict | None:
             try:
-                name = (await run(["xdotool", "getwindowname", wid])).strip()
+                name, geo_raw = await asyncio.gather(
+                    run(["xdotool", "getwindowname", wid]),
+                    run(["xdotool", "getwindowgeometry", wid]),
+                )
+                name = name.strip()
                 if not name:
-                    continue
-                geo_raw = await run(["xdotool", "getwindowgeometry", wid])
-                # "Window 123\n  Position: 10,20 (screen: 0)\n  Geometry: 800x600"
-                geometry = _parse_geometry(geo_raw)
-                info["windows"].append({"title": name, **geometry})
+                    return None
+                return {"title": name, **_parse_geometry(geo_raw)}
             except Exception:
-                continue
+                return None
+
+        results = await asyncio.gather(*[_get_window(wid) for wid in wids])
+        info["windows"] = [w for w in results if w is not None]
     except Exception:
         pass
 
