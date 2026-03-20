@@ -1,0 +1,31 @@
+[project]
+name = "ghostdesk"
+version = "0.1.0"
+description = "MCP server to control a virtual Linux desktop from an LLM agent"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [
+    { name = "Yoann Vanitou", email = "yvanitou@gmail.com" },
+]
+keywords = ["mcp", "desktop", "automation", "llm"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "mcp[cli]>=1.0",
+    "Pillow>=10.0",
+]
+
+[project.scripts]
+ghostdesk = "ghostdesk.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ghostdesk"]
