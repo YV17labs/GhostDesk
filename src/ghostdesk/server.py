@@ -56,28 +56,45 @@ keyboard.register(mcp)
 shell.register(mcp)
 
 # Wrap call_tool to log every tool invocation with name, args, and duration.
+# FastMCP's _setup_handlers captures a reference to the original call_tool before
+# our registration code runs. Direct assignment (mcp.call_tool = wrapper) doesn't
+# propagate because internal code has already bound the original. We use the
+# lowlevel _mcp_server.call_tool(validate_input=False) decorator to properly hook
+# the internal call path. This is a deliberate trade-off: accessing _mcp_server
+# (private) buys us correct behavior without relying on unstable public APIs.
 _original_call_tool = mcp.call_tool
 
 
 async def _logged_call_tool(name: str, arguments: dict) -> object:
-    args_summary = ", ".join(f"{k}={v!r}" for k, v in arguments.items())
+    # Defer args_summary construction to lazy formatting; avoid materializing large
+    # argument values (e.g., screenshots) unless logging is actually at INFO level.
+    def format_args() -> str:
+        return ", ".join(
+            f"{k}={repr(v)[:80]}"  # Truncate repr to avoid memory churn on large values
+            for k, v in arguments.items()
+        )
+
     t0 = time.monotonic()
     try:
         result = await _original_call_tool(name, arguments)
         elapsed = time.monotonic() - t0
-        logger.info("%s(%s) → OK (%.1fs)", name, args_summary, elapsed)
+        logger.info("%s(%s) → OK (%.1fs)", name, format_args(), elapsed)
         return result
     except Exception:
         elapsed = time.monotonic() - t0
-        logger.exception("%s(%s) → ERROR (%.1fs)", name, args_summary, elapsed)
+        logger.exception("%s(%s) → ERROR (%.1fs)", name, format_args(), elapsed)
         raise
 
 
-mcp.call_tool = _logged_call_tool  # type: ignore[method-assign]
+mcp._mcp_server.call_tool(validate_input=False)(_logged_call_tool)
 
 
 def main() -> None:
     """Start the MCP server with Streamable HTTP transport."""
+    # Ensure UTF-8 locale for proper character input
+    os.environ.setdefault("LC_ALL", "en_US.utf8")
+    os.environ.setdefault("LANG", "en_US.utf8")
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-5s  %(name)s  %(message)s",
