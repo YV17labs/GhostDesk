@@ -50,6 +50,39 @@ All mouse tools accept `humanize` (default `True`): when enabled, the cursor fol
 - `run_command(command, timeout_seconds?)` — execute shell command
 - `open_url(url, new_tab?)` — open URL in Firefox. Reuses the existing browser window via the address bar (Ctrl+L) if Firefox is already running. Set `new_tab=True` to open in a new tab.
 
+## Application Startup & Readiness
+
+### Starting Applications
+`launch(command)` spawns the application **immediately and returns**. It does NOT wait for the application to become responsive.
+
+### Verifying Readiness
+**DO NOT use arbitrary `wait()` calls to check if an application is ready.** This is unreliable across different system speeds and application complexities.
+
+Instead, **actively verify readiness**:
+1. After `launch()`, immediately call `list_elements()` or `screenshot()`
+2. If the command succeeds and returns data → application is ready
+3. If the command times out or fails → application not ready yet; wait briefly (100-500ms) and retry
+
+**Good pattern:**
+```
+launch("firefox https://example.com")
+list_elements()  // If this succeeds, app is ready; proceed with interactions
+```
+
+**Bad pattern:**
+```
+launch("firefox https://example.com")
+wait(3000)  // ✗ Arbitrary guess, unreliable across different systems
+list_elements()
+```
+
+### When to Use `wait()`
+Use `wait()` **only for**:
+- UI animations or transitions (e.g., fade-in, slide-out, modal appearance)
+- Expected application delays (e.g., file save, network request)
+
+**NOT for verifying application startup.** Hardcoded waits break across network speeds, system load, and application complexity. Active verification is always more reliable.
+
 ## Human-like behavior
 
 GhostDesk emulates human interaction patterns to avoid bot detection:
