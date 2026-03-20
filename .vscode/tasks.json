@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start GhostDesk (supervisord)",
+      "type": "shell",
+      "command": "sudo",
+      "args": ["supervisord", "-c", "/etc/supervisor/conf.d/ghostdesk.conf"],
+      "isBackground": false,
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "new"
+      },
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    }
+  ]
+}
