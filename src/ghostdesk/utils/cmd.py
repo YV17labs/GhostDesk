@@ -1,5 +1,5 @@
 # Copyright (c) 2026 YV17 — MIT License
-"""Async wrapper around system commands (xdotool, maim, etc.)."""
+"""Async subprocess runner for system commands (xdotool, maim, xclip, etc.)."""
 
 import asyncio
 

@@ -5,7 +5,7 @@ import asyncio
 import math
 import random
 
-from ghostdesk.utils.xdotool import run
+from ghostdesk.utils.cmd import run
 
 
 def _bezier_point(t: float, p0: tuple, p1: tuple, p2: tuple, p3: tuple) -> tuple[int, int]:
