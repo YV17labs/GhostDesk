@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import asyncio
 
-from ghostdesk.utils.xdotool import run
+from ghostdesk.utils.cmd import run
 
 
 async def get_window_info() -> dict:
