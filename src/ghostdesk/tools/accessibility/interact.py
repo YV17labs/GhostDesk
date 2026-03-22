@@ -10,69 +10,52 @@ from mcp.server.fastmcp import FastMCP
 
 from ghostdesk.tools.accessibility._client import run_atspi
 
+_NOT_FOUND_HINT = "Element not found. Use read_screen() to see available elements."
+
+
+async def _run_or_hint(cmd: str, args: list[str]) -> dict:
+    """Run an AT-SPI command; add a hint if the result contains an error."""
+    try:
+        result = await run_atspi(cmd, args)
+    except RuntimeError as e:
+        return {"error": str(e), "hint": _NOT_FOUND_HINT}
+    if isinstance(result, dict) and "error" in result:
+        result["hint"] = _NOT_FOUND_HINT
+    return result
+
 
 async def set_value(
     text: str,
     value: str,
     role: str | None = None,
 ) -> dict:
-    """Set the text content or numeric value of a UI element.
-
-    For text fields: clears existing content and sets the new value.
-    For sliders/spinbuttons: sets the numeric value.
-
-    This is more reliable than click + type_text because it uses the
-    accessibility API directly — no need to focus, select all, then type.
-
-    Args:
-        text: Text to search for in element names to find the target.
-        value: The value to set (string for text fields, number as string for sliders).
-        role: Optional role filter to narrow the search.
-    """
+    """Set text or numeric value on a form field."""
     args = [text, value]
     if role:
         args.extend(["--role", role])
-    return await run_atspi("set-value", args)
+    return await _run_or_hint("set-value", args)
 
 
 async def focus_element(
     text: str,
     role: str | None = None,
 ) -> dict:
-    """Give keyboard focus to a UI element.
-
-    After focusing, you can use type_text() or press_key() to interact
-    with the element. Useful for elements that need focus before they
-    accept keyboard input.
-
-    Args:
-        text: Text to search for in element names (case-insensitive substring).
-        role: Optional role filter to narrow the search.
-    """
+    """Give keyboard focus to a UI element."""
     args = [text]
     if role:
         args.extend(["--role", role])
-    return await run_atspi("focus", args)
+    return await _run_or_hint("focus", args)
 
 
 async def scroll_to_element(
     text: str,
     role: str | None = None,
 ) -> dict:
-    """Scroll to bring a UI element into view.
-
-    Use this when you know an element exists but it's not visible on screen
-    (e.g., it's below the fold). This is more reliable than mouse_scroll()
-    because it targets a specific element.
-
-    Args:
-        text: Text to search for in element names (case-insensitive substring).
-        role: Optional role filter to narrow the search.
-    """
+    """Scroll an off-screen element into view."""
     args = [text]
     if role:
         args.extend(["--role", role])
-    return await run_atspi("scroll", args)
+    return await _run_or_hint("scroll", args)
 
 
 def register(mcp: FastMCP) -> None:
