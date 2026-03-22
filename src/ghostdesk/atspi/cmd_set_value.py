@@ -27,6 +27,15 @@ def cmd_set_value(args: argparse.Namespace) -> None:
             if char_count > 0:
                 obj.delete_text(0, char_count)
             obj.insert_text(0, args.value, len(args.value))
+            # Verify the value was actually written
+            actual = _get_text_content(obj)
+            if args.value not in actual:
+                json.dump({
+                    "error": f"set_value appeared to succeed but the field still contains '{actual}'. "
+                             f"Use type_text() instead.",
+                    "element": obj.get_name() or args.text,
+                }, sys.stdout, ensure_ascii=False)
+                return
             json.dump({
                 "status": "ok",
                 "element": obj.get_name() or args.text,
@@ -42,6 +51,14 @@ def cmd_set_value(args: argparse.Namespace) -> None:
         if val_iface is not None:
             numeric_val = float(args.value)
             obj.set_current_value(numeric_val)
+            # Verify the value was actually set
+            actual = obj.get_current_value()
+            if abs(actual - numeric_val) > 0.01:
+                json.dump({
+                    "error": f"set_value appeared to succeed but the value is {actual}, not {numeric_val}.",
+                    "element": obj.get_name() or args.text,
+                }, sys.stdout, ensure_ascii=False)
+                return
             json.dump({
                 "status": "ok",
                 "element": obj.get_name() or args.text,
