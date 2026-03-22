@@ -25,7 +25,7 @@ async def test_run_atspi_success():
     proc = _make_proc(stdout=json.dumps(data).encode(), returncode=0)
 
     with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc):
-        result = await run_atspi("elements", ["--max", "10"])
+        result = await run_atspi("read", ["--max", "10"])
 
     assert result == data
 
@@ -45,11 +45,11 @@ async def test_run_atspi_no_args():
     proc = _make_proc(stdout=json.dumps(data).encode(), returncode=0)
 
     with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc) as mock_exec:
-        result = await run_atspi("elements")
+        result = await run_atspi("read")
 
     # Should not include extra args
     call_args = mock_exec.call_args[0]
-    assert call_args == ("/usr/bin/python3", "-m", "ghostdesk.atspi", "elements")
+    assert call_args == ("/usr/bin/python3", "-m", "ghostdesk.atspi", "read")
     assert result == data
 
 
@@ -58,7 +58,7 @@ async def test_run_atspi_nonzero_returncode():
 
     with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc):
         with pytest.raises(RuntimeError, match="AT-SPI query failed: No display found"):
-            await run_atspi("elements")
+            await run_atspi("read")
 
 
 async def test_run_atspi_error_in_json():
@@ -66,8 +66,8 @@ async def test_run_atspi_error_in_json():
     proc = _make_proc(stdout=json.dumps(data).encode(), returncode=0)
 
     with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc):
-        with pytest.raises(RuntimeError, match="Element not found"):
-            await run_atspi("find", ["missing"])
+        result = await run_atspi("find", ["missing"])
+        assert result == {"error": "Element not found"}
 
 
 async def test_run_atspi_timeout():
@@ -76,7 +76,7 @@ async def test_run_atspi_timeout():
 
     with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc):
         with pytest.raises(asyncio.TimeoutError):
-            await run_atspi("elements", timeout=0.1)
+            await run_atspi("read", timeout=0.1)
 
 
 async def test_run_atspi_error_key_in_list_not_raised():
@@ -85,6 +85,6 @@ async def test_run_atspi_error_key_in_list_not_raised():
     proc = _make_proc(stdout=json.dumps(data).encode(), returncode=0)
 
     with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock, return_value=proc):
-        result = await run_atspi("elements")
+        result = await run_atspi("read")
 
     assert result == data

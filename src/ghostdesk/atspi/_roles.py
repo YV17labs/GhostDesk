@@ -65,6 +65,9 @@ _TEXT_ROLES = frozenset(
     }
 )
 
+# Union of text + interactive roles — everything a screen reader would announce.
+_READABLE_ROLES = _TEXT_ROLES | _INTERACTIVE_ROLES
+
 # Human-readable role names for the JSON output.
 _ROLE_NAMES = {
     Atspi.Role.PUSH_BUTTON: "button",

@@ -40,7 +40,4 @@ async def run_atspi(
         raise RuntimeError(f"AT-SPI query failed: {msg}")
 
     data = json.loads(stdout.decode())
-    if isinstance(data, dict) and "error" in data:
-        raise RuntimeError(data["error"])
-
     return data
