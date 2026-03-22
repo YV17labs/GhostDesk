@@ -19,24 +19,22 @@ async def click_element(
     role: str | None = None,
     humanize: bool = True,
 ) -> str:
-    """Find a UI element by its name and click on its center.
-
-    Searches the accessibility tree for an element whose name contains the
-    given text (case-insensitive). Clicks the first match.
-
-    Args:
-        text: Text to search for in element names (case-insensitive substring match).
-        role: Optional role filter to narrow the search (e.g. "button", "link").
-        humanize: If True (default), move with a realistic curve before clicking.
-    """
+    """Find a UI element by name and click it."""
     args = [text]
     if role:
         args.extend(["--role", role])
 
-    match = await run_atspi("find", args)
+    try:
+        match = await run_atspi("find", args)
+    except RuntimeError:
+        match = {}
 
     if "center_x" not in match:
-        return f"No element found matching '{text}'."
+        return (
+            f"No element found matching '{text}'. "
+            f"Try read_screen() to see available elements, "
+            f"or use mouse_click(x, y) with coordinates from screenshot()."
+        )
 
     x, y = match["center_x"], match["center_y"]
 

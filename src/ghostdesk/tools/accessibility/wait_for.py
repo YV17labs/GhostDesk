@@ -14,32 +14,21 @@ async def wait_for_element(
     timeout_seconds: float = 10.0,
     poll_interval_ms: int = 500,
 ) -> dict:
-    """Wait until a UI element appears on screen.
-
-    Polls the accessibility tree repeatedly until an element matching the
-    given text (and optionally role) is found, or the timeout expires.
-
-    Use this instead of wait() with arbitrary delays — it returns as soon
-    as the element appears, saving time.
-
-    Args:
-        text: Text to search for in element names (case-insensitive).
-        role: Optional role filter (e.g. "button", "link").
-        timeout_seconds: Maximum time to wait. Defaults to 10.
-        poll_interval_ms: Milliseconds between polls. Defaults to 500.
-    """
+    """Wait until a UI element appears on screen."""
     args = [text]
     if role:
         args.extend(["--role", role])
 
-    deadline = asyncio.get_event_loop().time() + timeout_seconds
+    loop = asyncio.get_event_loop()
+    deadline = loop.time() + timeout_seconds
 
-    while asyncio.get_event_loop().time() < deadline:
+    while loop.time() < deadline:
         try:
             result = await run_atspi("find", args)
             if "center_x" in result:
                 return {
-                    "status": "found",
+                    "status": "ready",
+                    "message": "Element found. Page is ready — proceed immediately, do not call wait().",
                     "element": result,
                 }
         except RuntimeError:

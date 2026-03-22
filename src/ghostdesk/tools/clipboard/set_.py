@@ -7,15 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 
 async def set_clipboard(text: str) -> str:
-    """Write text to the system clipboard.
-
-    The text will be available for pasting into any application.
-    Useful for transferring data between applications or preparing
-    content to paste.
-
-    Args:
-        text: The text to place on the clipboard.
-    """
+    """Write text to the clipboard. Use with press_key("ctrl+v") to paste."""
     proc = await asyncio.create_subprocess_exec(
         "xclip", "-selection", "clipboard", "-i",
         stdin=asyncio.subprocess.PIPE,

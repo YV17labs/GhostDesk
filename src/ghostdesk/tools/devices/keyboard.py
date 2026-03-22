@@ -26,15 +26,7 @@ async def _type_char(char: str) -> None:
 
 
 async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> str:
-    """Type text character by character, as if using a physical keyboard.
-
-    Args:
-        text: The string to type.
-        delay_ms: Base milliseconds between keystrokes. Defaults to 50.
-                  Ignored when humanize=False (uses 12ms fixed).
-        humanize: If True (default), vary timing per character like a real
-                  typist — faster mid-word, slower after spaces/punctuation.
-    """
+    """Type text character by character with human-like timing."""
     if humanize:
         delays = typing_delays(text, base_delay_ms=delay_ms)
         for char, delay in zip(text, delays):
@@ -48,14 +40,7 @@ async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> str
 
 
 async def press_key(keys: str) -> str:
-    """Press a key or key combination.
-
-    Examples: 'Return', 'ctrl+c', 'alt+F4', 'shift+ctrl+t', 'Tab'.
-    Use xdotool key names (XKeysym).
-
-    Args:
-        keys: Key or combo string like 'ctrl+s' or 'Return'.
-    """
+    """Press a key or key combination (e.g. 'Return', 'ctrl+c', 'alt+F4')."""
     await run(["xdotool", "key", "--clearmodifiers", keys])
     return f"Pressed {keys}"
 

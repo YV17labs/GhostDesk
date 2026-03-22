@@ -8,18 +8,7 @@ from mcp.server.fastmcp import FastMCP
 
 
 async def launch(command: str) -> str:
-    """Launch a GUI application. Returns immediately, no output is captured.
-
-    Use for any graphical application: browsers, editors, media players, etc.
-    After launching, use wait() then screenshot() to see the result.
-
-    To open a website: launch("firefox https://example.com")
-    Firefox opens URLs in new tabs automatically when already running.
-
-    Args:
-        command: The command to launch (e.g. "firefox https://linkedin.com",
-                 "gedit /tmp/notes.txt", "vlc video.mp4").
-    """
+    """Launch a GUI application. Returns immediately without waiting."""
     try:
         parts = shlex.split(command)
     except ValueError as e:

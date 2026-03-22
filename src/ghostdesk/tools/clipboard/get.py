@@ -7,11 +7,7 @@ from ghostdesk.utils.cmd import run
 
 
 async def get_clipboard() -> str:
-    """Read the current content of the system clipboard.
-
-    Returns the text currently stored in the clipboard. Useful for
-    extracting text that was copied by the user or by a previous action.
-    """
+    """Read the current clipboard text."""
     try:
         return await run(["xclip", "-selection", "clipboard", "-o"])
     except RuntimeError:

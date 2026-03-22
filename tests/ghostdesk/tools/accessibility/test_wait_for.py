@@ -21,7 +21,7 @@ async def test_wait_found_immediately(_mock_run_atspi):
 
     result = await wait_for_element("OK", timeout_seconds=0.5, poll_interval_ms=50)
 
-    assert result["status"] == "found"
+    assert result["status"] == "ready"
     assert result["element"]["center_x"] == 50
     _mock_run_atspi.assert_awaited_once()
 
@@ -33,7 +33,7 @@ async def test_wait_found_after_retries(_mock_run_atspi):
 
     result = await wait_for_element("OK", timeout_seconds=2.0, poll_interval_ms=50)
 
-    assert result["status"] == "found"
+    assert result["status"] == "ready"
     assert _mock_run_atspi.await_count == 3
 
 
@@ -44,7 +44,7 @@ async def test_wait_found_after_runtime_errors(_mock_run_atspi):
 
     result = await wait_for_element("OK", timeout_seconds=2.0, poll_interval_ms=50)
 
-    assert result["status"] == "found"
+    assert result["status"] == "ready"
 
 
 async def test_wait_timeout(_mock_run_atspi):
