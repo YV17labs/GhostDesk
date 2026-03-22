@@ -24,19 +24,6 @@ def _for_each_app(fn, *args):
     return None
 
 
-def _collect_from_desktop(walker_fn, max_results, *args):
-    """Walk the entire desktop tree, collecting results via walker_fn."""
-    results: list[dict] = []
-    desktop = Atspi.get_desktop(0)
-    for i in range(desktop.get_child_count()):
-        try:
-            app = desktop.get_child_at_index(i)
-            if app is not None:
-                walker_fn(app, results, max_results, *args)
-        except Exception:
-            continue
-    return results
-
 
 def _find_element(
     obj: Atspi.Accessible,
