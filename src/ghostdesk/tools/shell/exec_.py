@@ -11,17 +11,7 @@ _KILL_DRAIN_TIMEOUT = 5  # seconds to drain pipes after killing a process group
 
 
 async def shell_exec(command: str, timeout_seconds: float = 30.0) -> dict[str, str | int]:
-    """Execute a shell command and return its output.
-
-    Use for any command where you need the text result: listing files,
-    installing packages, checking processes, running scripts, etc.
-
-    Do NOT use this for GUI applications — use launch() instead.
-
-    Args:
-        command: The bash command to execute (e.g. 'ls -la /tmp').
-        timeout_seconds: Maximum execution time in seconds. Defaults to 30.
-    """
+    """Execute a shell command and return stdout/stderr."""
     proc = await asyncio.create_subprocess_exec(
         "bash", "-c", command,
         stdout=asyncio.subprocess.PIPE,

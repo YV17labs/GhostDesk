@@ -19,14 +19,7 @@ async def screenshot(
     width: int | None = None,
     height: int | None = None,
 ) -> list:
-    """Capture the screen and return the image with cursor visible.
-
-    The screenshot always includes a bright crosshair showing the
-    current cursor position, plus metadata about open windows.
-
-    Call with no arguments for a full-screen capture, or pass x, y,
-    width, and height to capture a specific region.
-    """
+    """Capture the screen as an image."""
     region = all(v is not None for v in (x, y, width, height))
 
     fd, path = tempfile.mkstemp(suffix=".png")

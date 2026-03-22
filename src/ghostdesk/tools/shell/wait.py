@@ -7,14 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 
 async def wait(milliseconds: int) -> str:
-    """Wait for a specified number of milliseconds.
-
-    Useful to let animations finish, pages load, or UI transitions complete
-    before taking a screenshot or performing the next action.
-
-    Args:
-        milliseconds: Duration to wait.
-    """
+    """Pause for milliseconds."""
     await asyncio.sleep(milliseconds / 1000.0)
     return f"Waited {milliseconds}ms"
 
