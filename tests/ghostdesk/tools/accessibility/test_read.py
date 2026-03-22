@@ -7,7 +7,6 @@ import pytest
 
 from ghostdesk.tools.accessibility.read import (
     get_element_details,
-    list_elements,
     read_screen,
     read_table,
 )
@@ -21,50 +20,46 @@ def _mock_run_atspi():
         yield mock
 
 
-# --- list_elements ---
-
-async def test_list_elements_no_role(_mock_run_atspi):
-    _mock_run_atspi.return_value = [{"role": "button", "name": "OK"}]
-    result = await list_elements()
-    _mock_run_atspi.assert_awaited_once_with("elements", ["--max", "100"])
-    assert len(result) == 1
-
-
-async def test_list_elements_with_role(_mock_run_atspi):
-    _mock_run_atspi.return_value = []
-    result = await list_elements(role="button", max_results=50)
-    _mock_run_atspi.assert_awaited_once_with("elements", ["--max", "50", "--role", "button"])
-    assert result == []
-
-
-async def test_list_elements_invalid_role(_mock_run_atspi):
-    with pytest.raises(ValueError, match="Invalid role 'bogus'"):
-        await list_elements(role="bogus")
-    _mock_run_atspi.assert_not_awaited()
-
-
-async def test_list_elements_all_valid_roles(_mock_run_atspi):
-    """Every role in VALID_ROLES should pass validation."""
-    from ghostdesk.tools.accessibility._client import VALID_ROLES
-
-    _mock_run_atspi.return_value = []
-    for role in VALID_ROLES:
-        await list_elements(role=role)  # should not raise
-
-
 # --- read_screen ---
 
 async def test_read_screen_default(_mock_run_atspi):
-    _mock_run_atspi.return_value = [{"role": "heading", "text": "Welcome"}]
+    _mock_run_atspi.return_value = {
+        "items": [{"role": "heading", "name": "Welcome"}],
+        "visible": 1,
+        "total_in_tree": 10,
+    }
     result = await read_screen()
-    _mock_run_atspi.assert_awaited_once_with("text", ["--max", "500"])
-    assert result[0]["text"] == "Welcome"
+    _mock_run_atspi.assert_awaited_once_with("read", ["--max", "500"])
+    assert result["items"][0]["name"] == "Welcome"
+    assert result["visible"] == 1
+    assert result["total_in_tree"] == 10
 
 
 async def test_read_screen_custom_max(_mock_run_atspi):
-    _mock_run_atspi.return_value = []
+    _mock_run_atspi.return_value = {"items": [], "visible": 0, "total_in_tree": 0}
     await read_screen(max_results=10)
-    _mock_run_atspi.assert_awaited_once_with("text", ["--max", "10"])
+    _mock_run_atspi.assert_awaited_once_with("read", ["--max", "10"])
+
+
+async def test_read_screen_with_role(_mock_run_atspi):
+    _mock_run_atspi.return_value = {"items": [], "visible": 0, "total_in_tree": 0}
+    await read_screen(role="button", max_results=50)
+    _mock_run_atspi.assert_awaited_once_with("read", ["--max", "50", "--role", "button"])
+
+
+async def test_read_screen_invalid_role(_mock_run_atspi):
+    with pytest.raises(ValueError, match="Invalid role 'bogus'"):
+        await read_screen(role="bogus")
+    _mock_run_atspi.assert_not_awaited()
+
+
+async def test_read_screen_all_valid_roles(_mock_run_atspi):
+    """Every role in VALID_ROLES should pass validation."""
+    from ghostdesk.tools.accessibility._client import VALID_ROLES
+
+    _mock_run_atspi.return_value = {"items": [], "visible": 0, "total_in_tree": 0}
+    for role in VALID_ROLES:
+        await read_screen(role=role)  # should not raise
 
 
 # --- get_element_details ---

@@ -8,10 +8,10 @@ Usage:
     /usr/bin/python3 -m ghostdesk.atspi <command> [options]
 
 Commands:
-    elements   — list interactive UI elements (original behavior)
-    text       — read all visible text content from the screen
+    read       — read the screen like a screen reader (name + role + states)
     details    — inspect a specific element (actions, states, text, relations)
     table      — extract a structured table
+    find       — find element and return coordinates
     scroll     — scroll to an element
     set-value  — set text content on an element
     focus      — give focus to an element
@@ -38,8 +38,7 @@ except (ImportError, ValueError) as exc:
     sys.exit(1)
 
 # Now safe to import from this package — gi.require_version has been called.
-from .cmd_elements import cmd_elements
-from .cmd_text import cmd_text
+from .cmd_read import cmd_read
 from .cmd_details import cmd_details
 from .cmd_find import cmd_find
 from .cmd_table import cmd_table
@@ -52,16 +51,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="AT-SPI accessibility tree query")
     subparsers = parser.add_subparsers(dest="command")
 
-    # elements
-    p_elem = subparsers.add_parser("elements", help="List interactive elements")
-    p_elem.add_argument("--role", action="append", default=None)
-    p_elem.add_argument("--max", type=int, default=200)
-    p_elem.set_defaults(func=cmd_elements)
-
-    # text
-    p_text = subparsers.add_parser("text", help="Read all visible text")
-    p_text.add_argument("--max", type=int, default=500)
-    p_text.set_defaults(func=cmd_text)
+    # read (primary command — replaces both "elements" and "text")
+    p_read = subparsers.add_parser("read", help="Read screen like a screen reader")
+    p_read.add_argument("--role", action="append", default=None)
+    p_read.add_argument("--max", type=int, default=500)
+    p_read.set_defaults(func=cmd_read)
 
     # details
     p_detail = subparsers.add_parser("details", help="Inspect a specific element")
@@ -105,10 +99,10 @@ def main() -> None:
     if hasattr(args, "func"):
         args.func(args)
     else:
-        # Backward compatibility: no subcommand = elements
+        # Default: read
         args.role = None
-        args.max = 200
-        cmd_elements(args)
+        args.max = 500
+        cmd_read(args)
 
 
 if __name__ == "__main__":
