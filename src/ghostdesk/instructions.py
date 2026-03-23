@@ -19,7 +19,12 @@ cost) and **devices** (human-like mouse/keyboard/screenshots, stealth).
 6. Verify after every action with read_screen().
 7. For long text: set_clipboard() then press_key("ctrl+v").
 8. On error: retry once, then switch channel.
-9. On "Session not found": stop and tell the user.
+9. If click_element repeatedly hits a parent element instead of the intended
+   target, take a screenshot() to locate it visually, then use mouse_click
+   at the exact coordinates.
+10. Scroll small: use mouse_scroll with amount 3 (default). Never exceed 5
+    in a single scroll — take multiple small scrolls instead.
+11. On "Session not found": stop and tell the user.
 
 ## Examples
 
