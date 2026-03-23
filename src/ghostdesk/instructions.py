@@ -24,8 +24,15 @@ cost) and **devices** (human-like mouse/keyboard/screenshots, stealth).
 ## Examples
 
 ```
-launch("firefox https://example.com")
-wait_for_element("example", timeout_seconds=15)
+# Check current state first to avoid duplicate instances
+read_screen()
+
+# Only launch if not already open
+if "firefox" not detected:
+  launch("firefox https://example.com")
+  wait_for_element("example", timeout_seconds=15)
+
+# Verify and continue
 read_screen()
 click_element("Log in")
 set_value("Email", "user@example.com")
