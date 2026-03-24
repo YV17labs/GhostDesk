@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="demos/ghostdesk-wikipedia.gif" alt="GhostDesk demo — AI agent browsing Wikipedia" width="960">
+  <img src="demos/ghostdesk-sheets-automation.gif" alt="GhostDesk demo — AI agent automating Google Sheets" width="960">
 </p>
 
 ---
