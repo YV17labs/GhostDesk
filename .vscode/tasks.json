@@ -12,9 +12,6 @@
         "reveal": "always",
         "focus": true,
         "panel": "new"
-      },
-      "runOptions": {
-        "runOn": "folderOpen"
       }
     }
   ]
