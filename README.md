@@ -206,6 +206,7 @@ See GhostDesk in action:
 | Demo | Description |
 |------|-------------|
 | [Google Sheets Automation](demos/ghostdesk-sheets-automation.gif) | AI agent autonomously populates a spreadsheet with AI startup funding data, formats headers, and creates a 3D bar chart |
+| [Amazon Scraper to Google Sheets](demos/amazon-scraper-to-sheets.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
 | [Wikipedia Research](demos/ghostdesk-wikipedia.gif) | AI agent browsing Wikipedia, reading articles, and extracting information |
 
 ## How it works
