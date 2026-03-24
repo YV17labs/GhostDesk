@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="demos/ghostdesk-sheets-automation.gif" alt="GhostDesk demo — AI agent automating Google Sheets" width="960">
+  <img src="demos/ghostdesk-amazon-sheets-automation.gif" alt="GhostDesk demo — Automated Amazon scraping to Google Sheets with real-time visualization" width="960">
 </p>
 
 ---
