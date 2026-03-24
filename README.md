@@ -17,6 +17,10 @@
   <em>If a human can do it on a desktop, your agent can too.</em>
 </p>
 
+<p align="center">
+  <img src="demo.gif" alt="GhostDesk demo — AI agent browsing Wikipedia" width="960">
+</p>
+
 ---
 
 ## Why GhostDesk?
