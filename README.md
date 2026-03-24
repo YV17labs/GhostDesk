@@ -25,25 +25,76 @@ Most AI agents are trapped in text. They can call APIs and generate code, but th
 
 Connect any MCP-compatible LLM (Claude, GPT, Gemini...) and it gets a full Linux desktop with 25+ tools to interact with **any application** — browsers, IDEs, office suites, terminals, legacy software, internal tools. No API needed. No integration required. If it has a UI, your agent can use it.
 
-## What can you do with it?
+## What can your agent do with a full desktop?
 
-**Web automation without brittle selectors**
-> Your agent sees the page like a human does. It reads buttons, fills forms, clicks links — no CSS selectors, no Selenium scripts, no breaking when the UI changes.
+Your agent gets its own Linux desktop. Here's what that unlocks:
 
-**Automate legacy & internal tools**
-> That old Java app with no API? That internal admin panel? GhostDesk doesn't care. If it renders on screen, your agent can operate it.
+### Agentic workflows — chain anything
 
-**End-to-end workflow automation**
-> Chain actions across multiple applications: pull data from a browser, paste it into a spreadsheet, generate a report, email it — all in one conversation.
+```
+"Go to the CRM, export last month's leads as CSV,
+ open LibreOffice Calc, build a pivot table,
+ take a screenshot of the chart, and email it to the team."
+```
 
-**Data extraction from any UI**
-> Scrape tables, read dashboards, extract form data. The accessibility engine returns structured data, not raw pixels.
+Your agent opens the browser, logs in, downloads the file, switches to another app, processes the data, captures the result, and sends it — autonomously, across multiple applications, in one conversation.
 
-**QA & UI testing**
-> Let your agent navigate your app, fill every form, click every button, and report what's broken — with screenshots as evidence.
+### Browse the web like a human
 
-**Unattended desktop tasks**
-> Schedule your agent to log into portals, download reports, update records, or monitor dashboards. Runs headless in Docker — no physical screen needed.
+```
+"Search for competitors on Google, open the first 5 results,
+ extract pricing from each page, and summarize in a spreadsheet."
+```
+
+No Selenium. No CSS selectors. No Puppeteer scripts that break every week. The agent reads the page semantically, clicks what it sees, fills forms naturally — and falls back to human-like mouse movement when sites detect bots.
+
+### Operate any software — no API required
+
+```
+"Open the legacy inventory app, search for product #4521,
+ update the stock count to 150, and confirm the change."
+```
+
+That old Java app with no API? That internal admin panel from 2010? A Windows app running in Wine? If it renders pixels on screen, your agent can operate it.
+
+### Data extraction at scale
+
+```
+"Open the analytics dashboard, read the KPI table,
+ scroll down to the revenue chart, take a screenshot,
+ then export the raw data."
+```
+
+The accessibility engine returns structured tables (headers + rows), form values, and element states — not raw pixels. Your agent reads UIs like a screen reader, fast and accurate.
+
+### QA & UI testing with evidence
+
+```
+"Navigate the signup flow, try invalid emails, empty fields,
+ and SQL injection in every input. Screenshot each error state."
+```
+
+Your agent becomes a QA engineer — it clicks every button, fills every form, tests every edge case, and brings back screenshots as proof.
+
+### Unattended automation — runs 24/7
+
+```
+"Every morning: log into the supplier portal, download
+ the latest price list, compare with yesterday's, and
+ flag any changes above 5%."
+```
+
+Runs headless in Docker. No physical screen. No human babysitting. Schedule your agent to handle repetitive desktop tasks while you sleep.
+
+### Multi-app orchestration
+
+```
+"Open VS Code, create a new Python file, write a script
+ that calls our API, run it in the terminal, debug if it fails,
+ then commit and push to GitHub."
+```
+
+Your agent isn't limited to one app. It can switch between browser, terminal, IDE, file manager, email client — just like a human switching windows on their desktop.
 
 ## Key features
 
