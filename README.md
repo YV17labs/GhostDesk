@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="demo.gif" alt="GhostDesk demo — AI agent browsing Wikipedia" width="960">
+  <img src="demos/ghostdesk-wikipedia.gif" alt="GhostDesk demo — AI agent browsing Wikipedia" width="960">
 </p>
 
 ---
@@ -198,6 +198,15 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 | MCP server | `http://localhost:3000/mcp` |
 | noVNC (browser) | `http://localhost:6080/vnc.html` |
 | VNC | `vnc://localhost:5900` (password: `changeme`) |
+
+## Demos
+
+See GhostDesk in action:
+
+| Demo | Description |
+|------|-------------|
+| [Google Sheets Automation](demos/ghostdesk-sheets-automation.gif) | AI agent autonomously populates a spreadsheet with AI startup funding data, formats headers, and creates a 3D bar chart |
+| [Wikipedia Research](demos/ghostdesk-wikipedia.gif) | AI agent browsing Wikipedia, reading articles, and extracting information |
 
 ## How it works
 
