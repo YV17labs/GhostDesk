@@ -157,22 +157,23 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 
 ## Quick start
 
-### 1. Open in VS Code Dev Container
-
-Clone the repo, open it in VS Code, and use **"Reopen in Container"**.
-
-### 2. Start the desktop
+### 1. Run the container
 
 ```bash
-sudo supervisord -c /etc/supervisor/conf.d/ghostdesk.conf
+docker run -d --name ghostdesk \
+  -p 3000:3000 \
+  -p 5900:5900 \
+  -p 6080:6080 \
+  ghcr.io/yv17labs/ghostdesk:latest
 ```
 
-This boots the virtual desktop (Xvfb + Openbox), VNC server, and the MCP server.
+That's it. The virtual desktop, MCP server, and VNC are all running inside an isolated container. Your agent gets a full Linux desktop — your host machine stays untouched.
 
-### 3. Connect your agent
+### 2. Connect your AI
 
-Add GhostDesk to your MCP client config:
+GhostDesk works with any MCP-compatible client. Add it to your config:
 
+**Claude Desktop / Claude Code**
 ```json
 {
   "mcpServers": {
@@ -184,9 +185,13 @@ Add GhostDesk to your MCP client config:
 }
 ```
 
-### 4. Watch your agent work
+**ChatGPT, Gemini, or any LLM with MCP support** — same config, just point to `http://localhost:3000/mcp`.
 
-Open your browser and go to `http://localhost:6080/vnc.html` to see the virtual desktop in real time.
+**Local models (Ollama, LM Studio, etc.)** — any MCP client library can connect to the same endpoint.
+
+### 3. Watch your agent work
+
+Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time.
 
 | Service | URL |
 |---------|-----|
