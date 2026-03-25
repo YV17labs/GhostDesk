@@ -3,7 +3,10 @@
 
 import pytest
 
-from ghostdesk.roles import INTERACTIVE_ROLE_NAMES
+from ghostdesk.roles import ALL_ROLE_NAMES, INTERACTIVE_ROLE_NAMES
+
+
+# --- INTERACTIVE_ROLE_NAMES ---
 
 
 def test_interactive_role_names_is_frozenset():
@@ -40,3 +43,31 @@ def test_interactive_role_names_is_immutable():
     """INTERACTIVE_ROLE_NAMES cannot be modified."""
     with pytest.raises(AttributeError):
         INTERACTIVE_ROLE_NAMES.add("newrole")
+
+
+# --- ALL_ROLE_NAMES ---
+
+
+def test_all_role_names_is_frozenset():
+    """ALL_ROLE_NAMES is a frozenset (immutable)."""
+    assert isinstance(ALL_ROLE_NAMES, frozenset)
+
+
+def test_all_role_names_superset_of_interactive():
+    """ALL_ROLE_NAMES contains every interactive role."""
+    assert INTERACTIVE_ROLE_NAMES.issubset(ALL_ROLE_NAMES)
+
+
+@pytest.mark.parametrize("role", [
+    "window", "frame", "terminal", "tree", "panel", "video",
+    "section", "dialog", "calendar", "canvas", "application",
+])
+def test_all_role_names_contains_non_interactive(role):
+    """ALL_ROLE_NAMES includes non-interactive AT-SPI roles."""
+    assert role in ALL_ROLE_NAMES
+
+
+def test_all_role_names_is_immutable():
+    """ALL_ROLE_NAMES cannot be modified."""
+    with pytest.raises(AttributeError):
+        ALL_ROLE_NAMES.add("newrole")
