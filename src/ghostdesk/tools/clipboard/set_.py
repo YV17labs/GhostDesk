@@ -11,13 +11,16 @@ async def set_clipboard(text: str) -> str:
     proc = await asyncio.create_subprocess_exec(
         "xclip", "-selection", "clipboard", "-i",
         stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await asyncio.wait_for(proc.communicate(text.encode()), timeout=5.0)
+    assert proc.stdin is not None
+    proc.stdin.write(text.encode())
+    proc.stdin.close()
+    await asyncio.wait_for(proc.stdin.wait_closed(), timeout=5.0)
 
-    if proc.returncode != 0:
-        raise RuntimeError(f"xclip failed: {stderr.decode().strip()}")
+    # xclip forks a background process to serve the clipboard;
+    # don't wait for it to exit — just verify stdin was accepted.
 
     return f"Clipboard set ({len(text)} characters)"
 
