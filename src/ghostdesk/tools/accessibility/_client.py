@@ -6,7 +6,7 @@ import json
 import os
 import sys
 
-from ghostdesk.roles import INTERACTIVE_ROLE_NAMES as VALID_ROLES  # noqa: F401 — re-exported
+from ghostdesk.roles import ALL_ROLE_NAMES as VALID_ROLES  # noqa: F401 — re-exported
 
 # src/ directory — needed so /usr/bin/python3 can find the ghostdesk package.
 # Uses the actual install path of this package rather than fragile parent traversal.

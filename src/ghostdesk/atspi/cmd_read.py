@@ -79,7 +79,11 @@ def _collect_tree(
         return []
 
     showing = _is_showing(obj)
-    readable = role in _READABLE_ROLES
+    role_str = _role_name(role)
+    if role_filter is not None:
+        readable = role_str in role_filter
+    else:
+        readable = role in _READABLE_ROLES
 
     # Count every readable node for the has_more indicator.
     if readable:
@@ -115,19 +119,12 @@ def _collect_tree(
             continue
 
     # --- Decide whether this node is meaningful ---
-    is_meaningful = bool(name) and readable and showing
-
-    if is_meaningful and role_filter:
-        if _role_name(role) not in role_filter:
-            is_meaningful = False
-
-    if not is_meaningful:
+    if not (bool(name) and readable and showing):
         # Structural container — skip it, promote its children.
         return child_entries
 
     # --- Build the node entry ---
     counters["visible"] += 1
-    role_str = _role_name(role)
     entry: dict = {"role": role_str, "name": name}
 
     # Heading level
