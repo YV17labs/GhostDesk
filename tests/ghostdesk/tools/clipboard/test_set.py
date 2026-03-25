@@ -2,7 +2,7 @@
 """Tests for ghostdesk.tools.clipboard.set_ — write text to clipboard."""
 
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -11,10 +11,14 @@ from ghostdesk.tools.clipboard.set_ import set_clipboard
 
 @pytest.fixture
 def mock_process():
-    """Create a mock asyncio.subprocess.Process."""
+    """Create a mock asyncio.subprocess.Process with stdin mock."""
     proc = AsyncMock()
     proc.returncode = 0
-    proc.communicate = AsyncMock(return_value=(b"", b""))
+    # stdin needs synchronous write() and close(), async wait_closed()
+    proc.stdin = MagicMock()
+    proc.stdin.write = MagicMock()
+    proc.stdin.close = MagicMock()
+    proc.stdin.wait_closed = AsyncMock()
     return proc
 
 
@@ -36,10 +40,12 @@ async def test_set_clipboard_success(patch_subprocess):
     mock_exec.assert_awaited_once_with(
         "xclip", "-selection", "clipboard", "-i",
         stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    mock_process.communicate.assert_awaited_once_with(b"hello world")
+    mock_process.stdin.write.assert_called_once_with(b"hello world")
+    mock_process.stdin.close.assert_called_once()
+    mock_process.stdin.wait_closed.assert_awaited_once()
 
 
 async def test_set_clipboard_empty_text(patch_subprocess):
@@ -49,24 +55,14 @@ async def test_set_clipboard_empty_text(patch_subprocess):
     result = await set_clipboard("")
 
     assert result == "Clipboard set (0 characters)"
-    mock_process.communicate.assert_awaited_once_with(b"")
+    mock_process.stdin.write.assert_called_once_with(b"")
+    mock_process.stdin.close.assert_called_once()
 
 
-async def test_set_clipboard_xclip_failure(patch_subprocess):
-    """set_clipboard() raises RuntimeError when xclip fails."""
+async def test_set_clipboard_timeout(patch_subprocess):
+    """set_clipboard() raises TimeoutError when stdin write hangs."""
     _, mock_process = patch_subprocess
-    mock_process.returncode = 1
-    mock_process.communicate.return_value = (b"", b"xclip error message")
+    mock_process.stdin.wait_closed = AsyncMock(side_effect=asyncio.TimeoutError)
 
-    with pytest.raises(RuntimeError, match="xclip failed: xclip error message"):
+    with pytest.raises(TimeoutError):
         await set_clipboard("some text")
-
-
-async def test_set_clipboard_xclip_failure_empty_stderr(patch_subprocess):
-    """set_clipboard() raises RuntimeError with empty stderr on failure."""
-    _, mock_process = patch_subprocess
-    mock_process.returncode = 1
-    mock_process.communicate.return_value = (b"", b"")
-
-    with pytest.raises(RuntimeError, match="xclip failed:"):
-        await set_clipboard("text")
