@@ -4,11 +4,10 @@
 import asyncio
 import os
 import tempfile
-
 from mcp.server.fastmcp import FastMCP, Image
 
 from ghostdesk.utils.cmd import run
-from ghostdesk.utils.cursor_overlay import draw_cursor
+from ghostdesk.utils.cursor_overlay import ImageFormat, draw_cursor
 from ghostdesk.utils.humanizer import get_cursor_position
 from ghostdesk.utils.window_info import get_window_info
 
@@ -18,8 +17,14 @@ async def screenshot(
     y: int | None = None,
     width: int | None = None,
     height: int | None = None,
+    output_format: ImageFormat = "png",
+    quality: int = 80,
 ) -> list:
-    """Capture the screen as an image."""
+    """Capture the screen as an image.
+
+    *output_format* — ``"png"`` (default, lossless) or ``"webp"``
+    (lossy, ~2-3× smaller).  *quality* is only used for WebP (1-100, default 80).
+    """
     region = all(v is not None for v in (x, y, width, height))
 
     fd, path = tempfile.mkstemp(suffix=".png")
@@ -43,10 +48,14 @@ async def screenshot(
             cx -= x  # type: ignore[operator]
             cy -= y  # type: ignore[operator]
 
-        png_with_cursor = draw_cursor(raw_png, cx, cy)
+        image_bytes = draw_cursor(
+            raw_png, cx, cy,
+            output_format=output_format,
+            quality=quality,
+        )
 
         return [
-            Image(data=png_with_cursor, format="png"),
+            Image(data=image_bytes, format=output_format),
             {
                 "cursor": {"x": cx, "y": cy},
                 "active_window": win_info["active_window"],

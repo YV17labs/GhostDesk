@@ -19,14 +19,45 @@ def _make_test_png(width: int = 50, height: int = 50, color: str = "red") -> byt
 class TestDrawCursor:
     """Tests for draw_cursor."""
 
-    def test_returns_valid_png(self):
-        """draw_cursor should return valid PNG bytes."""
+    def test_default_format_is_png(self):
+        """draw_cursor should return PNG by default."""
         png = _make_test_png()
         result = draw_cursor(png, 25, 25)
 
-        # Should be able to open as an image
         img = Image.open(io.BytesIO(result))
         assert img.format == "PNG"
+
+    def test_webp_format(self):
+        """draw_cursor should return WebP when requested."""
+        png = _make_test_png()
+        result = draw_cursor(png, 25, 25, output_format="webp")
+
+        img = Image.open(io.BytesIO(result))
+        assert img.format == "WEBP"
+
+    def test_webp_quality(self):
+        """Higher quality WebP should produce larger output."""
+        png = _make_test_png(100, 100, "blue")
+        low = draw_cursor(png, 50, 50, output_format="webp", quality=10)
+        high = draw_cursor(png, 50, 50, output_format="webp", quality=100)
+        assert len(high) > len(low)
+
+    def test_invalid_format_falls_back_to_png(self):
+        """draw_cursor should fall back to PNG for unknown formats."""
+        png = _make_test_png()
+        result = draw_cursor(png, 25, 25, output_format="bmp")  # type: ignore[arg-type]
+        img = Image.open(io.BytesIO(result))
+        assert img.format == "PNG"
+
+    def test_quality_clamped(self):
+        """draw_cursor should clamp quality to 1-100."""
+        png = _make_test_png(100, 100, "blue")
+        # quality=200 should be clamped to 100, quality=-5 to 1
+        high = draw_cursor(png, 50, 50, output_format="webp", quality=200)
+        low = draw_cursor(png, 50, 50, output_format="webp", quality=-5)
+        # Both should produce valid images without error
+        Image.open(io.BytesIO(high))
+        Image.open(io.BytesIO(low))
 
     def test_preserves_dimensions(self):
         """Output image should have the same dimensions as input."""
@@ -50,17 +81,15 @@ class TestDrawCursor:
         original = Image.open(io.BytesIO(png))
         original_pixel = original.getpixel((25, 25))
 
-        result = draw_cursor(png, 25, 25)
+        result = draw_cursor(png, 25, 25, output_format="png")
         modified = Image.open(io.BytesIO(result))
         modified_pixel = modified.getpixel((25, 25))
-
-        # The center dot should change the pixel color
         assert modified_pixel != original_pixel
 
     def test_custom_color(self):
         """draw_cursor should accept a custom color parameter."""
         png = _make_test_png(50, 50, "black")
-        result = draw_cursor(png, 25, 25, color=(0, 255, 0, 255))
+        result = draw_cursor(png, 25, 25, color=(0, 255, 0, 255), output_format="png")
 
         img = Image.open(io.BytesIO(result))
         # Center pixel should have been modified (green cursor on black bg)
@@ -72,8 +101,8 @@ class TestDrawCursor:
         """draw_cursor with larger size should affect more pixels."""
         png = _make_test_png(100, 100, "white")
 
-        small = draw_cursor(png, 50, 50, size=10)
-        large = draw_cursor(png, 50, 50, size=40)
+        small = draw_cursor(png, 50, 50, size=10, output_format="png")
+        large = draw_cursor(png, 50, 50, size=40, output_format="png")
 
         # The large cursor image should differ from the small one
         # Check pixels far from center that only the large cursor reaches
