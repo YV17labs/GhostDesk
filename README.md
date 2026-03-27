@@ -27,7 +27,7 @@
 
 Most AI agents are trapped in text. They can call APIs and generate code, but they can't **use software**. GhostDesk changes that.
 
-Connect any MCP-compatible LLM (Claude, GPT, Gemini...) and it gets a full Linux desktop with 25+ tools to interact with **any application** — browsers, IDEs, office suites, terminals, legacy software, internal tools. No API needed. No integration required. If it has a UI, your agent can use it.
+Connect any MCP-compatible LLM (Claude, GPT, Gemini...) and it gets a full Linux desktop with 13 tools to interact with **any application** — browsers, IDEs, office suites, terminals, legacy software, internal tools. No API needed. No integration required. If it has a UI, your agent can use it.
 
 ## What can your agent do with a full desktop?
 
@@ -110,39 +110,31 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 | **📋** | **Clipboard** | Read & write the clipboard — paste long text instantly |
 | **⌨️** | **Keyboard control** | Type text, press hotkeys, keyboard shortcuts — full keyboard access |
 | **🖥️** | **Shell access** | Run any command, launch any app, capture stdout/stderr |
-| **📊** | **Table extraction** | Pull structured table data (headers + rows) from any application |
-| **🔍** | **Smart element detection** | Wait for elements to appear, scroll them into view, inspect their state |
+| **🗺️** | **Spatial layout** | Every element has coordinates — your agent builds a mental map of the screen |
+| **🔍** | **Smart element detection** | Wait for elements to appear, filter by role, get page context summaries |
 | **🐳** | **Sandboxed** | Runs in Docker — isolated, reproducible, safe |
 | **👀** | **Live view** | Watch your agent work in real-time via VNC or browser (noVNC) |
 
-## 25+ tools at your agent's fingertips
+## 13 tools at your agent's fingertips
 
 ### Read & understand the screen
 | Tool | Description |
 |------|-------------|
-| `read_screen()` | Get all visible UI elements — names, roles, states — in reading order |
-| `get_element_details()` | Inspect any element: its value, actions, children, position |
-| `read_table()` | Extract structured table data as headers + rows |
-| `screenshot()` | Capture the screen (full or region) with cursor position overlay |
-| `get_screen_size()` | Get current screen resolution |
+| `read_screen()` | Get all visible UI elements as a flat list with coordinates. Returns `context` (page summary), `items` (app content), `browser` (chrome). Filter by `role` |
+| `screenshot()` | Capture the screen (full or region) with cursor position overlay — fallback when accessibility isn't enough |
 
 ### Interact with the UI
 | Tool | Description |
 |------|-------------|
-| `click_element()` | Find an element by name and click it |
-| `set_value()` | Set text, numbers, or slider values on form fields |
-| `focus_element()` | Give keyboard focus to any element |
-| `scroll_to_element()` | Scroll an off-screen element into view |
-| `wait_for_element()` | Wait until an element appears (with configurable timeout) |
+| `mouse_click(x, y)` | Click at coordinates from `read_screen()` — fast and unambiguous |
+| `wait_for_element(text)` | Wait until an element appears on screen (with configurable timeout) |
 
 ### Mouse & keyboard
 | Tool | Description |
 |------|-------------|
-| `mouse_move()` | Move the cursor with natural Bézier trajectories |
-| `mouse_click()` | Click at coordinates (left / middle / right) |
 | `mouse_double_click()` | Double-click at coordinates |
-| `mouse_drag()` | Drag with human-like movement |
-| `mouse_scroll()` | Scroll in any direction |
+| `mouse_drag()` | Drag from one position to another |
+| `mouse_scroll()` | Scroll in any direction (up/down/left/right) |
 | `type_text()` | Type with realistic per-character delays |
 | `press_key()` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
 
@@ -151,7 +143,6 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 |------|-------------|
 | `exec()` | Run shell commands with stdout/stderr capture |
 | `launch()` | Start GUI applications |
-| `wait()` | Pause execution |
 | `get_clipboard()` | Read clipboard contents |
 | `set_clipboard()` | Write to clipboard |
 
@@ -236,7 +227,7 @@ Your agent starts with accessibility (fast & cheap), and falls back to devices (
 uv run pytest --cov
 ```
 
-183 tests — 97% coverage.
+203 tests — 97% coverage.
 
 ## License
 
