@@ -26,6 +26,7 @@ _INTERACTIVE_ROLES = frozenset(
         Atspi.Role.TREE_ITEM,
         Atspi.Role.LIST_ITEM,
         Atspi.Role.TABLE_CELL,
+        Atspi.Role.TABLE_ROW,
     }
 )
 

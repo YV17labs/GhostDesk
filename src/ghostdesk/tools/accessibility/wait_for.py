@@ -28,7 +28,7 @@ async def wait_for_element(
             if "center_x" in result:
                 return {
                     "status": "ready",
-                    "message": "Element found. Page is ready — proceed immediately, do not call wait().",
+                    "message": "Element found. Page is ready — proceed with your next action.",
                     "element": result,
                 }
         except RuntimeError:

@@ -5,46 +5,79 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ghostdesk.tools.accessibility.read import (
-    get_element_details,
-    read_screen,
-    read_table,
-)
+from ghostdesk.tools.accessibility.read import read_screen
 
 MODULE = "ghostdesk.tools.accessibility.read"
+
+_EMPTY = {"items": [], "visible": 0, "total_in_tree": 0}
 
 
 @pytest.fixture(autouse=True)
 def _mock_run_atspi():
-    with patch(f"{MODULE}.run_atspi", new_callable=AsyncMock) as mock:
+    with (
+        patch(f"{MODULE}.run_atspi", new_callable=AsyncMock) as mock,
+        patch(f"{MODULE}.get_active_window", new_callable=AsyncMock, return_value="Test Window"),
+    ):
         yield mock
 
 
 # --- read_screen ---
 
 async def test_read_screen_default(_mock_run_atspi):
+    """Positions are included by default."""
     _mock_run_atspi.return_value = {
         "items": [{"role": "heading", "name": "Welcome"}],
         "visible": 1,
         "total_in_tree": 10,
     }
     result = await read_screen()
-    _mock_run_atspi.assert_awaited_once_with("read", ["--max", "500"])
+    _mock_run_atspi.assert_awaited_once_with(
+        "read", ["--max", "100", "--include-positions"],
+    )
     assert result["items"][0]["name"] == "Welcome"
-    assert result["visible"] == 1
-    assert result["total_in_tree"] == 10
+    assert result["active_window"] == "Test Window"
+
+
+async def test_read_screen_no_positions(_mock_run_atspi):
+    """Positions can be explicitly disabled."""
+    _mock_run_atspi.return_value = {**_EMPTY}
+    await read_screen(include_positions=False)
+    _mock_run_atspi.assert_awaited_once_with(
+        "read", ["--max", "100"],
+    )
 
 
 async def test_read_screen_custom_max(_mock_run_atspi):
-    _mock_run_atspi.return_value = {"items": [], "visible": 0, "total_in_tree": 0}
+    _mock_run_atspi.return_value = {**_EMPTY}
     await read_screen(max_results=10)
-    _mock_run_atspi.assert_awaited_once_with("read", ["--max", "10"])
+    _mock_run_atspi.assert_awaited_once_with(
+        "read", ["--max", "10", "--include-positions"],
+    )
 
 
 async def test_read_screen_with_role(_mock_run_atspi):
-    _mock_run_atspi.return_value = {"items": [], "visible": 0, "total_in_tree": 0}
+    _mock_run_atspi.return_value = {**_EMPTY}
     await read_screen(role="button", max_results=50)
-    _mock_run_atspi.assert_awaited_once_with("read", ["--max", "50", "--role", "button"])
+    _mock_run_atspi.assert_awaited_once_with(
+        "read", ["--max", "50", "--include-positions", "--role", "button"],
+    )
+
+
+async def test_read_screen_with_app(_mock_run_atspi):
+    _mock_run_atspi.return_value = {**_EMPTY}
+    await read_screen(app="Firefox")
+    _mock_run_atspi.assert_awaited_once_with(
+        "read", ["--max", "100", "--include-positions", "--app", "Firefox"],
+    )
+
+
+async def test_read_screen_role_alias(_mock_run_atspi):
+    """Alias 'row' should resolve to 'table_row'."""
+    _mock_run_atspi.return_value = {**_EMPTY}
+    await read_screen(role="row")
+    _mock_run_atspi.assert_awaited_once_with(
+        "read", ["--max", "100", "--include-positions", "--role", "table_row"],
+    )
 
 
 async def test_read_screen_invalid_role(_mock_run_atspi):
@@ -57,42 +90,31 @@ async def test_read_screen_all_valid_roles(_mock_run_atspi):
     """Every role in VALID_ROLES should pass validation."""
     from ghostdesk.tools.accessibility._client import VALID_ROLES
 
-    _mock_run_atspi.return_value = {"items": [], "visible": 0, "total_in_tree": 0}
+    _mock_run_atspi.return_value = {**_EMPTY}
     for role in VALID_ROLES:
         await read_screen(role=role)  # should not raise
 
 
-# --- get_element_details ---
-
-async def test_get_element_details_no_role(_mock_run_atspi):
-    _mock_run_atspi.return_value = {"name": "Submit", "role": "button", "states": ["enabled"]}
-    result = await get_element_details("Submit")
-    _mock_run_atspi.assert_awaited_once_with("details", ["Submit"])
-    assert result["name"] == "Submit"
-
-
-async def test_get_element_details_with_role(_mock_run_atspi):
-    _mock_run_atspi.return_value = {"name": "Submit", "role": "button"}
-    result = await get_element_details("Submit", role="button")
-    _mock_run_atspi.assert_awaited_once_with("details", ["Submit", "--role", "button"])
+async def test_read_screen_browser_split(_mock_run_atspi):
+    """Browser chrome is passed through when present."""
+    _mock_run_atspi.return_value = {
+        "items": [{"role": "button", "name": "Submit", "y": 200, "x": 100}],
+        "browser": [{"role": "button", "name": "Reload", "y": 44, "x": 78}],
+        "visible": 2,
+        "total_in_tree": 2,
+    }
+    result = await read_screen()
+    assert result["items"][0]["name"] == "Submit"
+    assert result["browser"][0]["name"] == "Reload"
 
 
-# --- read_table ---
-
-async def test_read_table_no_text(_mock_run_atspi):
-    _mock_run_atspi.return_value = {"headers": ["A", "B"], "rows": [["1", "2"]]}
-    result = await read_table()
-    _mock_run_atspi.assert_awaited_once_with("table", ["--max-rows", "100"])
-    assert result["headers"] == ["A", "B"]
-
-
-async def test_read_table_with_text(_mock_run_atspi):
-    _mock_run_atspi.return_value = {"headers": [], "rows": []}
-    await read_table(text="Sales", max_rows=50)
-    _mock_run_atspi.assert_awaited_once_with("table", ["--max-rows", "50", "--text", "Sales"])
-
-
-async def test_read_table_no_text_custom_max(_mock_run_atspi):
-    _mock_run_atspi.return_value = {}
-    await read_table(max_rows=10)
-    _mock_run_atspi.assert_awaited_once_with("table", ["--max-rows", "10"])
+async def test_read_screen_no_browser(_mock_run_atspi):
+    """Non-browser apps return items without browser key."""
+    _mock_run_atspi.return_value = {
+        "items": [{"role": "button", "name": "OK"}],
+        "visible": 1,
+        "total_in_tree": 1,
+    }
+    result = await read_screen()
+    assert "browser" not in result
+    assert result["items"][0]["name"] == "OK"
