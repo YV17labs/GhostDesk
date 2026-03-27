@@ -69,14 +69,6 @@ async def screenshot(
             pass
 
 
-async def get_screen_size() -> dict[str, int]:
-    """Return the current screen width and height in pixels."""
-    output = await run(["xdotool", "getdisplaygeometry"])
-    parts = output.split()
-    return {"width": int(parts[0]), "height": int(parts[1])}
-
-
 def register(mcp: FastMCP) -> None:
     """Register screenshot-related tools on the MCP server."""
     mcp.tool()(screenshot)
-    mcp.tool()(get_screen_size)
