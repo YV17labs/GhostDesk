@@ -19,12 +19,12 @@ async def test_create_app_returns_fastmcp():
     assert isinstance(app, FastMCP)
 
 
-async def test_create_app_has_22_tools():
-    """create_app() registers exactly 22 tools."""
+async def test_create_app_has_13_tools():
+    """create_app() registers exactly 13 tools."""
     app = create_app(port=9999)
 
     tools = app._tool_manager._tools
-    assert len(tools) == 22, f"Expected 22 tools, got {len(tools)}: {sorted(tools.keys())}"
+    assert len(tools) == 13, f"Expected 13 tools, got {len(tools)}: {sorted(tools.keys())}"
 
 
 async def test_create_app_custom_port():

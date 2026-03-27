@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ghostdesk.tools.devices.screen import get_screen_size, screenshot
+from ghostdesk.tools.devices.screen import screenshot
 
 MODULE = "ghostdesk.tools.devices.screen"
 
@@ -135,9 +135,3 @@ async def test_screenshot_custom_quality(_mock_deps):
     _, kwargs = mock_draw.call_args
     assert kwargs.get("quality") == 50
 
-
-# --- get_screen_size ---
-
-async def test_get_screen_size(_mock_deps):
-    result = await get_screen_size()
-    assert result == {"width": 1920, "height": 1080}

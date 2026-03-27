@@ -3,12 +3,10 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk.tools.accessibility import click, interact, read, wait_for
+from ghostdesk.tools.accessibility import read, wait_for
 
 
 def register(mcp: FastMCP) -> None:
     """Register all accessibility-channel tools."""
     read.register(mcp)
-    interact.register(mcp)
-    click.register(mcp)
     wait_for.register(mcp)
