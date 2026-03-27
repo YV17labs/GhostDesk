@@ -2,43 +2,44 @@
 """LLM instructions for the GhostDesk MCP server."""
 
 INSTRUCTIONS = """
-You control a virtual Linux desktop with two tool channels:
+You control a virtual Linux desktop.
 
-- **accessibility** (fast, cheap): read_screen, click_element, set_value,
-  focus, wait_for_element, launch, exec
-- **devices** (vision, stealth): screenshot, mouse_click, mouse_scroll,
-  type_text, press_key, set_clipboard
+## How to interact
 
-## Rules
+- **See the screen**: read_screen() — returns elements with role, name, and coordinates.
+- **Click**: mouse_click(x, y) — use center_x, center_y from read_screen results.
+- **Type text**: mouse_click(x, y) on the field, then type_text("hello").
+- **Press keys**: press_key("Return"), press_key("ctrl+v").
+- **Wait for page**: wait_for_element("expected text") — use after navigation.
+- **Launch apps**: launch("firefox https://example.com").
+- **Scroll**: mouse_scroll(x, y, direction="down", amount=3).
+- **Screenshot**: screenshot() — only when read_screen() is not enough.
 
-1. Always start with read_screen() — the app may already be open.
-2. If read_screen() returns empty → use screenshot(). Do not retry
-   read_screen() in a loop.
-3. Before launching an app, check it is installed:
-   - GUI: exec("ls /usr/share/applications/")
-   - CLI: exec("which <tool>")
-   - Missing: exec("sudo apt-get update && sudo apt-get install -y <pkg>")
-4. After launch() → use wait_for_element(). Never use wait().
-5. After every action → verify with read_screen().
-6. Input preference: set_value() > focus+type_text > click+type_text.
-7. Long text → set_clipboard() then press_key("ctrl+v").
-8. On error → retry once, then switch to devices.
-9. If click_element() hits the wrong target → screenshot() to locate,
-   then mouse_click() at exact coordinates.
-10. Scroll with mouse_scroll(amount=3). Never exceed 5 per scroll.
-11. On "Session not found" → stop and tell the user.
+## 4 rules
+
+1. **read_screen() first.** It returns `items` (app content with coordinates),
+   `browser` (browser chrome), and `not_shown` (hidden element types).
+
+2. **Use `not_shown` to find hidden content.** If read_screen() says
+   `not_shown: ["table_row"]`, call `read_screen(role="table_row")`.
+
+3. **Click with coordinates.** Each element has `center_x`, `center_y`.
+   Use `mouse_click(center_x, center_y)` — fast and unambiguous.
+
+4. **wait_for_element() after navigation.** After clicking a link or
+   submitting a form, wait_for_element("expected text") tells you
+   when the page is ready. Then read_screen() again.
 
 ## Example
 
 ```
-read_screen()                              # check current state
-if "firefox" not detected:
-  launch("firefox https://example.com")
-  wait_for_element("example", timeout_seconds=15)
-read_screen()                              # verify
-click_element("Log in")
-set_value("Email", "user@example.com")
-click_element("Submit")
-read_screen()                              # verify
+read_screen()
+# → items: [{role: "button", name: "Compose", center_x: 108, center_y: 185},
+#            {role: "table_row", name: "Alice, Meeting tomorrow...", center_x: 740, center_y: 218}]
+mouse_click(740, 218)
+# → clicked the email
+wait_for_element("Alice")
+read_screen()
+# → email content
 ```
 """
