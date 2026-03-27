@@ -45,6 +45,7 @@ from .cmd_table import cmd_table
 from .cmd_scroll import cmd_scroll
 from .cmd_set_value import cmd_set_value
 from .cmd_focus import cmd_focus
+from .cmd_focused import cmd_focused
 
 
 def main() -> None:
@@ -54,7 +55,12 @@ def main() -> None:
     # read (primary command — replaces both "elements" and "text")
     p_read = subparsers.add_parser("read", help="Read screen like a screen reader")
     p_read.add_argument("--role", action="append", default=None)
-    p_read.add_argument("--max", type=int, default=500)
+    p_read.add_argument("--max", type=int, default=100,
+                       help="Max visible elements to return (default: 100)")
+    p_read.add_argument("--include-positions", action="store_true",
+                       help="Include x/y coordinates in output (default: false)")
+    p_read.add_argument("--app", default=None,
+                       help="Filter by application name (e.g. 'Firefox')")
     p_read.set_defaults(func=cmd_read)
 
     # details
@@ -94,6 +100,10 @@ def main() -> None:
     p_focus.add_argument("--role", default=None)
     p_focus.set_defaults(func=cmd_focus)
 
+    # focused
+    p_focused = subparsers.add_parser("focused", help="Return the focused element")
+    p_focused.set_defaults(func=cmd_focused)
+
     args = parser.parse_args()
 
     if hasattr(args, "func"):
@@ -101,7 +111,9 @@ def main() -> None:
     else:
         # Default: read
         args.role = None
-        args.max = 500
+        args.app = None
+        args.max = 100
+        args.include_positions = True
         cmd_read(args)
 
 

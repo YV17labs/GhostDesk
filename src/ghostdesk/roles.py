@@ -12,7 +12,7 @@ Any change here must be reflected in atspi/_roles.py's Atspi.Role mappings.
 INTERACTIVE_ROLE_NAMES: frozenset[str] = frozenset({
     "button", "toggle", "checkbox", "radio", "combobox", "menu", "menuitem",
     "link", "textfield", "password", "text", "spinbutton", "slider", "tab",
-    "treeitem", "listitem", "cell",
+    "treeitem", "listitem", "cell", "table_row",
 })
 
 # All supported role names — every AT-SPI role that ghostdesk can map.
