@@ -1,4 +1,4 @@
-# Copyright (c) 2026 YV17 — MIT License
+# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
 """Tests for ghostdesk.tools.devices.mouse."""
 
 from unittest.mock import AsyncMock, patch

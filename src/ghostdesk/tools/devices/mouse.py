@@ -1,4 +1,4 @@
-# Copyright (c) 2026 YV17 — MIT License
+# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
 """Mouse control tools — with optional human-like movement."""
 
 from mcp.server.fastmcp import FastMCP
