@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ghostdesk.tools.devices.screen import get_screen_size, screenshot
+from ghostdesk.tools.devices.screen import screenshot
 
 MODULE = "ghostdesk.tools.devices.screen"
 
@@ -84,8 +84,11 @@ async def test_screenshot_region(_mock_deps):
     # cursor coords should be adjusted for region offset
     meta = result[1]
     assert meta["cursor"] == {"x": 90, "y": 180}  # 100-10, 200-20
-    # draw_cursor should receive adjusted coords
-    mock_draw.assert_called_once_with(_make_tiny_png(), 90, 180)
+    # draw_cursor should receive adjusted coords + format kwargs
+    mock_draw.assert_called_once_with(
+        _make_tiny_png(), 90, 180,
+        output_format="png", quality=80,
+    )
 
 
 async def test_screenshot_partial_region_treated_as_fullscreen(_mock_deps):
@@ -110,8 +113,25 @@ async def test_screenshot_cleans_up_tempfile(_mock_deps):
     assert len(new_pngs) == 0
 
 
-# --- get_screen_size ---
+async def test_screenshot_default_format_is_png(_mock_deps):
+    _, _, _, mock_draw = _mock_deps
+    await screenshot()
+    mock_draw.assert_called_once()
+    _, kwargs = mock_draw.call_args
+    assert kwargs.get("output_format") == "png"
+    assert kwargs.get("quality") == 80
 
-async def test_get_screen_size(_mock_deps):
-    result = await get_screen_size()
-    assert result == {"width": 1920, "height": 1080}
+
+async def test_screenshot_webp_format(_mock_deps):
+    _, _, _, mock_draw = _mock_deps
+    await screenshot(output_format="webp")
+    _, kwargs = mock_draw.call_args
+    assert kwargs.get("output_format") == "webp"
+
+
+async def test_screenshot_custom_quality(_mock_deps):
+    _, _, _, mock_draw = _mock_deps
+    await screenshot(quality=50)
+    _, kwargs = mock_draw.call_args
+    assert kwargs.get("quality") == 50
+

@@ -1,9 +1,12 @@
 # Copyright (c) 2026 YV17 — MIT License
-"""Draw a visible cursor on screenshot PNGs."""
+"""Draw a visible cursor on screenshot images."""
 
 import io
+from typing import Literal
 
 from PIL import Image, ImageDraw
+
+ImageFormat = Literal["webp", "png"]
 
 
 def draw_cursor(
@@ -12,12 +15,22 @@ def draw_cursor(
     y: int,
     size: int = 24,
     color: tuple[int, int, int, int] = (255, 50, 50, 230),
+    *,
+    output_format: ImageFormat = "png",
+    quality: int = 80,
 ) -> bytes:
     """Overlay a bright crosshair + dot on *png_bytes* at position (x, y).
 
     The crosshair is intentionally vivid so the LLM can always spot the
     current cursor position regardless of background.
+
+    *output_format* controls the final encoding (``"webp"`` or ``"png"``).
+    *quality* applies to WebP only (ignored for PNG).
     """
+    if output_format not in ("webp", "png"):
+        output_format = "png"
+    quality = max(1, min(quality, 100))
+
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     draw = ImageDraw.Draw(img)
 
@@ -41,5 +54,8 @@ def draw_cursor(
 
     result = img.convert("RGB")
     buf = io.BytesIO()
-    result.save(buf, format="PNG")
+    if output_format == "webp":
+        result.save(buf, format="WebP", quality=quality, method=4)
+    else:
+        result.save(buf, format="PNG")
     return buf.getvalue()

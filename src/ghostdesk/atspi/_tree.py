@@ -29,12 +29,17 @@ def _find_element(
     obj: Atspi.Accessible,
     text: str | None = None,
     role: str | None = None,
+    _text_lower: str | None = None,
 ) -> Atspi.Accessible | None:
     """Find an element by text match on name or description, and/or by role.
 
     If text is None, matches any element with the given role.
     If role is None, matches any role.
     """
+    # Lowercase text once, reuse across recursion.
+    if _text_lower is None and text is not None:
+        _text_lower = text.lower()
+
     try:
         obj_role = obj.get_role()
     except Exception:
@@ -57,8 +62,7 @@ def _find_element(
             except Exception:
                 pass
 
-            text_lower = text.lower()
-            if text_lower in name.lower() or text_lower in desc.lower():
+            if _text_lower in name.lower() or _text_lower in desc.lower():
                 return obj
 
     try:
@@ -70,7 +74,7 @@ def _find_element(
         try:
             child = obj.get_child_at_index(i)
             if child is not None:
-                found = _find_element(child, text, role)
+                found = _find_element(child, text, role, _text_lower)
                 if found is not None:
                     return found
         except Exception:

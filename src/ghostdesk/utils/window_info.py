@@ -8,22 +8,23 @@ import asyncio
 from ghostdesk.utils.cmd import run
 
 
+async def get_active_window() -> str | None:
+    """Return just the active window title (cheap — 2 xdotool calls)."""
+    try:
+        wid = (await run(["xdotool", "getactivewindow"])).strip()
+        name = (await run(["xdotool", "getwindowname", wid])).strip()
+        return name or None
+    except Exception:
+        return None
+
+
 async def get_window_info() -> dict:
     """Return active window title and list of visible windows.
 
     All fields are best-effort — returns ``None`` / empty list on failure
     (e.g. no window focused, bare desktop).
     """
-    info: dict = {"active_window": None, "windows": []}
-
-    # Active window
-    try:
-        wid = (await run(["xdotool", "getactivewindow"])).strip()
-        name = (await run(["xdotool", "getwindowname", wid])).strip()
-        if name:
-            info["active_window"] = name
-    except Exception:
-        pass
+    info: dict = {"active_window": await get_active_window(), "windows": []}
 
     # Visible windows — fetch name+geometry in parallel per window
     try:
