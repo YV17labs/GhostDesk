@@ -18,7 +18,7 @@ def test_interactive_role_names_is_frozenset():
     "button", "toggle", "checkbox", "radio", "combobox",
     "menu", "menuitem", "link", "textfield", "password",
     "text", "spinbutton", "slider", "tab", "treeitem",
-    "listitem", "cell",
+    "listitem", "cell", "table_row",
 ])
 def test_contains_interactive_role(role):
     """INTERACTIVE_ROLE_NAMES contains all expected interactive roles."""
@@ -35,8 +35,8 @@ def test_does_not_contain_non_interactive_role(role):
 
 
 def test_interactive_role_names_count():
-    """INTERACTIVE_ROLE_NAMES contains exactly 17 roles."""
-    assert len(INTERACTIVE_ROLE_NAMES) == 17
+    """INTERACTIVE_ROLE_NAMES contains exactly 18 roles."""
+    assert len(INTERACTIVE_ROLE_NAMES) == 18
 
 
 def test_interactive_role_names_is_immutable():

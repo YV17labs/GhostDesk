@@ -18,14 +18,8 @@ async def _move_to(x: int, y: int, humanize: bool) -> None:
         await run(["xdotool", "mousemove", str(x), str(y)])
 
 
-async def mouse_move(x: int, y: int, humanize: bool = True) -> str:
-    """Move mouse cursor to screen coordinates."""
-    await _move_to(x, y, humanize)
-    return f"Moved to ({x}, {y})"
-
-
 async def mouse_click(x: int, y: int, button: str = "left", humanize: bool = True) -> str:
-    """Click at screen coordinates."""
+    """Click at screen coordinates. Use center_x, center_y from read_screen() results."""
     btn = _BUTTON_MAP.get(button, "1")
     await _move_to(x, y, humanize)
     await run(["xdotool", "click", btn])
@@ -33,7 +27,7 @@ async def mouse_click(x: int, y: int, button: str = "left", humanize: bool = Tru
 
 
 async def mouse_double_click(x: int, y: int, button: str = "left", humanize: bool = True) -> str:
-    """Double-click at screen coordinates."""
+    """Double-click at screen coordinates. Use for opening files or selecting words."""
     btn = _BUTTON_MAP.get(button, "1")
     await _move_to(x, y, humanize)
     await run(["xdotool", "click", "--repeat", "2", "--delay", "100", btn])
@@ -44,7 +38,7 @@ async def mouse_drag(
     from_x: int, from_y: int, to_x: int, to_y: int,
     button: str = "left", humanize: bool = True,
 ) -> str:
-    """Drag mouse from one position to another."""
+    """Drag from one position to another. Use for selecting text, moving items, or resizing."""
     btn = _BUTTON_MAP.get(button, "1")
     await _move_to(from_x, from_y, humanize)
     await run(["xdotool", "mousedown", btn])
@@ -54,7 +48,7 @@ async def mouse_drag(
 
 
 async def mouse_scroll(x: int, y: int, direction: str = "down", amount: int = 3, humanize: bool = True) -> str:
-    """Scroll the mouse wheel at a given position."""
+    """Scroll at a position. direction: up/down/left/right. amount: number of scroll steps (max 5)."""
     scroll_map = {"up": "4", "down": "5", "left": "6", "right": "7"}
     btn = scroll_map.get(direction, "5")
     await _move_to(x, y, humanize)
@@ -64,7 +58,6 @@ async def mouse_scroll(x: int, y: int, direction: str = "down", amount: int = 3,
 
 def register(mcp: FastMCP) -> None:
     """Register mouse-related tools on the MCP server."""
-    mcp.tool()(mouse_move)
     mcp.tool()(mouse_click)
     mcp.tool()(mouse_double_click)
     mcp.tool()(mouse_drag)

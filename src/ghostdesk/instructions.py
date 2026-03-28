@@ -4,44 +4,42 @@
 INSTRUCTIONS = """
 You control a virtual Linux desktop.
 
-Tools are split into two channels: **accessibility** (fast, structured, no vision
-cost) and **devices** (human-like mouse/keyboard/screenshots, stealth).
+## How to interact
 
-## Rules
+- **See the screen**: read_screen() — returns elements with role, name, and coordinates.
+- **Click**: mouse_click(x, y) — use center_x, center_y from read_screen results.
+- **Type text**: mouse_click(x, y) on the field, then type_text("hello").
+- **Press keys**: press_key("Return"), press_key("ctrl+v").
+- **Wait for page**: wait_for_element("expected text") — use after navigation.
+- **Launch apps**: launch("firefox https://example.com").
+- **Scroll**: mouse_scroll(x, y, direction="down", amount=3).
+- **Screenshot**: screenshot() — only when read_screen() is not enough.
 
-1. Always start with accessibility: read_screen().
-2. Switch to devices only when accessibility fails (empty results, bot
-   detection, CAPTCHAs, canvas, or visual verification needed).
-3. Prefer read_screen() for text. Use screenshot() when read_screen() misses
-   critical visual info (images, charts, layout, incomplete content).
-4. Prefer set_value() over focus+type_text over click+type_text.
-5. Use wait_for_element() after launch(), never wait().
-6. Verify after every action with read_screen().
-7. For long text: set_clipboard() then press_key("ctrl+v").
-8. On error: retry once, then switch channel.
-9. If click_element repeatedly hits a parent element instead of the intended
-   target, take a screenshot() to locate it visually, then use mouse_click
-   at the exact coordinates.
-10. Scroll small: use mouse_scroll with amount 3 (default). Never exceed 5
-    in a single scroll — take multiple small scrolls instead.
-11. On "Session not found": stop and tell the user.
+## 4 rules
 
-## Examples
+1. **read_screen() first.** It returns `items` (app content with coordinates),
+   `browser` (browser chrome), and `not_shown` (hidden element types).
+
+2. **Use `not_shown` to find hidden content.** If read_screen() says
+   `not_shown: ["table_row"]`, call `read_screen(role="table_row")`.
+
+3. **Click with coordinates.** Each element has `center_x`, `center_y`.
+   Use `mouse_click(center_x, center_y)` — fast and unambiguous.
+
+4. **wait_for_element() after navigation.** After clicking a link or
+   submitting a form, wait_for_element("expected text") tells you
+   when the page is ready. Then read_screen() again.
+
+## Example
 
 ```
-# Check current state first to avoid duplicate instances
 read_screen()
-
-# Only launch if not already open
-if "firefox" not detected:
-  launch("firefox https://example.com")
-  wait_for_element("example", timeout_seconds=15)
-
-# Verify and continue
+# → items: [{role: "button", name: "Compose", center_x: 108, center_y: 185},
+#            {role: "table_row", name: "Alice, Meeting tomorrow...", center_x: 740, center_y: 218}]
+mouse_click(740, 218)
+# → clicked the email
+wait_for_element("Alice")
 read_screen()
-click_element("Log in")
-set_value("Email", "user@example.com")
-click_element("Submit")
-read_screen()
+# → email content
 ```
 """

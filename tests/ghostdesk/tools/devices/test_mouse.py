@@ -9,7 +9,6 @@ from ghostdesk.tools.devices.mouse import (
     mouse_click,
     mouse_double_click,
     mouse_drag,
-    mouse_move,
     mouse_scroll,
 )
 
@@ -28,32 +27,6 @@ def _mock_deps():
 
 def _mocks(_mock_deps):
     return _mock_deps
-
-
-# --- mouse_move ---
-
-async def test_mouse_move_humanize(_mock_deps):
-    mock_run, mock_pos, mock_hmove = _mock_deps
-    result = await mouse_move(100, 200, humanize=True)
-    mock_pos.assert_awaited_once()
-    mock_hmove.assert_awaited_once_with(10, 20, 100, 200)
-    mock_run.assert_not_awaited()
-    assert result == "Moved to (100, 200)"
-
-
-async def test_mouse_move_no_humanize(_mock_deps):
-    mock_run, mock_pos, mock_hmove = _mock_deps
-    result = await mouse_move(100, 200, humanize=False)
-    mock_run.assert_awaited_once_with(["xdotool", "mousemove", "100", "200"])
-    mock_hmove.assert_not_awaited()
-    assert result == "Moved to (100, 200)"
-
-
-async def test_mouse_move_default_humanize(_mock_deps):
-    """Default humanize should be True."""
-    _, mock_pos, mock_hmove = _mock_deps
-    await mouse_move(5, 10)
-    mock_hmove.assert_awaited_once()
 
 
 # --- mouse_click ---

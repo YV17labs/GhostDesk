@@ -5,6 +5,7 @@ import logging
 import time
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.exceptions import ToolError
 
 logger = logging.getLogger("ghostdesk")
 
@@ -59,6 +60,14 @@ def install_call_logging(mcp: FastMCP) -> None:
             elapsed = time.monotonic() - t0
             logger.info("%s(%s) → OK (%.1fs)", name, format_args(), elapsed)
             return result
+        except ToolError as e:
+            elapsed = time.monotonic() - t0
+            msg = str(e)
+            if "validation error" in msg.lower():
+                # Replace verbose Pydantic trace with a short message.
+                msg = f"Invalid arguments for {name}. You sent: {format_args()}. Each parameter must be passed separately with the correct type."
+            logger.error("%s(%s) → ERROR (%.1fs): %s", name, format_args(), elapsed, msg)
+            raise ToolError(msg) from e
         except Exception:
             elapsed = time.monotonic() - t0
             logger.exception("%s(%s) → ERROR (%.1fs)", name, format_args(), elapsed)

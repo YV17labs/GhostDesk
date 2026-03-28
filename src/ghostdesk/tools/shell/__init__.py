@@ -3,11 +3,10 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk.tools.shell import exec_, launch, wait
+from ghostdesk.tools.shell import exec_, launch
 
 
 def register(mcp: FastMCP) -> None:
     """Register all shell-channel tools."""
     exec_.register(mcp)
     launch.register(mcp)
-    wait.register(mcp)
