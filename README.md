@@ -2,7 +2,6 @@
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
   <img src="https://img.shields.io/badge/python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT License">
-  <img src="https://img.shields.io/badge/coverage-97%25-brightgreen?style=for-the-badge" alt="Coverage 97%">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Docker-orange?style=for-the-badge&logo=docker&logoColor=white" alt="Platform">
 </p>
 
@@ -10,7 +9,7 @@
 
 <p align="center">
   <strong>Give your AI agent eyes, hands, and a full Linux desktop.</strong><br>
-  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, read UI elements, fill forms, launch apps, and run shell commands — all inside a sandboxed virtual desktop.
+  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, launch apps, and run shell commands — all inside a sandboxed virtual desktop.
 </p>
 
 <p align="center">
@@ -27,7 +26,11 @@
 
 Most AI agents are trapped in text. They can call APIs and generate code, but they can't **use software**. GhostDesk changes that.
 
+<<<<<<< HEAD
 Connect any MCP-compatible LLM (Claude, GPT, Gemini...) and it gets a full Linux desktop with 25+ tools to interact with **any application** — browsers, IDEs, office suites, terminals, legacy software, internal tools. No API needed. No integration required. If it has a UI, your agent can use it.
+=======
+Connect any MCP-compatible LLM (Claude, GPT, Gemini...) and it gets a full Linux desktop with 11 tools to interact with **any application** — browsers, IDEs, office suites, terminals, legacy software, internal tools. No API needed. No integration required. If it has a UI, your agent can use it.
+>>>>>>> ef25bdb (Simplify API: Remove accessibility tools, focus on screenshot/desktop control)
 
 ## What can your agent do with a full desktop?
 
@@ -50,7 +53,7 @@ Your agent opens the browser, logs in, downloads the file, switches to another a
  extract pricing from each page, and summarize in a spreadsheet."
 ```
 
-No Selenium. No CSS selectors. No Puppeteer scripts that break every week. The agent reads the page semantically, clicks what it sees, fills forms naturally — and falls back to human-like mouse movement when sites detect bots.
+No Selenium. No CSS selectors. No Puppeteer scripts that break every week. The agent looks at the screen, clicks what it sees, fills forms naturally — with human-like mouse movement that bypasses bot detection.
 
 ### Operate any software — no API required
 
@@ -69,7 +72,7 @@ That old Java app with no API? That internal admin panel from 2010? A Windows ap
  then export the raw data."
 ```
 
-The accessibility engine returns structured tables (headers + rows), form values, and element states — not raw pixels. Your agent reads UIs like a screen reader, fast and accurate.
+The agent takes screenshots, reads the screen visually, and extracts what it needs — works on any application, any UI framework, any language.
 
 ### QA & UI testing with evidence
 
@@ -104,22 +107,29 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 
 | | Feature | Why it matters |
 |---|---|---|
-| **👁️** | **Accessibility engine** | Reads UI elements semantically (buttons, inputs, labels, tables) — fast, structured, zero vision cost |
+| **📸** | **Screenshots** | Full or regional captures with cursor overlay — the agent sees exactly what a human would see |
 | **🖱️** | **Human-like input** | Bézier mouse curves, variable typing speed, micro-jitter — bypasses bot detection |
-| **📸** | **Screenshots** | Full or regional captures with cursor overlay — for when your agent needs to *see* |
 | **📋** | **Clipboard** | Read & write the clipboard — paste long text instantly |
 | **⌨️** | **Keyboard control** | Type text, press hotkeys, keyboard shortcuts — full keyboard access |
 | **🖥️** | **Shell access** | Run any command, launch any app, capture stdout/stderr |
+<<<<<<< HEAD
 | **📊** | **Table extraction** | Pull structured table data (headers + rows) from any application |
 | **🔍** | **Smart element detection** | Wait for elements to appear, scroll them into view, inspect their state |
 | **🐳** | **Sandboxed** | Runs in Docker — isolated, reproducible, safe |
 | **👀** | **Live view** | Watch your agent work in real-time via VNC or browser (noVNC) |
 
 ## 25+ tools at your agent's fingertips
+=======
+| **🐳** | **Sandboxed** | Runs in Docker — isolated, reproducible, safe |
+| **👀** | **Live view** | Watch your agent work in real-time via VNC or browser (noVNC) |
 
-### Read & understand the screen
+## 11 tools at your agent's fingertips
+>>>>>>> ef25bdb (Simplify API: Remove accessibility tools, focus on screenshot/desktop control)
+
+### See the screen
 | Tool | Description |
 |------|-------------|
+<<<<<<< HEAD
 | `read_screen()` | Get all visible UI elements — names, roles, states — in reading order |
 | `get_element_details()` | Inspect any element: its value, actions, children, position |
 | `read_table()` | Extract structured table data as headers + rows |
@@ -134,12 +144,19 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 | `focus_element()` | Give keyboard focus to any element |
 | `scroll_to_element()` | Scroll an off-screen element into view |
 | `wait_for_element()` | Wait until an element appears (with configurable timeout) |
+=======
+| `screenshot()` | Capture the screen (full or region) with cursor position overlay |
+>>>>>>> ef25bdb (Simplify API: Remove accessibility tools, focus on screenshot/desktop control)
 
 ### Mouse & keyboard
 | Tool | Description |
 |------|-------------|
+<<<<<<< HEAD
 | `mouse_move()` | Move the cursor with natural Bézier trajectories |
 | `mouse_click()` | Click at coordinates (left / middle / right) |
+=======
+| `mouse_click(x, y)` | Click at coordinates |
+>>>>>>> ef25bdb (Simplify API: Remove accessibility tools, focus on screenshot/desktop control)
 | `mouse_double_click()` | Double-click at coordinates |
 | `mouse_drag()` | Drag with human-like movement |
 | `mouse_scroll()` | Scroll in any direction |
@@ -212,13 +229,13 @@ See GhostDesk in action:
 
 ## How it works
 
-GhostDesk uses **two interaction channels** that your agent switches between automatically:
+GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your LLM agent connects and gets **screenshot-first interaction**:
 
-**Accessibility channel** — Uses Linux's AT-SPI (the same API screen readers use) to read and interact with UI elements. Fast, structured, no screenshots needed. Perfect for forms, buttons, menus, and tables.
+1. **Screenshot** — the agent takes a screenshot to see what's on screen, just like a human looking at their monitor
+2. **Act** — based on what it sees, the agent clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter)
+3. **Verify** — the agent takes another screenshot to confirm the result
 
-**Devices channel** — Simulates real mouse and keyboard input with human-like behavior: Bézier curves for mouse movement, variable typing delays, micro-jitter on click targets. Indistinguishable from a real user. Used when accessibility isn't enough — canvas apps, CAPTCHAs, visual verification.
-
-Your agent starts with accessibility (fast & cheap), and falls back to devices (stealth & visual) only when needed.
+This approach works with **any application** — web apps, native apps, legacy software, even apps with no accessibility support. If it renders pixels, the agent can use it.
 
 ## Configuration
 
@@ -236,8 +253,11 @@ Your agent starts with accessibility (fast & cheap), and falls back to devices (
 uv run pytest --cov
 ```
 
+<<<<<<< HEAD
 183 tests — 97% coverage.
 
+=======
+>>>>>>> ef25bdb (Simplify API: Remove accessibility tools, focus on screenshot/desktop control)
 ## License
 
 MIT — see [LICENSE](LICENSE).

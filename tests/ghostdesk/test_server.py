@@ -19,12 +19,21 @@ async def test_create_app_returns_fastmcp():
     assert isinstance(app, FastMCP)
 
 
+<<<<<<< HEAD
 async def test_create_app_has_22_tools():
     """create_app() registers exactly 22 tools."""
     app = create_app(port=9999)
 
     tools = app._tool_manager._tools
     assert len(tools) == 22, f"Expected 22 tools, got {len(tools)}: {sorted(tools.keys())}"
+=======
+async def test_create_app_has_11_tools():
+    """create_app() registers exactly 11 tools."""
+    app = create_app(port=9999)
+
+    tools = app._tool_manager._tools
+    assert len(tools) == 11, f"Expected 11 tools, got {len(tools)}: {sorted(tools.keys())}"
+>>>>>>> ef25bdb (Simplify API: Remove accessibility tools, focus on screenshot/desktop control)
 
 
 async def test_create_app_custom_port():
