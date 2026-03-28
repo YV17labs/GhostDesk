@@ -5,9 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SCREEN_WIDTH=1280 \
     SCREEN_HEIGHT=800 \
     SCREEN_DEPTH=24 \
-    PORT=3000 \
-    GTK_MODULES=gail:atk-bridge \
-    GNOME_ACCESSIBILITY=1
+    PORT=3000
 
 # Add Mozilla APT repo for real Firefox deb (Ubuntu ships a snap wrapper)
 RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
@@ -36,10 +34,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     python3 \
     python3-venv \
-    dbus-x11 \
-    at-spi2-core \
-    gir1.2-atspi-2.0 \
-    python3-gi \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user with passwordless sudo
@@ -67,14 +61,6 @@ COPY .docker/supervisor.conf /etc/supervisor/conf.d/ghostdesk.conf
 RUN mkdir -p /home/agent/.config/openbox \
     && printf '<?xml version="1.0" encoding="UTF-8"?>\n<openbox_config xmlns="http://openbox.org/3.4/rc">\n  <applications>\n    <application class="*"><decor>no</decor></application>\n  </applications>\n</openbox_config>\n' > /home/agent/.config/openbox/rc.xml \
     && chown -R agent:agent /home/agent/.config
-
-# Enable Firefox accessibility (AT-SPI) — required for list_elements / click_element tools
-RUN mkdir -p /home/agent/.mozilla/firefox/ghostdesk.default-release \
-    && printf '[General]\nStartWithLastProfile=1\n\n[Profile0]\nName=default-release\nIsRelative=1\nPath=ghostdesk.default-release\nDefault=1\n' \
-       > /home/agent/.mozilla/firefox/profiles.ini \
-    && printf 'user_pref("accessibility.force_disabled", 0);\nuser_pref("accessibility.AOM.enabled", true);\n' \
-       > /home/agent/.mozilla/firefox/ghostdesk.default-release/user.js \
-    && chown -R agent:agent /home/agent/.mozilla
 
 EXPOSE 3000 5900 6080
 
