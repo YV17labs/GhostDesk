@@ -6,40 +6,31 @@ You control a virtual Linux desktop.
 
 ## How to interact
 
-- **See the screen**: read_screen() — returns elements with role, name, and coordinates.
-- **Click**: mouse_click(x, y) — use center_x, center_y from read_screen results.
+- **See the screen**: screenshot() — returns an image of the desktop.
+- **Click**: mouse_click(x, y) — click at the coordinates you see in the screenshot.
 - **Type text**: mouse_click(x, y) on the field, then type_text("hello").
 - **Press keys**: press_key("Return"), press_key("ctrl+v").
-- **Wait for page**: wait_for_element("expected text") — use after navigation.
 - **Launch apps**: launch("firefox https://example.com").
 - **Scroll**: mouse_scroll(x, y, direction="down", amount=3).
-- **Screenshot**: screenshot() — only when read_screen() is not enough.
 
-## 4 rules
+## 3 rules
 
-1. **read_screen() first.** It returns `items` (app content with coordinates),
-   `browser` (browser chrome), and `not_shown` (hidden element types).
+1. **screenshot() first.** Look at the image to understand what is on screen.
 
-2. **Use `not_shown` to find hidden content.** If read_screen() says
-   `not_shown: ["table_row"]`, call `read_screen(role="table_row")`.
+2. **Click what you see.** Estimate coordinates from the screenshot
+   and use mouse_click(x, y).
 
-3. **Click with coordinates.** Each element has `center_x`, `center_y`.
-   Use `mouse_click(center_x, center_y)` — fast and unambiguous.
-
-4. **wait_for_element() after navigation.** After clicking a link or
-   submitting a form, wait_for_element("expected text") tells you
-   when the page is ready. Then read_screen() again.
+3. **screenshot() after navigation.** After clicking a link or
+   submitting a form, take a new screenshot to see the result.
 
 ## Example
 
 ```
-read_screen()
-# → items: [{role: "button", name: "Compose", center_x: 108, center_y: 185},
-#            {role: "table_row", name: "Alice, Meeting tomorrow...", center_x: 740, center_y: 218}]
+screenshot()
+# → image of Gmail inbox
 mouse_click(740, 218)
-# → clicked the email
-wait_for_element("Alice")
-read_screen()
-# → email content
+# → clicked the first email
+screenshot()
+# → image of the email content
 ```
 """

@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP
 
 from ghostdesk._logging import configure_logging, install_call_logging
 from ghostdesk.instructions import INSTRUCTIONS
-from ghostdesk.tools import accessibility, clipboard, devices, shell
+from ghostdesk.tools import clipboard, devices, shell
 
 
 def create_app(port: int | None = None) -> FastMCP:
@@ -22,7 +22,6 @@ def create_app(port: int | None = None) -> FastMCP:
     mcp = FastMCP("ghostdesk", instructions=INSTRUCTIONS, host="0.0.0.0", port=port)
 
     devices.register(mcp)
-    accessibility.register(mcp)
     shell.register(mcp)
     clipboard.register(mcp)
 
