@@ -5,7 +5,8 @@ import os
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk._logging import configure_logging, install_call_logging
+from ghostdesk._logging import configure_logging
+from ghostdesk._middleware import install_middleware
 from ghostdesk.instructions import INSTRUCTIONS
 from ghostdesk.tools import clipboard, devices, shell
 
@@ -25,7 +26,7 @@ def create_app(port: int | None = None) -> FastMCP:
     shell.register(mcp)
     clipboard.register(mcp)
 
-    install_call_logging(mcp)
+    install_middleware(mcp)
 
     return mcp
 
