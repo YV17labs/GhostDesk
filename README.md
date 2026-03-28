@@ -199,7 +199,17 @@ GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP se
 2. **Act** — based on what it sees, the agent clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter)
 3. **Verify** — the agent takes another screenshot to confirm the result
 
-This approach works with **any application** — web apps, native apps, legacy software, even apps with no accessibility support. If it renders pixels, the agent can use it.
+This approach works with **any application** — web apps, native apps, legacy software. The LLM sees and understands the interface visually, without needing accessibility APIs. If it renders pixels, the agent can use it.
+
+## Model Requirements
+
+GhostDesk requires an LLM with these core capabilities:
+
+- **Vision** — understand and analyze screenshots
+- **Tool use** — call MCP tools to interact with the desktop
+- **Reasoning** — plan multi-step tasks and adapt to changing screen states
+
+Any LLM with strong vision capabilities and reasoning (e.g., Claude, GPT-4, Gemini, Qwen 3.5) will work. Proprietary or open-source models both function equally well as long as they support tool use and can reason through complex workflows.
 
 ## Configuration
 
