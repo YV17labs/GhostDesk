@@ -1,7 +1,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
   <img src="https://img.shields.io/badge/python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12+">
-  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="MIT License">
+  <img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=for-the-badge" alt="AGPL-3.0 License">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Docker-orange?style=for-the-badge&logo=docker&logoColor=white" alt="Platform">
 </p>
 
@@ -229,4 +229,6 @@ uv run pytest --cov
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+AGPL-3.0 with Commons Clause — see [LICENSE](LICENSE).
+
+Commercial use (resale, paid SaaS, etc.) requires written permission from the project owner.
