@@ -89,14 +89,12 @@ class TestGetWindowInfo:
     """Tests for get_window_info."""
 
     async def test_success_full_info(self):
-        """get_window_info returns active window and window list on success."""
+        """get_window_info returns window list on success."""
         async def mock_run_side_effect(cmd, **kwargs):
-            if cmd == ["xdotool", "getactivewindow"]:
-                return "12345"
+            if cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
+                return "12345\n67890"
             elif cmd == ["xdotool", "getwindowname", "12345"]:
                 return "My Editor"
-            elif cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
-                return "12345\n67890"
             elif cmd == ["xdotool", "getwindowname", "67890"]:
                 return "Terminal"
             elif cmd == ["xdotool", "getwindowgeometry", "12345"]:
@@ -110,36 +108,15 @@ class TestGetWindowInfo:
 
             info = await get_window_info()
 
-            assert info["active_window"] == "My Editor"
             assert len(info["windows"]) == 2
             assert info["windows"][0]["title"] == "My Editor"
             assert info["windows"][0]["width"] == 800
             assert info["windows"][1]["title"] == "Terminal"
 
-    async def test_active_window_failure_returns_none(self):
-        """When getactivewindow fails, active_window should be None."""
-        async def mock_run_side_effect(cmd, **kwargs):
-            if cmd == ["xdotool", "getactivewindow"]:
-                raise RuntimeError("No active window")
-            elif cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
-                return ""
-            return ""
-
-        with patch("ghostdesk.utils.window_info.run", new_callable=AsyncMock) as mock_run:
-            mock_run.side_effect = mock_run_side_effect
-
-            info = await get_window_info()
-
-            assert info["active_window"] is None
-
-    async def test_window_search_failure_returns_empty_list(self):
+    async def test_window_search_failure_returns_empty_windows(self):
         """When window search fails, windows list should be empty."""
         async def mock_run_side_effect(cmd, **kwargs):
-            if cmd == ["xdotool", "getactivewindow"]:
-                return "12345"
-            elif cmd == ["xdotool", "getwindowname", "12345"]:
-                return "Editor"
-            elif cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
+            if cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
                 raise RuntimeError("Search failed")
             return ""
 
@@ -148,18 +125,15 @@ class TestGetWindowInfo:
 
             info = await get_window_info()
 
-            assert info["active_window"] == "Editor"
             assert info["windows"] == []
 
     async def test_individual_window_failure_skipped(self):
         """Windows that fail to fetch name/geometry are excluded."""
         async def mock_run_side_effect(cmd, **kwargs):
-            if cmd == ["xdotool", "getactivewindow"]:
-                return "111"
+            if cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
+                return "111\n222"
             elif cmd == ["xdotool", "getwindowname", "111"]:
                 return "Good Window"
-            elif cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
-                return "111\n222"
             elif cmd == ["xdotool", "getwindowname", "222"]:
                 raise RuntimeError("Window gone")
             elif cmd == ["xdotool", "getwindowgeometry", "111"]:
@@ -178,12 +152,10 @@ class TestGetWindowInfo:
     async def test_window_with_empty_name_skipped(self):
         """Windows with empty names are filtered out."""
         async def mock_run_side_effect(cmd, **kwargs):
-            if cmd == ["xdotool", "getactivewindow"]:
+            if cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
                 return "111"
             elif cmd == ["xdotool", "getwindowname", "111"]:
                 return ""
-            elif cmd == ["xdotool", "search", "--onlyvisible", "--name", ""]:
-                return "111"
             elif cmd == ["xdotool", "getwindowgeometry", "111"]:
                 return "Window 111\n  Position: 0,0 (screen: 0)\n  Geometry: 400x300"
             return ""
@@ -193,8 +165,6 @@ class TestGetWindowInfo:
 
             info = await get_window_info()
 
-            # Active window should be None (empty name)
-            assert info["active_window"] is None
             # Window with empty name should be excluded from list
             assert info["windows"] == []
 
@@ -205,4 +175,4 @@ class TestGetWindowInfo:
 
             info = await get_window_info()
 
-            assert info == {"active_window": None, "windows": []}
+            assert info == {"windows": []}
