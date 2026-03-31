@@ -39,7 +39,6 @@ def tiny_png(tmp_path):
 def _mock_deps(tiny_png):
     """Patch all external dependencies of screen module."""
     win_info = {
-        "active_window": {"title": "test", "id": 1},
         "windows": [{"title": "test", "id": 1}],
     }
 
@@ -72,7 +71,6 @@ async def test_screenshot_full(_mock_deps):
     assert len(result) == 2
     meta = result[1]
     assert meta["cursor"] == {"x": 100, "y": 200}
-    assert "active_window" in meta
     assert "windows" in meta
     mock_draw.assert_called_once()
 

@@ -58,7 +58,6 @@ async def screenshot(
             Image(data=image_bytes, format=output_format),
             {
                 "cursor": {"x": cx, "y": cy},
-                "active_window": win_info["active_window"],
                 "windows": win_info["windows"],
             },
         ]
