@@ -38,10 +38,6 @@ def tiny_png(tmp_path):
 @pytest.fixture(autouse=True)
 def _mock_deps(tiny_png):
     """Patch all external dependencies of screen module."""
-    win_info = {
-        "windows": [{"title": "test", "id": 1}],
-    }
-
     async def fake_run(cmd):
         """Write a tiny PNG when maim is called; return geometry for xdotool."""
         if cmd[0] == "maim":
@@ -56,27 +52,27 @@ def _mock_deps(tiny_png):
     with (
         patch(f"{MODULE}.run", side_effect=fake_run) as mock_run,
         patch(f"{MODULE}.get_cursor_position", new_callable=AsyncMock, return_value=(100, 200)) as mock_pos,
-        patch(f"{MODULE}.get_window_info", new_callable=AsyncMock, return_value=win_info) as mock_win,
+        patch(f"{MODULE}.get_clickables", new_callable=AsyncMock, return_value=[]) as mock_click,
         patch(f"{MODULE}.draw_cursor", return_value=tiny_png) as mock_draw,
     ):
-        yield mock_run, mock_pos, mock_win, mock_draw
+        yield mock_run, mock_pos, mock_click, mock_draw
 
 
 # --- screenshot ---
 
 async def test_screenshot_full(_mock_deps):
-    mock_run, mock_pos, mock_win, mock_draw = _mock_deps
+    mock_run, mock_pos, mock_click, mock_draw = _mock_deps
     result = await screenshot()
     assert isinstance(result, list)
     assert len(result) == 2
     meta = result[1]
     assert meta["cursor"] == {"x": 100, "y": 200}
-    assert "windows" in meta
+    assert "apps" in meta
     mock_draw.assert_called_once()
 
 
 async def test_screenshot_region(_mock_deps):
-    mock_run, mock_pos, mock_win, mock_draw = _mock_deps
+    mock_run, mock_pos, mock_click, mock_draw = _mock_deps
     result = await screenshot(x=10, y=20, width=300, height=400)
     assert isinstance(result, list)
     # cursor coords should be adjusted for region offset
