@@ -1,11 +1,13 @@
 <p align="center">
+  <img src="assets/logo.png" alt="GhostDesk" width="200">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
   <img src="https://img.shields.io/badge/python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=for-the-badge" alt="AGPL-3.0 License">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Docker-orange?style=for-the-badge&logo=docker&logoColor=white" alt="Platform">
 </p>
-
-<h1 align="center">GhostDesk</h1>
 
 <p align="center">
   <strong>Give your AI agent eyes, hands, and a full Linux desktop.</strong><br>
