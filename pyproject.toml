@@ -1,9 +1,9 @@
 [project]
 name = "ghostdesk"
-version = "2.0.0"
+version = "3.0.0"
 description = "MCP server to control a virtual Linux desktop from an LLM agent"
 readme = "README.md"
-license = "MIT"
+license = "AGPL-3.0-only"
 requires-python = ">=3.12"
 authors = [
     { name = "Yoann Vanitou", email = "yvanitou@gmail.com" },
@@ -12,7 +12,7 @@ keywords = ["mcp", "desktop", "automation", "llm"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
