@@ -13,6 +13,7 @@ You control a virtual Linux desktop.
 ## How to interact
 
 - **See the screen**: screenshot() — returns an image of the desktop.
+  Use x, y, width, height to capture a specific region.
 - **Click**: mouse_click(x, y) — click at the coordinates you see in the screenshot.
 - **Type text**: mouse_click(x, y) on the field, then type_text("hello").
 - **Press keys**: press_key("Return"), press_key("ctrl+v").
@@ -34,7 +35,7 @@ You control a virtual Linux desktop.
 
 ```
 screenshot()
-# → image of the desktop + metadata (cursor position, clickable elements)
+# → image + metadata (cursor position)
 mouse_click(740, 218)
 # → clicked a UI element
 screenshot()

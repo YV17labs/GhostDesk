@@ -17,16 +17,9 @@ apt-get install -y --no-install-recommends firefox/mozilla
 # --- Desktop stack + dependencies ---
 apt-get install -y --no-install-recommends \
     xvfb openbox x11vnc novnc websockify \
-    xdotool maim xclip hsetroot \
+    xdotool maim xclip hsetroot x11-utils \
     supervisor sudo \
-    dbus-x11 python3 python3-venv \
-    python3-gi gir1.2-atspi-2.0 at-spi2-core dconf-cli \
+    dbus-x11 \
     gnome-terminal
 
 rm -rf /var/lib/apt/lists/*
-
-# --- AT-SPI accessibility (system-level) ---
-mkdir -p /etc/dconf/profile /etc/dconf/db/local.d
-printf 'user-db:user\nsystem-db:local\n' > /etc/dconf/profile/user
-printf '[org/gnome/desktop/interface]\ntoolkit-accessibility=true\n' > /etc/dconf/db/local.d/00-a11y
-dconf update

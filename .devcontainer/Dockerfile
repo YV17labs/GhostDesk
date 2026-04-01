@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     RUN_USER=vscode \
     APP_DIR=/workspaces/ghostdesk
 
-# Desktop environment (Firefox, Openbox, VNC, AT-SPI…)
+# Desktop environment (Firefox, Openbox, VNC…)
 COPY .docker/setup-desktop.sh /tmp/setup-desktop.sh
 RUN bash /tmp/setup-desktop.sh && rm /tmp/setup-desktop.sh
 
@@ -19,6 +19,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Supervisor config
 COPY .docker/supervisor.conf /etc/supervisor/conf.d/ghostdesk.conf
+COPY .docker/start-openbox.sh /usr/local/bin/start-openbox.sh
 
 # Wallpaper
 COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
@@ -26,7 +27,6 @@ COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
 # Openbox minimal config
 RUN mkdir -p /home/vscode/.config/openbox \
     && printf '<?xml version="1.0" encoding="UTF-8"?>\n<openbox_config xmlns="http://openbox.org/3.4/rc">\n  <applications>\n    <application class="*"><decor>no</decor></application>\n  </applications>\n</openbox_config>\n' > /home/vscode/.config/openbox/rc.xml \
-    && printf 'hsetroot -fill /usr/share/ghostdesk/wallpaper.png &\n' > /home/vscode/.config/openbox/autostart \
     && chown -R vscode:vscode /home/vscode/.config
 
 EXPOSE 3000 5900 6080
