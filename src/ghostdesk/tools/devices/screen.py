@@ -9,7 +9,7 @@ from mcp.server.fastmcp import FastMCP, Image
 from ghostdesk.utils.cmd import run
 from ghostdesk.utils.cursor_overlay import ImageFormat, draw_cursor
 from ghostdesk.utils.humanizer import get_cursor_position
-from ghostdesk.utils.window_info import get_window_info
+from ghostdesk.utils.windows import get_open_windows
 
 
 async def screenshot(
@@ -20,16 +20,14 @@ async def screenshot(
     output_format: ImageFormat = "png",
     quality: int = 80,
 ) -> list:
-    """Capture the screen as an image.
-
-    *output_format* — ``"png"`` (default, lossless) or ``"webp"``
-    (lossy, ~2-3× smaller).  *quality* is only used for WebP (1-100, default 80).
-    """
+    """Capture the screen. Returns an image and cursor position."""
     region = all(v is not None for v in (x, y, width, height))
 
     fd, path = tempfile.mkstemp(suffix=".png")
     os.close(fd)
     try:
+        windows_task = asyncio.create_task(get_open_windows())
+
         cmd = ["maim", "--format=png"]
         if region:
             cmd += ["-g", f"{width}x{height}+{x}+{y}"]
@@ -39,9 +37,8 @@ async def screenshot(
         with open(path, "rb") as f:
             raw_png = f.read()
 
-        # Cursor position and window metadata in parallel
-        (cx, cy), win_info = await asyncio.gather(
-            get_cursor_position(), get_window_info(),
+        (cx, cy), windows = await asyncio.gather(
+            get_cursor_position(), windows_task,
         )
 
         if region:
@@ -54,12 +51,11 @@ async def screenshot(
             quality=quality,
         )
 
+        metadata: dict = {"result": {"cursor": {"x": cx, "y": cy}, "windows": windows}}
+
         return [
             Image(data=image_bytes, format=output_format),
-            {
-                "cursor": {"x": cx, "y": cy},
-                "windows": win_info["windows"],
-            },
+            metadata,
         ]
     finally:
         try:
