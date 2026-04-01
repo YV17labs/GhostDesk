@@ -1,11 +1,13 @@
 <p align="center">
+  <img src="assets/logo.png" alt="GhostDesk" width="200">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
   <img src="https://img.shields.io/badge/python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12+">
   <img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=for-the-badge" alt="AGPL-3.0 License">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Docker-orange?style=for-the-badge&logo=docker&logoColor=white" alt="Platform">
 </p>
-
-<h1 align="center">GhostDesk</h1>
 
 <p align="center">
   <strong>Give your AI agent eyes, hands, and a full Linux desktop.</strong><br>
@@ -116,7 +118,7 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 ### See the screen
 | Tool | Description |
 |------|-------------|
-| `screenshot()` | Capture the screen (full or region) with cursor position overlay |
+| `screenshot()` | Capture the screen (full or region) with cursor position |
 
 ### Mouse & keyboard
 | Tool | Description |
@@ -154,7 +156,7 @@ That's it. The virtual desktop, MCP server, and VNC are all running inside an is
 
 GhostDesk works with any MCP-compatible client. Add it to your config:
 
-**Claude Desktop / Claude Code**
+**Claude Desktop / Claude Code** (Streamable HTTP)
 ```json
 {
   "mcpServers": {
@@ -164,6 +166,23 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
     }
   }
 }
+```
+
+**Clients that only support stdio** (Cursor, Windsurf, etc.)
+```json
+{
+  "mcpServers": {
+    "ghostdesk": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:3000/mcp"]
+    }
+  }
+}
+```
+
+Or run the bridge manually:
+```bash
+npx -y mcp-remote http://localhost:3000/mcp
 ```
 
 **ChatGPT, Gemini, or any LLM with MCP support** — same config, just point to `http://localhost:3000/mcp`.

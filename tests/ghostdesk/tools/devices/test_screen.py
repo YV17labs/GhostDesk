@@ -38,10 +38,6 @@ def tiny_png(tmp_path):
 @pytest.fixture(autouse=True)
 def _mock_deps(tiny_png):
     """Patch all external dependencies of screen module."""
-    win_info = {
-        "windows": [{"title": "test", "id": 1}],
-    }
-
     async def fake_run(cmd):
         """Write a tiny PNG when maim is called; return geometry for xdotool."""
         if cmd[0] == "maim":
@@ -56,7 +52,7 @@ def _mock_deps(tiny_png):
     with (
         patch(f"{MODULE}.run", side_effect=fake_run) as mock_run,
         patch(f"{MODULE}.get_cursor_position", new_callable=AsyncMock, return_value=(100, 200)) as mock_pos,
-        patch(f"{MODULE}.get_window_info", new_callable=AsyncMock, return_value=win_info) as mock_win,
+        patch(f"{MODULE}.get_open_windows", new_callable=AsyncMock, return_value=[{"app": "firefox", "title": "Firefox", "x": 0, "y": 0, "width": 1280, "height": 800}]) as mock_win,
         patch(f"{MODULE}.draw_cursor", return_value=tiny_png) as mock_draw,
     ):
         yield mock_run, mock_pos, mock_win, mock_draw
@@ -69,9 +65,9 @@ async def test_screenshot_full(_mock_deps):
     result = await screenshot()
     assert isinstance(result, list)
     assert len(result) == 2
-    meta = result[1]
+    meta = result[1]["result"]
     assert meta["cursor"] == {"x": 100, "y": 200}
-    assert "windows" in meta
+    assert meta["windows"] == [{"app": "firefox", "title": "Firefox", "x": 0, "y": 0, "width": 1280, "height": 800}]
     mock_draw.assert_called_once()
 
 
@@ -80,7 +76,7 @@ async def test_screenshot_region(_mock_deps):
     result = await screenshot(x=10, y=20, width=300, height=400)
     assert isinstance(result, list)
     # cursor coords should be adjusted for region offset
-    meta = result[1]
+    meta = result[1]["result"]
     assert meta["cursor"] == {"x": 90, "y": 180}  # 100-10, 200-20
     # draw_cursor should receive adjusted coords + format kwargs
     mock_draw.assert_called_once_with(
@@ -93,7 +89,7 @@ async def test_screenshot_partial_region_treated_as_fullscreen(_mock_deps):
     """If only some region args are given, it should be full screen."""
     _, _, _, mock_draw = _mock_deps
     result = await screenshot(x=10, y=20)  # width/height missing
-    meta = result[1]
+    meta = result[1]["result"]
     # No offset adjustment — treated as full screen
     assert meta["cursor"] == {"x": 100, "y": 200}
 
@@ -132,4 +128,3 @@ async def test_screenshot_custom_quality(_mock_deps):
     await screenshot(quality=50)
     _, kwargs = mock_draw.call_args
     assert kwargs.get("quality") == 50
-
