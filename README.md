@@ -118,7 +118,7 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 ### See the screen
 | Tool | Description |
 |------|-------------|
-| `screenshot()` | Capture the screen (full or region) with cursor position overlay |
+| `screenshot()` | Capture the screen (full or region) with cursor position |
 
 ### Mouse & keyboard
 | Tool | Description |
@@ -156,7 +156,7 @@ That's it. The virtual desktop, MCP server, and VNC are all running inside an is
 
 GhostDesk works with any MCP-compatible client. Add it to your config:
 
-**Claude Desktop / Claude Code**
+**Claude Desktop / Claude Code** (Streamable HTTP)
 ```json
 {
   "mcpServers": {
@@ -166,6 +166,23 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
     }
   }
 }
+```
+
+**Clients that only support stdio** (Cursor, Windsurf, etc.)
+```json
+{
+  "mcpServers": {
+    "ghostdesk": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "http://localhost:3000/mcp"]
+    }
+  }
+}
+```
+
+Or run the bridge manually:
+```bash
+npx -y mcp-remote http://localhost:3000/mcp
 ```
 
 **ChatGPT, Gemini, or any LLM with MCP support** — same config, just point to `http://localhost:3000/mcp`.

@@ -9,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     RUN_USER=agent \
     APP_DIR=/app
 
-# Desktop environment (Firefox, Openbox, VNC, AT-SPI…)
+# Desktop environment (Firefox, Openbox, VNC…)
 COPY .docker/setup-desktop.sh /tmp/setup-desktop.sh
 RUN bash /tmp/setup-desktop.sh && rm /tmp/setup-desktop.sh
 
@@ -33,10 +33,10 @@ COPY --chown=agent:agent src/ ./src/
 
 # Config + assets (single layer)
 COPY .docker/supervisor.conf /etc/supervisor/conf.d/ghostdesk.conf
+COPY .docker/start-openbox.sh /usr/local/bin/start-openbox.sh
 COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
 RUN mkdir -p /home/agent/.config/openbox \
     && printf '<?xml version="1.0" encoding="UTF-8"?>\n<openbox_config xmlns="http://openbox.org/3.4/rc">\n  <applications>\n    <application class="*"><decor>no</decor></application>\n  </applications>\n</openbox_config>\n' > /home/agent/.config/openbox/rc.xml \
-    && printf 'hsetroot -fill /usr/share/ghostdesk/wallpaper.png &\n' > /home/agent/.config/openbox/autostart \
     && chown -R agent:agent /home/agent/.config
 
 EXPOSE 3000 5900 6080
