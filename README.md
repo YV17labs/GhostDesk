@@ -113,30 +113,29 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 | **🐳** | **Sandboxed** | Runs in Docker — isolated, reproducible, safe |
 | **👀** | **Live view** | Watch your agent work in real-time via VNC or browser (noVNC) |
 
-## 11 tools at your agent's fingertips
+## 10 tools at your agent's fingertips
 
 ### See the screen
 | Tool | Description |
 |------|-------------|
-| `screenshot()` | Capture the screen (full or region) with cursor position |
+| `screenshot` | Capture the screen (full or region) with cursor position |
 
 ### Mouse & keyboard
 | Tool | Description |
 |------|-------------|
-| `mouse_click(x, y)` | Click at coordinates |
-| `mouse_double_click()` | Double-click at coordinates |
-| `mouse_drag()` | Drag from one position to another |
-| `mouse_scroll()` | Scroll in any direction (up/down/left/right) |
-| `type_text()` | Type with realistic per-character delays |
-| `press_key()` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
+| `mouse_click` | Click at coordinates |
+| `mouse_double_click` | Double-click at coordinates |
+| `mouse_drag` | Drag from one position to another |
+| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
+| `type_text` | Type with realistic per-character delays |
+| `press_key` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
 
 ### System
 | Tool | Description |
 |------|-------------|
-| `exec()` | Run shell commands with stdout/stderr capture |
-| `launch()` | Start GUI applications |
-| `get_clipboard()` | Read clipboard contents |
-| `set_clipboard()` | Write to clipboard |
+| `launch` | Start GUI applications |
+| `get_clipboard` | Read clipboard contents |
+| `set_clipboard` | Write to clipboard |
 
 ## Quick start
 
