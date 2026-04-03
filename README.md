@@ -113,12 +113,13 @@ Your agent isn't limited to one app. It can switch between browser, terminal, ID
 | **🐳** | **Sandboxed** | Runs in Docker — isolated, reproducible, safe |
 | **👀** | **Live view** | Watch your agent work in real-time via VNC or browser (noVNC) |
 
-## 10 tools at your agent's fingertips
+## 11 tools at your agent's fingertips
 
-### See the screen
+### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen (full or region) with cursor position |
+| `screenshot` | Capture the screen as an image (full or region). Use `annotate=True` to overlay detected elements with coordinate labels |
+| `inspect` | Read the screen as structured JSON — cursor, windows, and all visible UI elements with click coordinates (no image) |
 
 ### Mouse & keyboard
 | Tool | Description |
@@ -211,30 +212,30 @@ See GhostDesk in action:
 
 ## How it works
 
-GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your LLM agent connects and gets **screenshot-first interaction**:
+GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your LLM agent connects and gets two ways to perceive the screen:
 
-1. **Screenshot** — the agent takes a screenshot to see what's on screen, just like a human looking at their monitor
-2. **Act** — based on what it sees, the agent clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter)
-3. **Verify** — the agent takes another screenshot to confirm the result
+- **Vision mode** (`screenshot`) — the agent takes a screenshot and interprets it visually, like a human looking at their monitor. Best for large models with strong vision (Claude, GPT-4, Gemini).
+- **Text mode** (`inspect`) — the agent receives structured JSON with every visible UI element and its click coordinates. No image interpretation needed. Best for smaller models or text-only workflows.
 
-This approach works with **any application** — web apps, native apps, legacy software. The LLM sees and understands the interface visually, without needing accessibility APIs. If it renders pixels, the agent can use it.
+Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
+
+This approach works with **any application** — web apps, native apps, legacy software, Canvas, WebGL. If it renders pixels, the agent can use it.
 
 ## Model Requirements
 
-GhostDesk requires an LLM with these core capabilities:
+GhostDesk works best with models that have both **vision and tool use**. We recommend combining both tools:
 
-- **Vision** — understand and analyze screenshots
-- **Tool use** — call MCP tools to interact with the desktop
-- **Reasoning** — plan multi-step tasks and adapt to changing screen states
+- **`screenshot()`** — visual understanding, works on anything rendered on screen
+- **`inspect()`** — structured JSON with precise coordinates, great for dense UIs
 
-Any LLM with strong vision capabilities and reasoning (e.g., Claude, GPT-4, Gemini, Qwen 3.5) will work. Proprietary or open-source models both function equally well as long as they support tool use and can reason through complex workflows.
+Large models (Claude, GPT-4, Gemini) can rely on `screenshot()` alone. Smaller models (9B+) benefit greatly from `inspect()` for precise coordinates, but should still use `screenshot()` as a fallback when OCR misses elements — icons, graphics, or non-standard UI components may not appear in `inspect()` results.
 
 ## Configuration
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `SCREEN_WIDTH` | `1280` | Virtual screen width |
-| `SCREEN_HEIGHT` | `800` | Virtual screen height |
+| `SCREEN_HEIGHT` | `1024` | Virtual screen height |
 | `SCREEN_DEPTH` | `24` | Color depth |
 | `VNC_PASSWORD` | `changeme` | VNC access password |
 | `PORT` | `3000` | MCP server port |
