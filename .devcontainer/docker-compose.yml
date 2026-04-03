@@ -12,7 +12,7 @@ services:
     environment:
       - DISPLAY=:99
       - SCREEN_WIDTH=1280
-      - SCREEN_HEIGHT=800
+      - SCREEN_HEIGHT=1024
       - SCREEN_DEPTH=24
       - VNC_PASSWORD=changeme
       - PORT=3000

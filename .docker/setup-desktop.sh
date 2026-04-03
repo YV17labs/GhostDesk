@@ -20,6 +20,7 @@ apt-get install -y --no-install-recommends \
     xdotool maim xclip hsetroot x11-utils \
     supervisor sudo \
     dbus-x11 \
-    gnome-terminal
+    gnome-terminal \
+    libgl1 libglib2.0-0
 
 rm -rf /var/lib/apt/lists/*

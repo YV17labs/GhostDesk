@@ -14,7 +14,12 @@ You control a virtual Linux desktop.
 
 - **See the screen**: screenshot() — returns an image of the desktop.
   Use x, y, width, height to capture a specific region.
-- **Click**: mouse_click(x, y) — click at the coordinates you see in the screenshot.
+  Use annotate=True to overlay detected UI elements with coordinate
+  labels — useful when you need precise click coordinates.
+- **Read the screen**: inspect() — returns structured JSON with
+  cursor position, open windows, and every visible UI element with
+  its click coordinates. No image.
+- **Click**: mouse_click(x, y) — click at the given coordinates.
 - **Type text**: mouse_click(x, y) on the field, then type_text("hello").
 - **Press keys**: press_key("Return"), press_key("ctrl+v").
 - **Launch apps**: launch("firefox https://example.com"), launch("gnome-terminal").
@@ -31,11 +36,31 @@ You control a virtual Linux desktop.
 3. **screenshot() after navigation.** After clicking a link or
    submitting a form, take a new screenshot to see the result.
 
-## Example
+## Text-only mode (when vision is limited)
+
+Use inspect() instead of screenshot() to get element coordinates
+without needing to interpret an image:
+
+```
+inspect()
+# → {"cursor": {"x": 640, "y": 400},
+#    "windows": [{"app": "firefox", "title": "Gmail", ...}],
+#    "elements": [
+#      {"role": "button", "x": 134, "y": 117, "label": "Gmail"},
+#      {"role": "text", "x": 383, "y": 297, "label": "Stripe"},
+#      ...
+#    ]}
+mouse_click(383, 297)
+# → clicked on "Stripe"
+inspect()
+# → updated element list
+```
+
+## Standard workflow
 
 ```
 screenshot()
-# → image + metadata (cursor position)
+# → image of the desktop
 mouse_click(740, 218)
 # → clicked a UI element
 screenshot()

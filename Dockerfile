@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:99 \
     SCREEN_WIDTH=1280 \
-    SCREEN_HEIGHT=800 \
+    SCREEN_HEIGHT=1024 \
     SCREEN_DEPTH=24 \
     PORT=3000 \
     RUN_USER=agent \
@@ -34,7 +34,7 @@ COPY --chown=agent:agent src/ ./src/
 # Config + assets (single layer)
 COPY .docker/supervisor.conf /etc/supervisor/conf.d/ghostdesk.conf
 COPY .docker/start-openbox.sh /usr/local/bin/start-openbox.sh
-COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
+COPY assets/wallpaper_1280x1024.png /usr/share/ghostdesk/wallpaper.png
 RUN mkdir -p /home/agent/.config/openbox \
     && printf '<?xml version="1.0" encoding="UTF-8"?>\n<openbox_config xmlns="http://openbox.org/3.4/rc">\n  <applications>\n    <application class="*"><decor>no</decor></application>\n  </applications>\n</openbox_config>\n' > /home/agent/.config/openbox/rc.xml \
     && chown -R agent:agent /home/agent/.config
