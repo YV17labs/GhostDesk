@@ -22,7 +22,7 @@ COPY .docker/supervisor.conf /etc/supervisor/conf.d/ghostdesk.conf
 COPY .docker/start-openbox.sh /usr/local/bin/start-openbox.sh
 
 # Wallpaper
-COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
+COPY assets/wallpaper_1280x1024.png /usr/share/ghostdesk/wallpaper.png
 
 # Openbox minimal config
 RUN mkdir -p /home/vscode/.config/openbox \
