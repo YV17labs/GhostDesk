@@ -13,48 +13,43 @@ You control a virtual Linux desktop.
 ## How to interact
 
 - **See the screen**: screenshot() — returns an image of the desktop.
-  Use x, y, width, height to capture a specific region.
-  Use annotate=True to overlay detected UI elements with coordinate
-  labels — useful when you need precise click coordinates.
-- **Read the screen**: inspect() — returns structured JSON with
-  cursor position, open windows, and every visible UI element with
-  its click coordinates. No image.
-- **Click**: mouse_click(x, y) — click at the given coordinates.
+  Use `region={"x": 0, "y": 0, "width": 400, "height": 300}` to capture
+  a specific area.
+  Use `annotate=True` to get a version where every interactive element
+  (buttons, links, input fields, icons…) is highlighted with a colored
+  bounding box and a small label showing its center coordinates, e.g.
+  `(320, 161)`. Those two numbers are the exact `x` and `y` to pass to
+  `mouse_click(x=320, y=161)`. Use this whenever you need to click
+  something — it removes all guesswork. Not needed for reading content
+  or verifying navigation results.
+  `format`: "png" (default) or "webp".
+- **Click**: mouse_click(x, y) — left-click. Use `button` for "middle"
+  or "right".
+- **Double-click**: mouse_double_click(x, y) — for opening files or
+  selecting words.
+- **Drag**: mouse_drag(from_x, from_y, to_x, to_y) — for selecting
+  text, moving items, or resizing.
+- **Scroll**: mouse_scroll(x, y, direction="down", amount=3) —
+  direction: up/down/left/right. amount: 1–5.
 - **Type text**: mouse_click(x, y) on the field, then type_text("hello").
 - **Press keys**: press_key("Return"), press_key("ctrl+v").
-- **Launch apps**: launch("firefox https://example.com"), launch("gnome-terminal").
-- **Scroll**: mouse_scroll(x, y, direction="down", amount=3).
-- **Switch windows**: press_key("alt+Tab") to cycle between open applications.
+- **Launch apps**: launch("firefox https://example.com"),
+  launch("gnome-terminal").
+- **Clipboard**: get_clipboard() to read, set_clipboard(text) to write.
+  Use set_clipboard + press_key("ctrl+v") for accented or special characters.
+- **Switch windows**: press_key("alt+Tab") to cycle between open apps.
 
 ## 3 rules
 
 1. **screenshot() first.** Look at the image to understand what is on screen.
 
 2. **Click what you see.** Estimate coordinates from the screenshot
-   and use mouse_click(x, y).
+   and use mouse_click(x, y). If the target is small or hard to locate,
+   use `screenshot(annotate=True)` first to get labeled coordinates.
 
 3. **screenshot() after navigation.** After clicking a link or
-   submitting a form, take a new screenshot to see the result.
-
-## Text-only mode (when vision is limited)
-
-Use inspect() instead of screenshot() to get element coordinates
-without needing to interpret an image:
-
-```
-inspect()
-# → {"cursor": {"x": 640, "y": 400},
-#    "windows": [{"app": "firefox", "title": "Gmail", ...}],
-#    "elements": [
-#      {"role": "button", "x": 134, "y": 117, "label": "Gmail"},
-#      {"role": "text", "x": 383, "y": 297, "label": "Stripe"},
-#      ...
-#    ]}
-mouse_click(383, 297)
-# → clicked on "Stripe"
-inspect()
-# → updated element list
-```
+   submitting a form, call wait() to let the page load, then
+   take a new screenshot to see the result.
 
 ## Standard workflow
 
@@ -62,8 +57,10 @@ inspect()
 screenshot()
 # → image of the desktop
 mouse_click(740, 218)
-# → clicked a UI element
+# → clicked a link
+wait(2)
+# → waited 2s for the page to load
 screenshot()
-# → image of the updated screen
+# → page loaded, continue
 ```
 """

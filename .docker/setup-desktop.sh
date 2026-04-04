@@ -16,11 +16,13 @@ apt-get install -y --no-install-recommends firefox/mozilla
 
 # --- Desktop stack + dependencies ---
 apt-get install -y --no-install-recommends \
-    xvfb openbox x11vnc novnc websockify \
-    xdotool maim xclip hsetroot x11-utils \
+    xvfb openbox tint2 x11vnc novnc websockify \
+    xdotool maim xclip hsetroot x11-utils adwaita-icon-theme-full \
+    locales \
     supervisor sudo \
     dbus-x11 \
     gnome-terminal \
-    libgl1 libglib2.0-0
+    libgl1 libglib2.0-0 \
+    tzdata
 
 rm -rf /var/lib/apt/lists/*
