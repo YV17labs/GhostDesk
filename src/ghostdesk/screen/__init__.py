@@ -10,4 +10,4 @@ from ghostdesk.screen.reader import inspect
 def register(mcp: FastMCP) -> None:
     """Register screen tools."""
     mcp.tool()(screenshot)
-    mcp.tool()(inspect)
+    # mcp.tool()(inspect)  # temporarily disabled

@@ -11,10 +11,10 @@ from rapidocr import RapidOCR
 _ocr: RapidOCR | None = None
 
 # Minimum confidence to keep a detection.
-_MIN_CONF = 0.3
+_MIN_CONF = 0.1
 
 # Minimum text height in pixels.
-_MIN_HEIGHT = 10
+_MIN_HEIGHT = 5
 
 
 def _get_ocr() -> RapidOCR:

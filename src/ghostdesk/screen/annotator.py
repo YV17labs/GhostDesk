@@ -28,8 +28,7 @@ def annotate_image(
     png_bytes: bytes,
     elements: list[Element],
     *,
-    output_format: str = "png",
-    quality: int = 80,
+    format: str = "png",
 ) -> bytes:
     """Draw bounding boxes and coordinate labels on a screenshot."""
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
@@ -126,8 +125,8 @@ def annotate_image(
 
     result = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
-    if output_format == "webp":
-        result.save(buf, format="WebP", quality=quality, method=4)
+    if format == "webp":
+        result.save(buf, format="WebP", method=4)
     else:
         result.save(buf, format="PNG")
     return buf.getvalue()

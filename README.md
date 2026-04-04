@@ -168,26 +168,7 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
 }
 ```
 
-**Clients that only support stdio** (Cursor, Windsurf, etc.)
-```json
-{
-  "mcpServers": {
-    "ghostdesk": {
-      "command": "npx",
-      "args": ["-y", "mcp-remote", "http://localhost:3000/mcp"]
-    }
-  }
-}
-```
-
-Or run the bridge manually:
-```bash
-npx -y mcp-remote http://localhost:3000/mcp
-```
-
 **ChatGPT, Gemini, or any LLM with MCP support** — same config, just point to `http://localhost:3000/mcp`.
-
-**Local models (Ollama, LM Studio, etc.)** — any MCP client library can connect to the same endpoint.
 
 ### 3. Watch your agent work
 
@@ -223,12 +204,22 @@ This approach works with **any application** — web apps, native apps, legacy s
 
 ## Model Requirements
 
-GhostDesk works best with models that have both **vision and tool use**. We recommend combining both tools:
+GhostDesk works best with models that have both **vision and tool use**.
 
-- **`screenshot()`** — visual understanding, works on anything rendered on screen
-- **`inspect()`** — structured JSON with precise coordinates, great for dense UIs
+### Large models (Claude, GPT-4, Gemini...)
 
-Large models (Claude, GPT-4, Gemini) can rely on `screenshot()` alone. Smaller models (9B+) benefit greatly from `inspect()` for precise coordinates, but should still use `screenshot()` as a fallback when OCR misses elements — icons, graphics, or non-standard UI components may not appear in `inspect()` results.
+No special setup needed. These models are excellent at interpreting screenshots and estimating coordinates. The MCP server provides built-in instructions that are enough.
+
+### Small models (local / edge)
+
+Small vision models need more guidance to interact with the desktop reliably. We provide a dedicated prompt optimized for them: **[SYSTEM_PROMPT_SMALL_MODEL.md](SYSTEM_PROMPT_SMALL_MODEL.md)**.
+
+It focuses on:
+- **Always using `screenshot(annotate=True)`** — small models struggle to estimate coordinates from raw screenshots, so the annotated overlay with bounding boxes and `(x,y)` labels is essential.
+- **A strict LOOK → ACT → VERIFY loop** — one action at a time, always verify with a fresh screenshot.
+- **Concrete patterns** — copy-paste workflows for common tasks (click, type, scroll, close popups...).
+
+**Best small model tested to date:** [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — a 35B MoE model with only 3B active parameters. Recommended as a starting point for local deployments. Below this size, results are possible but unreliable.
 
 ## Configuration
 
@@ -236,9 +227,10 @@ Large models (Claude, GPT-4, Gemini) can rely on `screenshot()` alone. Smaller m
 |----------|---------|-------------|
 | `SCREEN_WIDTH` | `1280` | Virtual screen width |
 | `SCREEN_HEIGHT` | `1024` | Virtual screen height |
-| `SCREEN_DEPTH` | `24` | Color depth |
 | `VNC_PASSWORD` | `changeme` | VNC access password |
 | `PORT` | `3000` | MCP server port |
+| `TZ` | `UTC` | Timezone (e.g. `Europe/Paris`, `America/Toronto`) |
+| `LOCALE` | `en_US.utf8` | System locale (e.g. `fr_FR.utf8`, `fr_CA.utf8`) |
 
 ## Tests
 

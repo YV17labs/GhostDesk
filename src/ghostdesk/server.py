@@ -34,8 +34,6 @@ def create_app(port: int | None = None) -> FastMCP:
 
 def main() -> None:
     """Start the MCP server with Streamable HTTP transport."""
-    os.environ.setdefault("LC_ALL", "en_US.utf8")
-    os.environ.setdefault("LANG", "en_US.utf8")
     configure_logging()
     create_app().run(transport="streamable-http")
 
