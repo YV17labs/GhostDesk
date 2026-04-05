@@ -58,6 +58,13 @@ No Selenium. No CSS selectors. No Puppeteer scripts that break every week. The a
 
 That old Java app with no API? That internal admin panel from 2010? A Windows app running in Wine? If it renders pixels on screen, your agent can operate it.
 
+### See it in action
+
+| Demo | Description |
+|------|-------------|
+| [Amazon Scraper to Google Sheets](demos/ghostdesk-amazon-sheets-automation.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
+| [Flight Search & Comparison](demos/ghostdesk-flight-search.gif) | AI agent searches Google Flights for Paris CDG → New York JFK, compares prices, and builds a chart in LibreOffice Calc |
+
 ---
 
 ## From one agent to a workforce
@@ -130,11 +137,6 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your agent gets a sandboxed desktop with a taskbar, clock, and pre-installed applications — equivalent to what a human sees on their screen.
 
-<p align="center">
-  <img src="demos/screenshots/desktop.webp" alt="GhostDesk virtual desktop" width="720">
-  <br><em>The virtual desktop — a minimal Linux environment with a taskbar and clock.</em>
-</p>
-
 The agent perceives the screen in two ways:
 
 ### Vision mode — `screenshot()` / `screenshot(annotate=True)`
@@ -142,9 +144,13 @@ The agent perceives the screen in two ways:
 The agent takes a screenshot to see the screen. With `annotate=True`, colored boxes with `(x, y)` coordinate labels are overlaid on every detected element — these coordinates are used directly for mouse actions, no guessing.
 
 <p align="center">
-  <img src="demos/screenshots/screenshot.webp" alt="Raw screenshot" width="49%">
-  <img src="demos/screenshots/screenshot_annotated.webp" alt="Annotated screenshot with coordinate labels" width="49%">
-  <br><em>Left: raw screenshot. Right: annotated with (x, y) coordinate labels on each element.</em>
+  <img src="demos/screenshots/screenshot.webp" alt="Raw screenshot" width="720">
+  <br><em>Raw screenshot — the agent sees the screen exactly as a human would.</em>
+</p>
+
+<p align="center">
+  <img src="demos/screenshots/screenshot_annotated.webp" alt="Annotated screenshot with coordinate labels" width="720">
+  <br><em>Annotated screenshot — every element gets a colored box with (x, y) coordinates for precise clicking.</em>
 </p>
 
 ### Text mode — `inspect()`
@@ -213,15 +219,6 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 | MCP server | `http://localhost:3000/mcp` |
 | noVNC (browser) | `http://localhost:6080/vnc.html` |
 | VNC | `vnc://localhost:5900` (password: `changeme`) |
-
----
-
-## Demos
-
-| Demo | Description |
-|------|-------------|
-| [Amazon Scraper to Google Sheets](demos/ghostdesk-amazon-sheets-automation.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
-| [Flight Search & Comparison](demos/ghostdesk-flight-search.gif) | AI agent searches Google Flights for Paris CDG → New York JFK, compares prices, and builds a chart in LibreOffice Calc |
 
 ---
 
