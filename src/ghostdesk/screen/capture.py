@@ -37,7 +37,7 @@ async def screenshot(
         region: Optional region to capture. If omitted, the entire
             screen is captured.
         annotate: If True, overlay detected UI elements with bounding
-            boxes and coordinate labels. Useful for debugging.
+            boxes and (x, y) coordinate labels for precise clicking.
         format: Image format — "png" or "webp".
     """
     fd, path = tempfile.mkstemp(suffix=".png")

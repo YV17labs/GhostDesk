@@ -54,7 +54,7 @@ class Element:
 
 
 def detect_elements(png_bytes: bytes) -> list[Element]:
-    """Detect all visible UI elements via OCR.
+    """Detect visible text elements via OCR.
 
     Returns elements sorted top-to-bottom, left-to-right.
     """

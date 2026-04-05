@@ -17,7 +17,7 @@ async def _move_to(x: int, y: int, humanize: bool) -> None:
 
 
 async def mouse_click(x: int, y: int, button: str = "left", humanize: bool = True) -> str:
-    """Click at screen coordinates. Use center_x, center_y from inspect() results."""
+    """Click at screen coordinates. Use coordinates from screenshot(annotate=True) or inspect()."""
     btn = _BUTTON_MAP.get(button, "1")
     await _move_to(x, y, humanize)
     await run(["xdotool", "click", btn])
