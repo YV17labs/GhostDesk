@@ -30,10 +30,6 @@ Most AI agents are trapped in text. They can call APIs and generate code, but th
 
 Connect any MCP-compatible LLM (Claude, GPT, Gemini...) and it gets a full Linux desktop with 11 tools to interact with **any application** — browsers, IDEs, office suites, terminals, legacy software, internal tools. No API needed. No integration required. If it has a UI, your agent can use it.
 
-## What can your agent do with a full desktop?
-
-Your agent gets its own Linux desktop. Here's what that unlocks:
-
 ### Agentic workflows — chain anything
 
 ```
@@ -62,81 +58,119 @@ No Selenium. No CSS selectors. No Puppeteer scripts that break every week. The a
 
 That old Java app with no API? That internal admin panel from 2010? A Windows app running in Wine? If it renders pixels on screen, your agent can operate it.
 
-### Data extraction at scale
+---
 
-```
-"Open the analytics dashboard, read the KPI table,
- scroll down to the revenue chart, take a screenshot,
- then export the raw data."
-```
+## From one agent to a workforce
 
-The agent takes screenshots, reads the screen visually, and extracts what it needs — works on any application, any UI framework, any language.
+Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each agent gets its own isolated desktop, its own apps, its own role. Think of it as hiring a team of digital employees, each with their own workstation.
 
-### QA & UI testing with evidence
+### Scale horizontally
 
-```
-"Navigate the signup flow, try invalid emails, empty fields,
- and SQL injection in every input. Screenshot each error state."
-```
+```yaml
+# docker-compose.yml — 3 specialized agents, one command
+services:
+  sales-agent:
+    image: ghcr.io/yv17labs/ghostdesk:latest
+    ports: ["3001:3000", "6081:6080"]
+    environment:
+      - TZ=America/New_York
 
-Your agent becomes a QA engineer — it clicks every button, fills every form, tests every edge case, and brings back screenshots as proof.
+  research-agent:
+    image: ghcr.io/yv17labs/ghostdesk:latest
+    ports: ["3002:3000", "6082:6080"]
+    environment:
+      - TZ=Europe/London
 
-### Unattended automation — runs 24/7
-
-```
-"Every morning: log into the supplier portal, download
- the latest price list, compare with yesterday's, and
- flag any changes above 5%."
-```
-
-Runs headless in Docker. No physical screen. No human babysitting. Schedule your agent to handle repetitive desktop tasks while you sleep.
-
-### Multi-app orchestration
-
-```
-"Open VS Code, create a new Python file, write a script
- that calls our API, run it in the terminal, debug if it fails,
- then commit and push to GitHub."
+  accounting-agent:
+    image: ghcr.io/yv17labs/ghostdesk:latest
+    ports: ["3003:3000", "6083:6080"]
+    environment:
+      - TZ=Europe/Paris
 ```
 
-Your agent isn't limited to one app. It can switch between browser, terminal, IDE, file manager, email client — just like a human switching windows on their desktop.
+```bash
+docker compose up -d   # Your workforce is ready
+```
 
-## Key features
+Each agent runs in parallel, independently, on its own desktop. Connect each to a different LLM, give each a different system prompt, install different apps — full specialization.
 
-| | Feature | Why it matters |
-|---|---|---|
-| **📸** | **Screenshots** | Full or regional captures with cursor overlay — the agent sees exactly what a human would see |
-| **🖱️** | **Human-like input** | Bézier mouse curves, variable typing speed, micro-jitter — bypasses bot detection |
-| **📋** | **Clipboard** | Read & write the clipboard — paste long text instantly |
-| **⌨️** | **Keyboard control** | Type text, press hotkeys, keyboard shortcuts — full keyboard access |
-| **🖥️** | **Shell access** | Run any command, launch any app, capture stdout/stderr |
-| **🐳** | **Sandboxed** | Runs in Docker — isolated, reproducible, safe |
-| **👀** | **Live view** | Watch your agent work in real-time via VNC or browser (noVNC) |
+### Secure by design
 
-## 11 tools at your agent's fingertips
+Every agent is sandboxed in its own container. No access to the host machine. No access to other agents. Network, filesystem, and process isolation come free from Docker.
 
-### Screen
-| Tool | Description |
-|------|-------------|
-| `screenshot` | Capture the screen as an image (full or region). Use `annotate=True` to overlay detected elements with coordinate labels |
-| `inspect` | Read the screen as structured JSON — cursor, windows, and all visible UI elements with click coordinates (no image) |
+This makes GhostDesk a natural fit for enterprises:
 
-### Mouse & keyboard
-| Tool | Description |
-|------|-------------|
-| `mouse_click` | Click at coordinates |
-| `mouse_double_click` | Double-click at coordinates |
-| `mouse_drag` | Drag from one position to another |
-| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
-| `type_text` | Type with realistic per-character delays |
-| `press_key` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
+| Concern | How GhostDesk handles it |
+|---------|--------------------------|
+| **Data isolation** | Each agent lives in its own container — no shared filesystem, no shared memory |
+| **Access control** | Restrict network access per agent with Docker networking. An agent with CRM access doesn't see finance tools |
+| **Auditability** | Watch any agent live via VNC, record sessions, review screenshots |
+| **Blast radius** | If an agent goes wrong, kill the container. Nothing else is affected |
+| **Compliance** | No data touches your host. Containers can run in air-gapped environments |
 
-### System
-| Tool | Description |
-|------|-------------|
-| `launch` | Start GUI applications |
-| `get_clipboard` | Read clipboard contents |
-| `set_clipboard` | Write to clipboard |
+### Specialize each agent
+
+Give each agent a role, like you would a new hire:
+
+- **Sales agent** — monitors the CRM, enriches leads, updates the pipeline
+- **Research agent** — browses the web, compiles competitive intelligence, writes reports
+- **Accounting agent** — processes invoices in legacy ERP software, reconciles spreadsheets
+- **QA agent** — clicks through your app, files bug reports with screenshots
+- **Support agent** — handles tickets, looks up customer info across multiple internal tools
+
+Each agent gets its own system prompt defining its mission, its own installed applications, and its own network permissions. Manage AI agents like employees — each with their own desktop, their own tools, and their own clearance level.
+
+### Supervise in real time
+
+Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agent work — or open ten tabs and monitor your entire workforce. Intervene at any time: take over the mouse, correct course, or chat with the orchestrating LLM.
+
+---
+
+## How it works
+
+GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your agent gets a sandboxed desktop with a taskbar, clock, and pre-installed applications — equivalent to what a human sees on their screen.
+
+<p align="center">
+  <img src="demos/screenshots/desktop.webp" alt="GhostDesk virtual desktop" width="720">
+  <br><em>The virtual desktop — a minimal Linux environment with a taskbar and clock.</em>
+</p>
+
+The agent perceives the screen in two ways:
+
+### Vision mode — `screenshot()` / `screenshot(annotate=True)`
+
+The agent takes a screenshot to see the screen. With `annotate=True`, colored boxes with `(x, y)` coordinate labels are overlaid on every detected element — these coordinates are used directly for mouse actions, no guessing.
+
+<p align="center">
+  <img src="demos/screenshots/screenshot.webp" alt="Raw screenshot" width="49%">
+  <img src="demos/screenshots/screenshot_annotated.webp" alt="Annotated screenshot with coordinate labels" width="49%">
+  <br><em>Left: raw screenshot. Right: annotated with (x, y) coordinate labels on each element.</em>
+</p>
+
+### Text mode — `inspect()`
+
+For smaller models or text-only workflows, the agent can read the screen as structured JSON. Returns detected text elements and their click coordinates — no image needed. Does not detect icons or images.
+
+```json
+{
+  "cursor": {"x": 17, "y": 60},
+  "windows": [
+    {"app": "firefox", "title": "YouTube — Mozilla Firefox", "x": 0, "y": 0, "width": 1280, "height": 992}
+  ],
+  "elements": [
+    {"label": "Search", "x": 364, "y": 114},
+    {"label": "Sign in", "x": 1227, "y": 113},
+    {"label": "Home", "x": 36, "y": 200},
+    {"label": "Shorts", "x": 36, "y": 273}
+  ]
+}
+```
+
+Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
+
+This approach works with **any application** — web apps, native apps, legacy software, Canvas, WebGL. If it renders pixels, the agent can use it.
+
+---
 
 ## Quick start
 
@@ -180,46 +214,55 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 | noVNC (browser) | `http://localhost:6080/vnc.html` |
 | VNC | `vnc://localhost:5900` (password: `changeme`) |
 
-## Demos
+---
 
-See GhostDesk in action:
+## Demos
 
 | Demo | Description |
 |------|-------------|
-| [Google Sheets Automation](demos/ghostdesk-sheets-automation.gif) | AI agent autonomously populates a spreadsheet with AI startup funding data, formats headers, and creates a 3D bar chart |
-| [Amazon Scraper to Google Sheets](demos/amazon-scraper-to-sheets.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
+| [Amazon Scraper to Google Sheets](demos/ghostdesk-amazon-sheets-automation.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
 | [Flight Search & Comparison](demos/ghostdesk-flight-search.gif) | AI agent searches Google Flights for Paris CDG → New York JFK, compares prices, and builds a chart in LibreOffice Calc |
-| [Wikipedia Research](demos/ghostdesk-wikipedia.gif) | AI agent browsing Wikipedia, reading articles, and extracting information |
 
-## How it works
+---
 
-GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your LLM agent connects and gets two ways to perceive the screen:
+## Tools
 
-- **Vision mode** (`screenshot`) — the agent takes a screenshot and interprets it visually, like a human looking at their monitor. Best for large models with strong vision (Claude, GPT-4, Gemini).
-- **Text mode** (`inspect`) — the agent receives structured JSON with every visible UI element and its click coordinates. No image interpretation needed. Best for smaller models or text-only workflows.
+11 tools at your agent's fingertips:
 
-Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
+### Screen
+| Tool | Description |
+|------|-------------|
+| `screenshot` | Capture the screen as an image (full or region). Use `annotate=True` to overlay detected elements with coordinate labels |
+| `inspect` | Read the screen as structured JSON — cursor, windows, and detected text elements with click coordinates (no image, no icons) |
 
-This approach works with **any application** — web apps, native apps, legacy software, Canvas, WebGL. If it renders pixels, the agent can use it.
+### Mouse & keyboard
+| Tool | Description |
+|------|-------------|
+| `mouse_click` | Click at coordinates |
+| `mouse_double_click` | Double-click at coordinates |
+| `mouse_drag` | Drag from one position to another |
+| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
+| `type_text` | Type with realistic per-character delays |
+| `press_key` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
 
-## Model Requirements
+### System
+| Tool | Description |
+|------|-------------|
+| `launch` | Start GUI applications |
+| `get_clipboard` | Read clipboard contents |
+| `set_clipboard` | Write to clipboard |
 
-GhostDesk works best with models that have both **vision and tool use**.
+---
 
-### Large models (Claude, GPT-4, Gemini...)
+## Model requirements
 
-No special setup needed. These models are excellent at interpreting screenshots and estimating coordinates. The MCP server provides built-in instructions that are enough.
+GhostDesk works best with models that have both **vision and tool use**. We provide a system prompt optimized for desktop agents: **[SYSTEM_PROMPT.md](SYSTEM_PROMPT.md)**.
 
-### Small models (local / edge)
-
-Small vision models need more guidance to interact with the desktop reliably. We provide a dedicated prompt optimized for them: **[SYSTEM_PROMPT_SMALL_MODEL.md](SYSTEM_PROMPT_SMALL_MODEL.md)**.
-
-It focuses on:
-- **Always using `screenshot(annotate=True)`** — small models struggle to estimate coordinates from raw screenshots, so the annotated overlay with bounding boxes and `(x,y)` labels is essential.
-- **A strict LOOK → ACT → VERIFY loop** — one action at a time, always verify with a fresh screenshot.
-- **Concrete patterns** — copy-paste workflows for common tasks (click, type, scroll, close popups...).
+Works well with large models out of the box (Claude, GPT-4, Gemini). Best results with **Anthropic models** — all tiers including Haiku perform reliably.
 
 **Best small model tested to date:** [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — a 35B MoE model with only 3B active parameters. Recommended as a starting point for local deployments. Below this size, results are possible but unreliable.
+
+---
 
 ## Configuration
 
@@ -232,11 +275,15 @@ It focuses on:
 | `TZ` | `UTC` | Timezone (e.g. `Europe/Paris`, `America/Toronto`) |
 | `LOCALE` | `en_US.utf8` | System locale (e.g. `fr_FR.utf8`, `fr_CA.utf8`) |
 
+---
+
 ## Tests
 
 ```bash
 uv run pytest --cov
 ```
+
+---
 
 ## License
 

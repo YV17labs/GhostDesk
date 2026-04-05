@@ -19,8 +19,8 @@ async def inspect(
 ) -> dict:
     """Read the screen contents as structured JSON. No image is returned.
 
-    Detects all visible UI elements (buttons, text, fields…) via OCR
-    and returns their label and click coordinates.  Use mouse_click()
+    Detects only text elements via OCR and returns their label and click
+    coordinates. Does not detect icons or images. Use mouse_click()
     with the reported x, y coordinates to interact.
 
     Args:
