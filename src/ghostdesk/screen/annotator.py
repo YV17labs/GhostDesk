@@ -10,17 +10,32 @@ from PIL import Image, ImageDraw, ImageFont
 
 from ghostdesk.screen.grounding import Element
 
-_LABEL_TEXT = (255, 255, 255, 255)  # White label text
+_LABEL_TEXT = (0, 0, 0, 255)  # Black label text
+_FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
+_FONT_SIZE = 10
 
 # Golden angle (~137.5°) gives maximum visual separation between
 # consecutive hues — no two neighbors look alike.
 _GOLDEN_ANGLE = 0.381966
 
+_font_cache: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
+
+
+def _get_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Return the shared font instance (lazy init)."""
+    global _font_cache  # noqa: PLW0603
+    if _font_cache is None:
+        try:
+            _font_cache = ImageFont.truetype(_FONT_PATH, _FONT_SIZE)
+        except (OSError, IOError):
+            _font_cache = ImageFont.load_default()
+    return _font_cache
+
 
 def _generate_color(index: int) -> tuple[int, int, int]:
     """Generate a distinct color for element *index* using golden angle hue."""
     hue = (index * _GOLDEN_ANGLE) % 1.0
-    r, g, b = colorsys.hsv_to_rgb(hue, 0.7, 0.9)
+    r, g, b = colorsys.hsv_to_rgb(hue, 0.45, 0.95)
     return int(r * 255), int(g * 255), int(b * 255)
 
 
@@ -35,10 +50,7 @@ def annotate_image(
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", 10)
-    except (OSError, IOError):
-        font = ImageFont.load_default()
+    font = _get_font()
 
     # All occupied zones: placed labels + all element bounding boxes.
     occupied: list[tuple[int, int, int, int]] = []
@@ -47,7 +59,7 @@ def annotate_image(
 
     for i, el in enumerate(elements):
         r, g, b = _generate_color(i)
-        box_fill = (r, g, b, 100)
+        box_fill = (r, g, b, 60)
         box_outline = (r, g, b, 255)
         label_bg = (r, g, b, 200)
 
@@ -69,23 +81,21 @@ def annotate_image(
         th = bbox[3] - bbox[1]
 
         # Try multiple positions around the box, pick the one with
-        # least overlap. Generates 8 base positions + 4 offset variants.
+        # least overlap. 8 outside positions + 2 inside fallbacks.
         lw = tw + 4
         lh = th + 2
         candidates = [
-            (el.x, el.y - lh - 2),                        # top-left
-            (el.x + el.width - lw, el.y - lh - 2),        # top-right
-            (el.x, el.y + el.height + 2),                  # bottom-left
-            (el.x + el.width - lw, el.y + el.height + 2),  # bottom-right
-            (el.x + el.width + 2, el.y),                    # right-top
-            (el.x + el.width + 2, el.y + el.height - lh),   # right-bottom
-            (el.x - lw - 2, el.y),                          # left-top
-            (el.x - lw - 2, el.y + el.height - lh),         # left-bottom
-            # Offset variants (shifted further away).
-            (el.x, el.y - lh - lh - 4),                    # far top-left
-            (el.x, el.y + el.height + lh + 4),              # far bottom-left
-            (el.x + el.width + lw + 4, el.y),               # far right
-            (el.x - lw - lw - 4, el.y),                     # far left
+            (el.x, el.y - lh),                              # top-left (outside)
+            (el.x + el.width - lw, el.y - lh),              # top-right (outside)
+            (el.x, el.y + el.height),                        # bottom-left (outside)
+            (el.x + el.width - lw, el.y + el.height),        # bottom-right (outside)
+            (el.x + el.width, el.y),                          # right-top
+            (el.x + el.width, el.y + el.height - lh),         # right-bottom
+            (el.x - lw, el.y),                                # left-top
+            (el.x - lw, el.y + el.height - lh),               # left-bottom
+            # Inside the box — guarantees visual association.
+            (el.x, el.y),                                      # inside top-left
+            (el.x + el.width - lw, el.y),                      # inside top-right
         ]
 
         # Own box index in occupied list — skip it when measuring overlap.
@@ -102,7 +112,7 @@ def annotate_image(
                 area += ox * oy
             return area
 
-        best_pos = (el.x, max(0, el.y - lh - 2))
+        best_pos = (el.x, max(0, el.y - lh))
         best_score = float("inf")
 
         for cx, cy in candidates:
