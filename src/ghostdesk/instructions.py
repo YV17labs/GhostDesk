@@ -38,6 +38,11 @@ You control a virtual Linux desktop.
 - **Clipboard**: get_clipboard() to read, set_clipboard(text) to write.
   Use set_clipboard + press_key("ctrl+v") for accented or special characters.
 - **Switch windows**: press_key("alt+Tab") to cycle between open apps.
+- **Inspect elements**: inspect() — returns structured JSON with all
+  detected UI elements and their center coordinates, without an image.
+  Faster than a screenshot when you only need to locate an element.
+  Use `x, y, width, height` to inspect a specific region.
+  Fall back to `screenshot(annotate=True)` if the target is not found.
 
 ## 3 rules
 
