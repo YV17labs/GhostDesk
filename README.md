@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <img src="demos/ghostdesk-amazon-sheets-automation.gif" alt="GhostDesk demo — Automated Amazon scraping to Google Sheets with real-time visualization" width="960">
+  <img src="demos/gifs/ghostdesk-amazon-sheets-automation.gif" alt="GhostDesk demo — Automated Amazon scraping to Google Sheets with real-time visualization" width="960">
 </p>
 
 ---
@@ -62,8 +62,8 @@ That old Java app with no API? That internal admin panel from 2010? A Windows ap
 
 | Demo | Description |
 |------|-------------|
-| [Amazon Scraper to Google Sheets](demos/ghostdesk-amazon-sheets-automation.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
-| [Flight Search & Comparison](demos/ghostdesk-flight-search.gif) | AI agent searches Google Flights for Paris CDG → New York JFK, compares prices, and builds a chart in LibreOffice Calc |
+| [Amazon Scraper to Google Sheets](demos/gifs/ghostdesk-amazon-sheets-automation.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
+| [Flight Search & Comparison](demos/gifs/ghostdesk-flight-search.gif) | AI agent searches Google Flights for Paris CDG → New York JFK, compares prices, and builds a chart in LibreOffice Calc |
 
 ---
 
@@ -139,9 +139,9 @@ GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP se
 
 The agent perceives the screen in two ways:
 
-### Vision mode — `screenshot()` / `screenshot(annotate=True)`
+### Vision mode — `screenshot()` / `screenshot(overlay=True)`
 
-The agent takes a screenshot to see the screen. With `annotate=True`, colored boxes with `(x, y)` coordinate labels are overlaid on every detected element — these coordinates are used directly for mouse actions, no guessing.
+The agent takes a screenshot to see the screen. Every screenshot also returns detected UI elements with absolute `(x, y)` coordinates as structured JSON — the agent reads coordinates from the JSON and clicks directly. With `overlay=True`, colored boxes with coordinate labels are drawn on the image for visual reference.
 
 <p align="center">
   <img src="demos/screenshots/screenshot.webp" alt="Raw screenshot" width="720">
@@ -149,25 +149,26 @@ The agent takes a screenshot to see the screen. With `annotate=True`, colored bo
 </p>
 
 <p align="center">
-  <img src="demos/screenshots/screenshot_annotated.webp" alt="Annotated screenshot with coordinate labels" width="720">
-  <br><em>Annotated screenshot — every element gets a colored box with (x, y) coordinates for precise clicking.</em>
+  <img src="demos/screenshots/screenshot_overlay.webp" alt="Screenshot with overlay showing coordinate labels" width="720">
+  <br><em>Overlay mode — every element gets a colored box with (x, y) coordinates for visual reference.</em>
 </p>
 
-### Text mode — `inspect()`
+### Lightweight mode — `inspect()`
 
-For smaller models or text-only workflows, the agent can read the screen as structured JSON. Returns detected text elements and their click coordinates — no image needed. Does not detect icons or images.
+`inspect()` is a text-only alternative to `screenshot()` — it returns the same JSON metadata (screen, cursor, windows, elements) without the image, saving context tokens. Use it when the agent doesn't need to see the screen.
 
 ```json
 {
+  "screen": {"width": 1280, "height": 1024},
   "cursor": {"x": 17, "y": 60},
   "windows": [
     {"app": "firefox", "title": "YouTube — Mozilla Firefox", "x": 0, "y": 0, "width": 1280, "height": 992}
   ],
   "elements": [
-    {"label": "Search", "x": 364, "y": 114},
-    {"label": "Sign in", "x": 1227, "y": 113},
-    {"label": "Home", "x": 36, "y": 200},
-    {"label": "Shorts", "x": 36, "y": 273}
+    {"label": "Search", "x": 364, "y": 114, "width": 42, "height": 14},
+    {"label": "Sign in", "x": 1227, "y": 113, "width": 38, "height": 13},
+    {"label": "Home", "x": 36, "y": 200, "width": 32, "height": 14},
+    {"label": "Shorts", "x": 36, "y": 273, "width": 36, "height": 14}
   ]
 }
 ```
@@ -229,8 +230,8 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen as an image (full or region). Use `annotate=True` to overlay detected elements with coordinate labels |
-| `inspect` | Read the screen as structured JSON — cursor, windows, and detected text elements with click coordinates (no image, no icons) |
+| `screenshot` | Capture the screen as an image + detected elements with absolute coordinates. One call gives vision and click targets. Use `overlay=True` to draw bounding boxes |
+| `inspect` | Text-only alternative to `screenshot()` — same JSON metadata, no image. Saves context tokens |
 
 ### Mouse & keyboard
 | Tool | Description |
@@ -253,7 +254,7 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 
 ## Model requirements
 
-GhostDesk works best with models that have both **vision and tool use**. We provide a system prompt optimized for desktop agents: **[SYSTEM_PROMPT.md](SYSTEM_PROMPT.md)**.
+GhostDesk works best with models that have both **vision and tool use**. The MCP server includes built-in instructions that guide the agent on how to use the tools effectively.
 
 Works well with large models out of the box (Claude, GPT-4, Gemini). Best results with **Anthropic models** — all tiers including Haiku perform reliably.
 
