@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="GhostDesk" width="200">
+  <img src="assets/logo.svg" alt="GhostDesk" width="200">
 </p>
 
 <p align="center">
