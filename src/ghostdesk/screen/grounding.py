@@ -50,6 +50,8 @@ class Element:
             "label": self.label,
             "x": self.center_x,
             "y": self.center_y,
+            "width": self.width,
+            "height": self.height,
         }
 
 

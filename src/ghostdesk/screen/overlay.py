@@ -1,5 +1,5 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Draw element annotations on screenshot images."""
+"""Draw bounding-box overlay on screenshot images."""
 
 from __future__ import annotations
 
@@ -39,13 +39,19 @@ def _generate_color(index: int) -> tuple[int, int, int]:
     return int(r * 255), int(g * 255), int(b * 255)
 
 
-def annotate_image(
+def draw_overlay(
     png_bytes: bytes,
     elements: list[Element],
     *,
-    format: str = "png",
+    fmt: str = "png",
+    offset: tuple[int, int] = (0, 0),
 ) -> bytes:
-    """Draw bounding boxes and coordinate labels on a screenshot."""
+    """Draw bounding boxes and coordinate labels on a screenshot.
+
+    Args:
+        offset: (dx, dy) added to displayed coordinate labels so they
+            show absolute screen positions even on cropped images.
+    """
     img = Image.open(io.BytesIO(png_bytes)).convert("RGBA")
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
@@ -74,8 +80,8 @@ def annotate_image(
             fill=box_fill,
         )
 
-        # Coordinate label.
-        coord_text = f"({el.center_x},{el.center_y})"
+        dx, dy = offset
+        coord_text = f"({el.center_x + dx},{el.center_y + dy})"
         bbox = font.getbbox(coord_text)
         tw = bbox[2] - bbox[0]
         th = bbox[3] - bbox[1]
@@ -135,7 +141,7 @@ def annotate_image(
 
     result = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
-    if format == "webp":
+    if fmt == "webp":
         result.save(buf, format="WebP", method=4)
     else:
         result.save(buf, format="PNG")
