@@ -37,4 +37,4 @@ async def inspect(
     if region:
         apply_region_offset(elements, region)
 
-    return build_metadata(cx, cy, windows, elements)
+    return build_metadata(cx, cy, windows, elements, region)
