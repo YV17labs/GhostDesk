@@ -19,5 +19,6 @@
       ]
     }
   },
-  "postCreateCommand": "uv sync"
+  "postCreateCommand": "uv sync",
+  "postStartCommand": "sudo /usr/local/bin/init-container.sh"
 }

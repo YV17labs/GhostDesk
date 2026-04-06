@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from ghostdesk._logging import configure_logging
 from ghostdesk._middleware import install_middleware
 from ghostdesk.instructions import INSTRUCTIONS
-from ghostdesk.tools import clipboard, devices, shell
+from ghostdesk import clipboard, input, screen, shell
 
 
 def create_app(port: int | None = None) -> FastMCP:
@@ -22,7 +22,8 @@ def create_app(port: int | None = None) -> FastMCP:
 
     mcp = FastMCP("ghostdesk", instructions=INSTRUCTIONS, host="0.0.0.0", port=port)
 
-    devices.register(mcp)
+    screen.register(mcp)
+    input.register(mcp)
     shell.register(mcp)
     clipboard.register(mcp)
 
@@ -33,8 +34,6 @@ def create_app(port: int | None = None) -> FastMCP:
 
 def main() -> None:
     """Start the MCP server with Streamable HTTP transport."""
-    os.environ.setdefault("LC_ALL", "en_US.utf8")
-    os.environ.setdefault("LANG", "en_US.utf8")
     configure_logging()
     create_app().run(transport="streamable-http")
 

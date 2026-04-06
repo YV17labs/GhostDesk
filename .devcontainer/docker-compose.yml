@@ -10,11 +10,10 @@ services:
       - "5900:5900"
       - "6080:6080"
     environment:
-      - DISPLAY=:99
       - SCREEN_WIDTH=1280
-      - SCREEN_HEIGHT=800
-      - SCREEN_DEPTH=24
+      - SCREEN_HEIGHT=1024
       - VNC_PASSWORD=changeme
-      - PORT=3000
+      - TZ=America/Montreal
+      - LOCALE=fr_CA.utf8
     shm_size: "2gb"
     command: sleep infinity

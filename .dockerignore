@@ -1,0 +1,10 @@
+.git
+.devcontainer
+.venv
+__pycache__
+*.pyc
+*.egg-info
+.ruff_cache
+.mypy_cache
+.pytest_cache
+MARKETING_STRATEGY.md
