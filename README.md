@@ -79,6 +79,7 @@ services:
   sales-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
     container_name: ghostdesk-sales-agent
+    restart: unless-stopped
     ports: ["3001:3000", "6081:6080"]
     volumes: ["ghostdesk-sales-agent-home:/home/agent"]
     shm_size: 2g
@@ -90,6 +91,7 @@ services:
   research-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
     container_name: ghostdesk-research-agent
+    restart: unless-stopped
     ports: ["3002:3000", "6082:6080"]
     volumes: ["ghostdesk-research-agent-home:/home/agent"]
     shm_size: 2g
@@ -101,6 +103,7 @@ services:
   accounting-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
     container_name: ghostdesk-accounting-agent
+    restart: unless-stopped
     ports: ["3003:3000", "6083:6080"]
     volumes: ["ghostdesk-accounting-agent-home:/home/agent"]
     shm_size: 2g
@@ -206,6 +209,7 @@ This approach works with **any application** — web apps, native apps, legacy s
 
 ```bash
 docker run -d --name ghostdesk-my-agent \
+  --restart unless-stopped \
   -p 3000:3000 \
   -p 5900:5900 \
   -p 6080:6080 \
