@@ -1,0 +1,43 @@
+# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
+"""Keyboard control tools — with optional human-like typing."""
+
+import asyncio
+
+from ghostdesk._cmd import run
+from ghostdesk.input.humanizer import typing_delays
+
+_CHAR_TO_KEY = {"\n": "Return", "\t": "Tab"}
+
+
+async def _type_char(char: str) -> None:
+    """Type a single character, using the appropriate xdotool method."""
+    key = _CHAR_TO_KEY.get(char)
+    if key:
+        await run(["xdotool", "key", "--clearmodifiers", key])
+    elif char.isascii():
+        await run(["xdotool", "type", "--clearmodifiers", "--delay", "0", char])
+    else:
+        # xdotool type can't handle non-ASCII on US keyboard layout.
+        # Use xdotool key with Unicode codepoint (e.g., U00E8 for è).
+        codepoint = f"U{ord(char):04X}"
+        await run(["xdotool", "key", "--clearmodifiers", codepoint])
+
+
+async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> str:
+    """Type text character by character with human-like timing."""
+    if humanize:
+        delays = typing_delays(text, base_delay_ms=delay_ms)
+        for char, delay in zip(text, delays):
+            await _type_char(char)
+            await asyncio.sleep(delay)
+    else:
+        for char in text:
+            await _type_char(char)
+
+    return f"Typed {len(text)} characters"
+
+
+async def press_key(keys: str) -> str:
+    """Press a key or key combination (e.g. 'Return', 'ctrl+c', 'alt+F4')."""
+    await run(["xdotool", "key", "--clearmodifiers", keys])
+    return f"Pressed {keys}"
