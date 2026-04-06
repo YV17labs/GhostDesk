@@ -24,7 +24,7 @@ async def test_create_app_has_11_tools():
     app = create_app(port=9999)
 
     tools = app._tool_manager._tools
-    assert len(tools) == 11, f"Expected 11 tools, got {len(tools)}: {sorted(tools.keys())}"
+    assert len(tools) == 12, f"Expected 12 tools, got {len(tools)}: {sorted(tools.keys())}"
 
 
 async def test_create_app_custom_port():

@@ -3,75 +3,71 @@
 
 import asyncio
 import io
-import os
-import tempfile
-from dataclasses import dataclass
 from typing import Literal
 
 from mcp.server.fastmcp import Image
 from PIL import Image as PILImage
 
-from ghostdesk._cmd import run
+from ghostdesk.input.humanizer import get_cursor_position
+from ghostdesk.screen._shared import Region, apply_region_offset, build_metadata, capture_png
+from ghostdesk.screen.windows import get_open_windows
 
 ImageFormat = Literal["webp", "png"]
 
 
-@dataclass
-class Region:
-    """Rectangular screen region to capture."""
-
-    x: int
-    y: int
-    width: int
-    height: int
-
-
 async def screenshot(
     region: Region | None = None,
-    annotate: bool = False,
+    overlay: bool = False,
     format: ImageFormat = "png",
-) -> Image:
-    """Capture the screen. Returns an image.
+) -> list:
+    """Capture the screen. Returns an image and detected UI elements.
 
     Args:
         region: Optional region to capture. If omitted, the entire
             screen is captured.
-        annotate: If True, overlay detected UI elements with bounding
-            boxes and (x, y) coordinate labels for precise clicking.
+        overlay: If True, draw bounding boxes and coordinate labels
+            on the image for visual reference.
         format: Image format — "png" or "webp".
+
+    Returns a list containing:
+        - The screenshot image (with or without visual overlay).
+        - A JSON object with screen dimensions, cursor position,
+          open windows, and all detected UI elements with their
+          absolute screen coordinates — use these with mouse_click().
     """
-    fd, path = tempfile.mkstemp(suffix=".png")
-    os.close(fd)
-    try:
-        cmd = ["maim", "--format=png"]
-        if region:
-            cmd += ["-g", f"{region.width}x{region.height}+{region.x}+{region.y}"]
-        cmd.append(path)
-        await run(cmd)
+    from ghostdesk.screen.grounding import detect_elements
 
-        with open(path, "rb") as f:
-            raw_png = f.read()
+    cursor_task = asyncio.create_task(get_cursor_position())
+    windows_task = asyncio.create_task(get_open_windows())
 
-        if annotate:
-            from ghostdesk.screen.annotator import annotate_image
-            from ghostdesk.screen.grounding import detect_elements
+    raw_png = await capture_png(region)
 
-            elements = await asyncio.to_thread(detect_elements, raw_png)
-            annotated = annotate_image(
-                raw_png, elements,
-                format=format,
-            )
-            return Image(data=annotated, format=format)
+    (cx, cy), windows, elements = await asyncio.gather(
+        cursor_task,
+        windows_task,
+        asyncio.to_thread(detect_elements, raw_png),
+    )
 
-        if format == "webp":
-            img = PILImage.open(io.BytesIO(raw_png))
-            buf = io.BytesIO()
-            img.save(buf, format="WEBP")
-            return Image(data=buf.getvalue(), format="webp")
+    if overlay:
+        from ghostdesk.screen.overlay import draw_overlay
 
-        return Image(data=raw_png, format="png")
-    finally:
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
+        label_offset = (region.x, region.y) if region else (0, 0)
+        img_bytes = draw_overlay(
+            raw_png, elements, fmt=format, offset=label_offset,
+        )
+
+    if region:
+        apply_region_offset(elements, region)
+
+    metadata = build_metadata(cx, cy, windows, elements)
+
+    if overlay:
+        return [Image(data=img_bytes, format=format), metadata]
+
+    if format == "webp":
+        img = PILImage.open(io.BytesIO(raw_png))
+        buf = io.BytesIO()
+        img.save(buf, format="WEBP")
+        return [Image(data=buf.getvalue(), format="webp"), metadata]
+
+    return [Image(data=raw_png, format="png"), metadata]

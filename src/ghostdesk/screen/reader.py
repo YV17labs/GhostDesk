@@ -2,20 +2,15 @@
 """Screen reader tool — structured text-only element detection."""
 
 import asyncio
-import os
-import tempfile
 
-from ghostdesk._cmd import run
 from ghostdesk.input.humanizer import get_cursor_position
+from ghostdesk.screen._shared import Region, apply_region_offset, build_metadata, capture_png
 from ghostdesk.screen.grounding import detect_elements
 from ghostdesk.screen.windows import get_open_windows
 
 
 async def inspect(
-    x: int | None = None,
-    y: int | None = None,
-    width: int | None = None,
-    height: int | None = None,
+    region: Region | None = None,
 ) -> dict:
     """Read the screen contents as structured JSON. No image is returned.
 
@@ -24,50 +19,22 @@ async def inspect(
     with the reported x, y coordinates to interact.
 
     Args:
-        x, y, width, height: Optional region to inspect. All four must
-            be provided together to inspect a specific area. If omitted,
-            the entire screen is inspected.
+        region: Optional region to inspect. If omitted, the entire
+            screen is inspected. Coordinates are always absolute
+            screen positions, even when a region is used.
     """
-    region = all(v is not None for v in (x, y, width, height))
+    windows_task = asyncio.create_task(get_open_windows())
+    cursor_task = asyncio.create_task(get_cursor_position())
 
-    fd, path = tempfile.mkstemp(suffix=".png")
-    os.close(fd)
-    try:
-        windows_task = asyncio.create_task(get_open_windows())
+    raw_png = await capture_png(region)
 
-        cmd = ["maim", "--format=png"]
-        if region:
-            cmd += ["-g", f"{width}x{height}+{x}+{y}"]
-        cmd.append(path)
-        await run(cmd)
+    (cx, cy), windows, elements = await asyncio.gather(
+        cursor_task,
+        windows_task,
+        asyncio.to_thread(detect_elements, raw_png),
+    )
 
-        with open(path, "rb") as f:
-            raw_png = f.read()
+    if region:
+        apply_region_offset(elements, region)
 
-        (cx, cy), windows, elements = await asyncio.gather(
-            get_cursor_position(),
-            windows_task,
-            asyncio.to_thread(detect_elements, raw_png),
-        )
-
-        if region:
-            cx -= x  # type: ignore[operator]
-            cy -= y  # type: ignore[operator]
-            for el in elements:
-                el.x += x  # type: ignore[operator]
-                el.y += y  # type: ignore[operator]
-                el.center_x = el.x + el.width // 2
-                el.center_y = el.y + el.height // 2
-
-        result = {
-            "cursor": {"x": cx, "y": cy},
-            "windows": windows,
-            "elements": [el.to_dict() for el in elements],
-        }
-
-        return result
-    finally:
-        try:
-            os.unlink(path)
-        except FileNotFoundError:
-            pass
+    return build_metadata(cx, cy, windows, elements)
