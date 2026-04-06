@@ -78,21 +78,35 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 services:
   sales-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
+    container_name: ghostdesk-sales-agent
     ports: ["3001:3000", "6081:6080"]
+    volumes: ["ghostdesk-sales-agent-home:/home/agent"]
+    shm_size: 2g
     environment:
       - TZ=America/New_York
 
   research-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
+    container_name: ghostdesk-research-agent
     ports: ["3002:3000", "6082:6080"]
+    volumes: ["ghostdesk-research-agent-home:/home/agent"]
+    shm_size: 2g
     environment:
       - TZ=Europe/London
 
   accounting-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
+    container_name: ghostdesk-accounting-agent
     ports: ["3003:3000", "6083:6080"]
+    volumes: ["ghostdesk-accounting-agent-home:/home/agent"]
+    shm_size: 2g
     environment:
       - TZ=Europe/Paris
+
+volumes:
+  ghostdesk-sales-agent-home:
+  ghostdesk-research-agent-home:
+  ghostdesk-accounting-agent-home:
 ```
 
 ```bash
@@ -185,14 +199,18 @@ This approach works with **any application** — web apps, native apps, legacy s
 ### 1. Run the container
 
 ```bash
-docker run -d --name ghostdesk \
+docker run -d --name ghostdesk-my-agent \
   -p 3000:3000 \
   -p 5900:5900 \
   -p 6080:6080 \
+  -v ghostdesk-my-agent-home:/home/agent \
+  --shm-size 2g \
   ghcr.io/yv17labs/ghostdesk:latest
 ```
 
-That's it. The virtual desktop, MCP server, and VNC are all running inside an isolated container. Your agent gets a full Linux desktop — your host machine stays untouched.
+Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
+
+The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
 
 ### 2. Connect your AI
 
