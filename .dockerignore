@@ -8,4 +8,3 @@ __pycache__
 .mypy_cache
 .pytest_cache
 MARKETING_STRATEGY.md
-SYSTEM_PROMPT.md
