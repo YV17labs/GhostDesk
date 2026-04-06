@@ -50,10 +50,13 @@ def apply_region_offset(elements: list[Element], region: Region) -> None:
 
 def build_metadata(
     cx: int, cy: int, windows: list[dict], elements: list[Element],
+    region: Region | None = None,
 ) -> dict:
     """Build the standard metadata dict returned by screenshot() and inspect()."""
+    r = region or Region(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
     return {
         "screen": {"width": SCREEN_WIDTH, "height": SCREEN_HEIGHT},
+        "region": {"x": r.x, "y": r.y, "width": r.width, "height": r.height},
         "cursor": {"x": cx, "y": cy},
         "windows": windows,
         "elements": [el.to_dict() for el in elements],

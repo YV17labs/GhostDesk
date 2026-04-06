@@ -59,7 +59,7 @@ async def screenshot(
     if region:
         apply_region_offset(elements, region)
 
-    metadata = build_metadata(cx, cy, windows, elements)
+    metadata = build_metadata(cx, cy, windows, elements, region)
 
     if overlay:
         return [Image(data=img_bytes, format=format), metadata]
