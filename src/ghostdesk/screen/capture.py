@@ -31,9 +31,9 @@ async def screenshot(
 
     Returns a list containing:
         - The screenshot image (with or without visual overlay).
-        - A JSON object with screen dimensions, cursor position,
-          open windows, and all detected UI elements with their
-          absolute screen coordinates — use these with mouse_click().
+        - A JSON object with screen dimensions, captured region,
+          cursor position, open windows, and all detected UI elements
+          with absolute screen coordinates — use these with mouse_click().
     """
     from ghostdesk.screen.grounding import detect_elements
 

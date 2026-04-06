@@ -160,6 +160,7 @@ The agent takes a screenshot to see the screen. Every screenshot also returns de
 ```json
 {
   "screen": {"width": 1280, "height": 1024},
+  "region": {"x": 0, "y": 0, "width": 1280, "height": 1024},
   "cursor": {"x": 17, "y": 60},
   "windows": [
     {"app": "firefox", "title": "YouTube — Mozilla Firefox", "x": 0, "y": 0, "width": 1280, "height": 992}
