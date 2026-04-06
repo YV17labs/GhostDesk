@@ -83,7 +83,9 @@ services:
     volumes: ["ghostdesk-sales-agent-home:/home/agent"]
     shm_size: 2g
     environment:
+      - VNC_PASSWORD=changeme
       - TZ=America/New_York
+      - LOCALE=en_US.utf8
 
   research-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
@@ -92,7 +94,9 @@ services:
     volumes: ["ghostdesk-research-agent-home:/home/agent"]
     shm_size: 2g
     environment:
-      - TZ=Europe/London
+      - VNC_PASSWORD=changeme
+      - TZ=America/Toronto
+      - LOCALE=en_CA.utf8
 
   accounting-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
@@ -101,7 +105,9 @@ services:
     volumes: ["ghostdesk-accounting-agent-home:/home/agent"]
     shm_size: 2g
     environment:
+      - VNC_PASSWORD=changeme
       - TZ=Europe/Paris
+      - LOCALE=fr_FR.utf8
 
 volumes:
   ghostdesk-sales-agent-home:
@@ -205,6 +211,9 @@ docker run -d --name ghostdesk-my-agent \
   -p 6080:6080 \
   -v ghostdesk-my-agent-home:/home/agent \
   --shm-size 2g \
+  -e VNC_PASSWORD=changeme \
+  -e TZ=UTC \
+  -e LOCALE=en_US.utf8 \
   ghcr.io/yv17labs/ghostdesk:latest
 ```
 
