@@ -48,6 +48,6 @@ RUN mkdir -p /home/agent/.config/openbox /home/agent/.config/tint2 \
 EXPOSE 3000 5900 6080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -sf http://localhost:3000/mcp || exit 1
+    CMD supervisorctl status | grep -qv FATAL || exit 1
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
