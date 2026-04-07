@@ -22,4 +22,26 @@ if ! locale -a 2>/dev/null | grep -qiF "${LOCALE}"; then
     echo "init-container: generated ${LOCALE_CANONICAL}"
 fi
 
-export LC_ALL="${LOCALE_CANONICAL}" LANG="${LOCALE_CANONICAL}"
+update-locale LC_ALL="${LOCALE_CANONICAL}" LANG="${LOCALE_CANONICAL}"
+
+# --- GNOME Keyring --------------------------------------------------------
+# Pre-create an unlocked "Default keyring" with an empty password so that
+# Electron / libsecret apps never prompt interactively.
+KEYRING_DIR="/home/${RUN_USER:?}/.local/share/keyrings"
+KEYRING_NAME="Default_keyring"
+if [ ! -f "${KEYRING_DIR}/default" ]; then
+    mkdir -p "${KEYRING_DIR}"
+    printf '%s' "${KEYRING_NAME}" > "${KEYRING_DIR}/default"
+    cat > "${KEYRING_DIR}/${KEYRING_NAME}.keyring" <<'KEYRING'
+[keyring]
+display-name=Default keyring
+ctime=0
+mtime=0
+lock-on-idle=false
+lock-after=false
+KEYRING
+    chmod 700 "${KEYRING_DIR}"
+    chmod 600 "${KEYRING_DIR}/default" "${KEYRING_DIR}/${KEYRING_NAME}.keyring"
+    chown -R "${RUN_USER}:${RUN_USER}" "${KEYRING_DIR}"
+    echo "init-container: created default gnome-keyring"
+fi
