@@ -3,7 +3,8 @@ FROM ubuntu:24.04
 LABEL org.opencontainers.image.title="ghostdesk" \
       org.opencontainers.image.description="MCP server to control a virtual Linux desktop from an LLM agent" \
       org.opencontainers.image.authors="Yoann Vanitou <yvanitou@gmail.com>" \
-      org.opencontainers.image.source="https://github.com/yv17labs/ghostdesk" \
+      org.opencontainers.image.source="https://github.com/YV17labs/GhostDesk" \
+      org.opencontainers.image.vendor="YV17" \
       org.opencontainers.image.licenses="AGPL-3.0-only"
 
 ENV DEBIAN_FRONTEND=noninteractive \
