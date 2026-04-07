@@ -3,7 +3,7 @@
 
 import asyncio
 
-from ghostdesk.input.humanizer import get_cursor_position
+from ghostdesk._cursor import get_cursor_position
 from ghostdesk.screen._shared import Region, apply_region_offset, build_metadata, capture_png
 from ghostdesk.screen.grounding import detect_elements
 from ghostdesk.screen.windows import get_open_windows
