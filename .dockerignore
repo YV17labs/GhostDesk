@@ -1,5 +1,6 @@
 .git
 .devcontainer
+.github
 .venv
 __pycache__
 *.pyc
@@ -7,4 +8,5 @@ __pycache__
 .ruff_cache
 .mypy_cache
 .pytest_cache
-MARKETING_STRATEGY.md
+tests
+demos
