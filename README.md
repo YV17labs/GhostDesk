@@ -307,6 +307,33 @@ Works well with large models out of the box (Claude, GPT-4, Gemini). Best result
 
 ---
 
+## Custom image
+
+The `base` tag provides GhostDesk without any pre-installed GUI application — just the virtual desktop, VNC, and the MCP server. Use it to build your own image with only the tools you need:
+
+```dockerfile
+FROM ghcr.io/yv17labs/ghostdesk:base
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        chromium-browser \
+        libreoffice-calc \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+```bash
+docker build -t my-agent .
+```
+
+See the project's [Dockerfile](Dockerfile) for a complete example.
+
+| Tag | Description |
+|-----|-------------|
+| `latest`, `X.Y.Z`, `X.Y` | Full image — includes Firefox, terminal, sudo |
+| `base`, `base-X.Y.Z`, `base-X.Y` | Minimal image — no GUI app, meant to be extended |
+
+---
+
 ## Tests
 
 ```bash
