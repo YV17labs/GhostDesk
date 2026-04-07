@@ -22,4 +22,4 @@ if ! locale -a 2>/dev/null | grep -qiF "${LOCALE}"; then
     echo "init-container: generated ${LOCALE_CANONICAL}"
 fi
 
-export LC_ALL="${LOCALE}" LANG="${LOCALE}"
+export LC_ALL="${LOCALE_CANONICAL}" LANG="${LOCALE_CANONICAL}"

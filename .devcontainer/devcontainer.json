@@ -19,6 +19,6 @@
       ]
     }
   },
-  "postCreateCommand": "uv sync",
+  "postCreateCommand": "rm -rf .venv && uv sync",
   "postStartCommand": "sudo /usr/local/bin/init-container.sh"
 }
