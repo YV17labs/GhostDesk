@@ -36,6 +36,12 @@ jobs:
             type=raw,value=base
             type=semver,pattern=base-{{version}}
             type=semver,pattern=base-{{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=ghostdesk
+            org.opencontainers.image.description=MCP server to control a virtual Linux desktop from an LLM agent
+            org.opencontainers.image.authors=Yoann Vanitou <yvanitou@gmail.com>
+            org.opencontainers.image.vendor=YV17
+            org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -45,6 +51,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=base
           cache-to: type=gha,mode=max,scope=base
           platforms: linux/amd64,linux/arm64
@@ -77,6 +84,12 @@ jobs:
             type=raw,value=latest
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=ghostdesk
+            org.opencontainers.image.description=MCP server to control a virtual Linux desktop from an LLM agent
+            org.opencontainers.image.authors=Yoann Vanitou <yvanitou@gmail.com>
+            org.opencontainers.image.vendor=YV17
+            org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -86,6 +99,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha,scope=latest
           cache-to: type=gha,mode=max,scope=latest
           platforms: linux/amd64,linux/arm64
