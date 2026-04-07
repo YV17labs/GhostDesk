@@ -19,8 +19,8 @@ async def test_create_app_returns_fastmcp():
     assert isinstance(app, FastMCP)
 
 
-async def test_create_app_has_11_tools():
-    """create_app() registers exactly 11 tools."""
+async def test_create_app_has_expected_tools():
+    """create_app() registers the expected number of tools."""
     app = create_app(port=9999)
 
     tools = app._tool_manager._tools
