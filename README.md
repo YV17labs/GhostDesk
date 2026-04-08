@@ -80,6 +80,7 @@ services:
     image: ghcr.io/yv17labs/ghostdesk:latest
     container_name: ghostdesk-sales-agent
     restart: unless-stopped
+    cap_add: [SYS_ADMIN]
     ports: ["3001:3000", "6081:6080"]
     volumes: ["ghostdesk-sales-agent-home:/home/agent"]
     shm_size: 2g
@@ -92,6 +93,7 @@ services:
     image: ghcr.io/yv17labs/ghostdesk:latest
     container_name: ghostdesk-research-agent
     restart: unless-stopped
+    cap_add: [SYS_ADMIN]
     ports: ["3002:3000", "6082:6080"]
     volumes: ["ghostdesk-research-agent-home:/home/agent"]
     shm_size: 2g
@@ -104,6 +106,7 @@ services:
     image: ghcr.io/yv17labs/ghostdesk:latest
     container_name: ghostdesk-accounting-agent
     restart: unless-stopped
+    cap_add: [SYS_ADMIN]
     ports: ["3003:3000", "6083:6080"]
     volumes: ["ghostdesk-accounting-agent-home:/home/agent"]
     shm_size: 2g
@@ -160,42 +163,11 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your agent gets a sandboxed desktop with a taskbar, clock, and pre-installed applications — equivalent to what a human sees on their screen.
 
-The agent perceives the screen in two ways:
+The agent perceives the screen and locates click targets with:
 
-### Vision mode — `screenshot()` / `screenshot(overlay=True)`
+### Vision mode — `screenshot()` + `rulers`
 
-The agent takes a screenshot to see the screen. Every screenshot also returns detected UI elements with absolute `(x, y)` coordinates as structured JSON — the agent reads coordinates from the JSON and clicks directly. With `overlay=True`, colored boxes with coordinate labels are drawn on the image for visual reference.
-
-<p align="center">
-  <img src="demos/screenshots/screenshot.webp" alt="Raw screenshot" width="720">
-  <br><em>Raw screenshot — the agent sees the screen exactly as a human would.</em>
-</p>
-
-<p align="center">
-  <img src="demos/screenshots/screenshot_overlay.webp" alt="Screenshot with overlay showing coordinate labels" width="720">
-  <br><em>Overlay mode — every element gets a colored box with (x, y) coordinates for visual reference.</em>
-</p>
-
-### Lightweight mode — `inspect()`
-
-`inspect()` is a text-only alternative to `screenshot()` — it returns the same JSON metadata (screen, cursor, windows, elements) without the image, saving context tokens. Use it when the agent doesn't need to see the screen.
-
-```json
-{
-  "screen": {"width": 1280, "height": 1024},
-  "region": {"x": 0, "y": 0, "width": 1280, "height": 1024},
-  "cursor": {"x": 17, "y": 60},
-  "windows": [
-    {"app": "firefox", "title": "YouTube — Mozilla Firefox", "x": 0, "y": 0, "width": 1280, "height": 992}
-  ],
-  "elements": [
-    {"label": "Search", "x": 364, "y": 114, "width": 42, "height": 14},
-    {"label": "Sign in", "x": 1227, "y": 113, "width": 38, "height": 13},
-    {"label": "Home", "x": 36, "y": 200, "width": 32, "height": 14},
-    {"label": "Shorts", "x": 36, "y": 273, "width": 36, "height": 14}
-  ]
-}
-```
+The agent takes a screenshot to see the screen. For precise clicking, it captures a zoomed region with `rulers=True` to display coordinate rulers on the edges (X-axis top, Y-axis left). The agent reads coordinates directly from the rulers and clicks with precision.
 
 Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
 
@@ -210,6 +182,7 @@ This approach works with **any application** — web apps, native apps, legacy s
 ```bash
 docker run -d --name ghostdesk-my-agent \
   --restart unless-stopped \
+  --cap-add SYS_ADMIN \
   -p 3000:3000 \
   -p 5900:5900 \
   -p 6080:6080 \
@@ -222,6 +195,8 @@ docker run -d --name ghostdesk-my-agent \
 ```
 
 Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
+
+> **`--cap-add SYS_ADMIN`** — Required by Electron apps (VS Code, Slack, etc.) and other applications that need Linux user namespaces to run their sandbox. Safe to remove if you don't need them.
 
 The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
 
@@ -262,8 +237,7 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen as an image + detected elements with absolute coordinates. One call gives vision and click targets. Use `overlay=True` to draw bounding boxes |
-| `inspect` | Text-only alternative to `screenshot()` — same JSON metadata, no image. Saves context tokens |
+| `screenshot` | Capture the screen as an image. Use `rulers=True` with `region=` for zoomed screenshots with coordinate rulers |
 
 ### Mouse & keyboard
 | Tool | Description |
@@ -275,10 +249,11 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 | `type_text` | Type with realistic per-character delays |
 | `press_key` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
 
-### System
+### Shell & system
 | Tool | Description |
 |------|-------------|
 | `launch` | Start GUI applications |
+| `process_status` | Check if a process is running and read its logs |
 | `get_clipboard` | Read clipboard contents |
 | `set_clipboard` | Write to clipboard |
 

@@ -15,5 +15,7 @@ services:
       - VNC_PASSWORD=changeme
       - TZ=America/Montreal
       - LOCALE=fr_CA.utf8
+    cap_add:
+      - SYS_ADMIN
     shm_size: "2gb"
     command: sleep infinity
