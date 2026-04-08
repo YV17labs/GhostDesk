@@ -1,6 +1,6 @@
 [project]
 name = "ghostdesk"
-version = "4.0.0"
+version = "5.0.0"
 description = "MCP server to control a virtual Linux desktop from an LLM agent"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -18,8 +18,6 @@ classifiers = [
 dependencies = [
     "mcp[cli]>=1.0",
     "Pillow>=10.0",
-    "rapidocr>=3.7.0",
-    "onnxruntime>=1.19",
 ]
 
 [project.scripts]

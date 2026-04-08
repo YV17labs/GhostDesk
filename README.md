@@ -163,21 +163,11 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your agent gets a sandboxed desktop with a taskbar, clock, and pre-installed applications — equivalent to what a human sees on their screen.
 
-The agent perceives the screen in two ways:
+The agent perceives the screen and locates click targets with:
 
-### Vision mode — `screenshot()` / `screenshot(overlay=True)`
+### Vision mode — `screenshot()` + `rulers`
 
-The agent takes a screenshot to see the screen. Every screenshot also returns detected UI elements with absolute `(x, y)` coordinates as structured JSON — the agent reads coordinates from the JSON and clicks directly. With `overlay=True`, colored boxes with coordinate labels are drawn on the image for visual reference.
-
-<p align="center">
-  <img src="demos/screenshots/screenshot.webp" alt="Raw screenshot" width="720">
-  <br><em>Raw screenshot — the agent sees the screen exactly as a human would.</em>
-</p>
-
-<p align="center">
-  <img src="demos/screenshots/screenshot_overlay.webp" alt="Screenshot with overlay showing coordinate labels" width="720">
-  <br><em>Overlay mode — every element gets a colored box with (x, y) coordinates for visual reference.</em>
-</p>
+The agent takes a screenshot to see the screen. For precise clicking, it captures a zoomed region with `rulers=True` to display coordinate rulers on the edges (X-axis top, Y-axis left). The agent reads coordinates directly from the rulers and clicks with precision.
 
 ### Lightweight mode — `inspect()`
 
@@ -268,7 +258,7 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen as an image + detected elements with absolute coordinates. One call gives vision and click targets. Use `overlay=True` to draw bounding boxes |
+| `screenshot` | Capture the screen as an image. Use `rulers=True` with `region=` for zoomed screenshots with coordinate rulers |
 | `inspect` | Text-only alternative to `screenshot()` — same JSON metadata, no image. Saves context tokens |
 
 ### Mouse & keyboard
