@@ -39,7 +39,6 @@ def _mock_deps():
         patch(f"{CAPTURE}.capture_png", side_effect=fake_capture_png),
         patch(f"{CAPTURE}.get_cursor_position", new_callable=AsyncMock, return_value=(100, 200)),
         patch(f"{CAPTURE}.get_open_windows", new_callable=AsyncMock, return_value=[]),
-        patch("ghostdesk.screen.grounding.detect_elements", return_value=[]),
     ):
         yield
 
@@ -53,7 +52,7 @@ async def test_screenshot_returns_image_and_metadata(_mock_deps):
     assert "screen" in meta
     assert "cursor" in meta
     assert "windows" in meta
-    assert "elements" in meta
+    assert "region" in meta
     assert meta["cursor"] == {"x": 100, "y": 200}
 
 

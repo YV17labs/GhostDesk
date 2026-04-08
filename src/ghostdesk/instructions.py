@@ -2,50 +2,54 @@
 """LLM instructions for the GhostDesk MCP server."""
 
 INSTRUCTIONS = """
-You control a virtual Linux desktop through screen capture, mouse, and keyboard.
+You control a virtual Linux desktop via screen capture, mouse, and keyboard.
 
-## Screen reading
+Pre-installed apps: **Firefox**, **GNOME Terminal**.
 
-`screenshot()` returns an image and detected UI elements with **absolute
-screen coordinates** as JSON. Read coordinates from the JSON and pass them
-directly to `mouse_click(x, y)`. Use `overlay=True` to draw bounding boxes
-on the image for visual reference.
+## How to click on screen
 
-`inspect()` is a **text-only alternative** — same JSON, no image.
-Prefer it when you don't need to see the screen (saves tokens).
-Never call both for the same action.
+**Step 1: Identify the target visually**
 
-Scope with a region for denser, more accurate results:
-`screenshot(region=Region(x, y, w, h))`. Use a generously sized region
-to avoid clipping UI elements.
+1. Call `screenshot()` to capture the full screen.
+2. Use your visual understanding to locate the target element by its text,
+   icon, position, or surrounding context.
+
+**Step 2: Get precise coordinates**
+
+3. Once you've identified the target area, take a **zoomed screenshot** with
+   rulers: `screenshot(region=Region(x, y, width, height), rulers=True)`.
+   **Make the region 2×–3× wider and taller** than the element.
+4. The zoomed image will have **coordinate rulers on the edges**:
+   - Horizontal ruler (top): X-axis with tick marks and labels every 50 pixels
+   - Vertical ruler (left): Y-axis with tick marks and labels every 50 pixels
+5. Read the absolute coordinates directly from the rulers.
+6. Call `mouse_click(x, y)` with the coordinates you read.
+
+**Step 3: Verify the action worked (mandatory)**
+
+7. **After executing any action, immediately take a screenshot** to confirm
+   the result. Never assume success without visual confirmation.
+8. Inspect the screenshot: did the expected change happen?
+9. If yes → proceed. If no → analyze what went wrong and retry.
+
+**Coordinates are always absolute** screen coordinates. No offset calculation.
 
 ## Visual feedback
 
-Every mouse and keyboard action returns `screen_changed` (bool) and
-`reaction_time_ms` (int). A 200×200 px zone around the action point is
-polled for up to 2 seconds after the action.
+Mouse and keyboard actions return `screen_changed` (bool) and
+`reaction_time_ms` (int).
 
-- **`screen_changed: false`** — the action likely had no effect.
-  Re-check coordinates or take a new screenshot.
-- **`screen_changed: true`** — the UI reacted; proceed immediately.
+- `screen_changed: false` → action likely had no effect. Re-screenshot.
+- `screen_changed: true` → UI reacted. Doesn't mean the **right** thing
+  happened — for destructive actions (delete, send), screenshot to confirm.
 
 ## Process tracking
 
-`launch()` returns a PID and a log file path. Use `process_status(pid)`
-to check whether a launched application is still running and to read its
-stdout/stderr output.
+`launch()` returns a PID + log path. Use `process_status(pid)` to check
+state and read stdout/stderr.
 
 ## Tips
 
-- `screen_changed: true` means the UI reacted, not that the **right** thing
-  happened. For critical actions (delete, send, submit), take a screenshot
-  after to confirm the outcome.
-- When click targets are small or closely spaced, zoom in first with
-  `screenshot(region=...)` to get more accurate coordinates.
-- OCR cannot read icons — it may return garbage labels (e.g. CJK characters
-  for toolbar buttons). When this happens, **look at the image yourself** to
-  identify icons visually and pick coordinates based on what you see, not
-  on the OCR labels.
-- Use `set_clipboard()` + `press_key("ctrl+v")` for accented or special characters.
-- Prefer keyboard shortcuts over mouse clicks when possible.
+- Prefer keyboard shortcuts over clicks when possible.
+- For accented or special characters: `set_clipboard()` + `press_key("ctrl+v")`.
 """
