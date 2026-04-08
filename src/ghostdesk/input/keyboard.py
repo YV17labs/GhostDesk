@@ -1,12 +1,28 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Keyboard control tools — with optional human-like typing."""
+"""Keyboard control tools — with optional human-like typing and visual feedback."""
 
 import asyncio
+import random
 
 from ghostdesk._cmd import run
-from ghostdesk.input.humanizer import typing_delays
+from ghostdesk._cursor import get_cursor_position
+from ghostdesk.input.feedback import build_feedback, capture_before, poll_for_change
 
 _CHAR_TO_KEY = {"\n": "Return", "\t": "Tab"}
+
+
+def _typing_delays(text: str, base_delay_ms: int = 50) -> list[float]:
+    """Generate human-like per-character delays (in seconds)."""
+    delays: list[float] = []
+    for char in text:
+        if char == " ":
+            ms = random.gauss(base_delay_ms * 1.5, base_delay_ms * 0.3)
+        elif char in ".,;:!?\n":
+            ms = random.gauss(base_delay_ms * 2.5, base_delay_ms * 0.5)
+        else:
+            ms = random.gauss(base_delay_ms, base_delay_ms * 0.2)
+        delays.append(max(10, ms) / 1000.0)
+    return delays
 
 
 async def _type_char(char: str) -> None:
@@ -23,10 +39,23 @@ async def _type_char(char: str) -> None:
         await run(["xdotool", "key", "--clearmodifiers", codepoint])
 
 
-async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> str:
-    """Type text character by character with human-like timing."""
+async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> dict:
+    """Type text character by character with human-like timing.
+
+    Captures a 200×200 px zone around the current mouse cursor before and
+    after typing.
+
+    Returns a dict with:
+    - action: description of what was performed.
+    - screen_changed: whether the zone visibly changed within 2 s. If false
+      the text field may not have focus — click on it first.
+    - reaction_time_ms: how quickly the change was detected (ms).
+    """
+    cx, cy = await get_cursor_position()
+    region, before_hash = await capture_before(cx, cy)
+
     if humanize:
-        delays = typing_delays(text, base_delay_ms=delay_ms)
+        delays = _typing_delays(text, base_delay_ms=delay_ms)
         for char, delay in zip(text, delays):
             await _type_char(char)
             await asyncio.sleep(delay)
@@ -34,10 +63,25 @@ async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> str
         for char in text:
             await _type_char(char)
 
-    return f"Typed {len(text)} characters"
+    result = await poll_for_change(region, before_hash)
+    return build_feedback(f"Typed {len(text)} characters", result)
 
 
-async def press_key(keys: str) -> str:
-    """Press a key or key combination (e.g. 'Return', 'ctrl+c', 'alt+F4')."""
+async def press_key(keys: str) -> dict:
+    """Press a key or key combination (e.g. 'Return', 'ctrl+c', 'alt+F4').
+
+    Captures a 200×200 px zone around the current mouse cursor before and
+    after the key press.
+
+    Returns a dict with:
+    - action: description of what was performed.
+    - screen_changed: whether the zone visibly changed within 2 s.
+    - reaction_time_ms: how quickly the change was detected (ms).
+    """
+    cx, cy = await get_cursor_position()
+    region, before_hash = await capture_before(cx, cy)
+
     await run(["xdotool", "key", "--clearmodifiers", keys])
-    return f"Pressed {keys}"
+
+    result = await poll_for_change(region, before_hash)
+    return build_feedback(f"Pressed {keys}", result)

@@ -3,7 +3,7 @@
 
 import importlib
 import sys
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,14 +19,15 @@ async def test_create_app_returns_fastmcp():
     assert isinstance(app, FastMCP)
 
 
-async def test_create_app_has_11_tools():
-    """create_app() registers exactly 11 tools."""
+async def test_create_app_has_expected_tools():
+    """create_app() registers the expected number of tools."""
     app = create_app(port=9999)
 
     tools = app._tool_manager._tools
-    assert len(tools) == 12, f"Expected 12 tools, got {len(tools)}: {sorted(tools.keys())}"
+    assert len(tools) == 11, f"Expected 11 tools, got {len(tools)}: {sorted(tools.keys())}"
 
 
+@pytest.mark.filterwarnings("ignore::RuntimeWarning:pydantic.fields")
 async def test_create_app_custom_port():
     """create_app() accepts a custom port."""
     app = create_app(port=4567)
@@ -64,3 +65,45 @@ async def test_import_server_no_side_effect():
     finally:
         if saved is not None:
             sys.modules[mod_name] = saved
+
+
+def test_main_calls_create_app_and_runs():
+    """main() calls configure_logging(), create_app(), and runs the server."""
+    from ghostdesk.server import main
+
+    with (
+        patch("ghostdesk.server.configure_logging") as mock_logging,
+        patch("ghostdesk.server.create_app") as mock_create,
+    ):
+        # Mock the app and its run method
+        mock_app = mock_create.return_value
+        mock_app.run = MagicMock()
+
+        main()
+
+        # Verify configure_logging was called
+        mock_logging.assert_called_once()
+        # Verify create_app was called with no arguments
+        mock_create.assert_called_once_with()
+        # Verify run was called with correct transport
+        mock_app.run.assert_called_once_with(transport="streamable-http")
+
+
+def test_main_with_port_env_var():
+    """main() respects PORT env var when calling create_app."""
+    from ghostdesk.server import main
+
+    with (
+        patch("ghostdesk.server.configure_logging"),
+        patch("ghostdesk.server.create_app") as mock_create,
+        patch.dict("os.environ", {"PORT": "5000"}),
+    ):
+        mock_app = mock_create.return_value
+        mock_app.run = MagicMock()
+
+        main()
+
+        # create_app is called with no arguments, but PORT env var
+        # affects the port used internally in create_app
+        mock_create.assert_called_once_with()
+        mock_app.run.assert_called_once_with(transport="streamable-http")

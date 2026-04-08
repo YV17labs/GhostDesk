@@ -1,5 +1,5 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Human-like mouse movement and typing — Bézier curves, easing, jitter."""
+"""Human-like mouse movement — Bézier curves, easing, jitter."""
 
 import asyncio
 import math
@@ -69,28 +69,3 @@ async def human_move(from_x: int, from_y: int, to_x: int, to_y: int) -> None:
 
     # Final snap to exact target (remove jitter)
     await run(["xdotool", "mousemove", str(to_x), str(to_y)])
-
-
-async def get_cursor_position() -> tuple[int, int]:
-    """Return current cursor (x, y) from xdotool."""
-    output = await run(["xdotool", "getmouselocation"])
-    # Format: "x:123 y:456 screen:0 window:789"
-    parts = dict(p.split(":") for p in output.split())
-    return int(parts["x"]), int(parts["y"])
-
-
-def typing_delays(text: str, base_delay_ms: int = 50) -> list[float]:
-    """Generate human-like per-character delays (in seconds).
-
-    Slower after spaces and punctuation, variable within words.
-    """
-    delays: list[float] = []
-    for char in text:
-        if char == " ":
-            ms = random.gauss(base_delay_ms * 1.5, base_delay_ms * 0.3)
-        elif char in ".,;:!?\n":
-            ms = random.gauss(base_delay_ms * 2.5, base_delay_ms * 0.5)
-        else:
-            ms = random.gauss(base_delay_ms, base_delay_ms * 0.2)
-        delays.append(max(10, ms) / 1000.0)
-    return delays

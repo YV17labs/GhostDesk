@@ -2,29 +2,54 @@
 """LLM instructions for the GhostDesk MCP server."""
 
 INSTRUCTIONS = """
-You control a virtual Linux desktop.
+You control a virtual Linux desktop via screen capture, mouse, and keyboard.
 
-## Pre-installed applications
+Pre-installed apps: **Firefox**, **GNOME Terminal**.
 
-- **Firefox** — web browser.
-- **GNOME Terminal** — terminal emulator.
+## How to click on screen
 
-## How to click precisely
+**Step 1: Identify the target visually**
 
-`screenshot()` returns both an image and detected UI elements with
-**absolute screen coordinates** as JSON — one call gives you vision
-and click targets. Read the coordinates from the JSON and pass them
-directly to `mouse_click(x, y)`. Use `overlay=True` to also draw
-bounding boxes on the image for visual reference. Coordinates are
-absolute even when a `region` is specified; no offset math needed.
+1. Call `screenshot()` to capture the full screen.
+2. Use your visual understanding to locate the target element by its text,
+   icon, position, or surrounding context.
 
-`inspect()` is a **text-only alternative** — same JSON, no image.
-Use it when you don't need to see the screen (saves context tokens).
-Never call both for the same action.
+**Step 2: Get precise coordinates**
+
+3. Once you've identified the target area, take a **zoomed screenshot** with
+   rulers: `screenshot(region=Region(x, y, width, height), rulers=True)`.
+   **Make the region 2×–3× wider and taller** than the element.
+4. The zoomed image will have **coordinate rulers on the edges**:
+   - Horizontal ruler (top): X-axis with tick marks and labels every 50 pixels
+   - Vertical ruler (left): Y-axis with tick marks and labels every 50 pixels
+5. Read the absolute coordinates directly from the rulers.
+6. Call `mouse_click(x, y)` with the coordinates you read.
+
+**Step 3: Verify the action worked (mandatory)**
+
+7. **After executing any action, immediately take a screenshot** to confirm
+   the result. Never assume success without visual confirmation.
+8. Inspect the screenshot: did the expected change happen?
+9. If yes → proceed. If no → analyze what went wrong and retry.
+
+**Coordinates are always absolute** screen coordinates. No offset calculation.
+
+## Visual feedback
+
+Mouse and keyboard actions return `screen_changed` (bool) and
+`reaction_time_ms` (int).
+
+- `screen_changed: false` → action likely had no effect. Re-screenshot.
+- `screen_changed: true` → UI reacted. Doesn't mean the **right** thing
+  happened — for destructive actions (delete, send), screenshot to confirm.
+
+## Process tracking
+
+`launch()` returns a PID + log path. Use `process_status(pid)` to check
+state and read stdout/stderr.
 
 ## Tips
 
-- Use `set_clipboard()` + `press_key("ctrl+v")` for accented or special characters.
-- Prefer keyboard shortcuts over mouse clicks when possible.
-- When targeting a specific area, scope with a region for denser, more accurate results: `screenshot(region=Region(x, y, w, h))` or `inspect(region=Region(x, y, w, h))`. Use a generously sized region to avoid clipping UI elements.
+- Prefer keyboard shortcuts over clicks when possible.
+- For accented or special characters: `set_clipboard()` + `press_key("ctrl+v")`.
 """
