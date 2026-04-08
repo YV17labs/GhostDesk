@@ -249,10 +249,11 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 | `type_text` | Type with realistic per-character delays |
 | `press_key` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
 
-### System
+### Shell & system
 | Tool | Description |
 |------|-------------|
 | `launch` | Start GUI applications |
+| `process_status` | Check if a process is running and read its logs |
 | `get_clipboard` | Read clipboard contents |
 | `set_clipboard` | Write to clipboard |
 
