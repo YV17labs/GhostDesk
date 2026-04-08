@@ -2,14 +2,20 @@
 """Screenshot capture tool."""
 
 import asyncio
-import io
 from typing import Literal
 
 from mcp.server.fastmcp import Image
-from PIL import Image as PILImage
 
 from ghostdesk._cursor import get_cursor_position
-from ghostdesk.screen._shared import Region, apply_region_offset, build_metadata, capture_png
+from ghostdesk.screen._shared import (
+    Region,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    build_metadata,
+    capture_png,
+    save_image_bytes,
+)
+from ghostdesk.screen.rulers import draw_rulers
 from ghostdesk.screen.windows import get_open_windows
 
 ImageFormat = Literal["webp", "png"]
@@ -17,57 +23,58 @@ ImageFormat = Literal["webp", "png"]
 
 async def screenshot(
     region: Region | None = None,
-    overlay: bool = False,
     format: ImageFormat = "png",
+    rulers: bool = False,
 ) -> list:
-    """Capture the screen. Returns an image and detected UI elements.
+    """Capture the screen with optional coordinate rulers.
+
+    By default returns the raw screenshot for clarity. Coordinates are always
+    absolute screen coordinates, even with `region=`.
 
     Args:
-        region: Optional region to capture. If omitted, the entire
-            screen is captured.
-        overlay: If True, draw bounding boxes and coordinate labels
-            on the image for visual reference.
-        format: Image format — "png" or "webp".
+        region: Optional area to capture (full screen if omitted).
+        format: "png" or "webp".
+        rulers: Draw coordinate rulers on edges (X-axis top, Y-axis left)
+            with marks every 20 pixels. Recommended for precise clicking.
 
-    Returns a list containing:
-        - The screenshot image (with or without visual overlay).
-        - A JSON object with screen dimensions, captured region,
-          cursor position, open windows, and all detected UI elements
-          with absolute screen coordinates — use these with mouse_click().
+    Returns: [Image, JSON metadata (screen, cursor, windows)].
     """
-    from ghostdesk.screen.grounding import detect_elements
-
     cursor_task = asyncio.create_task(get_cursor_position())
     windows_task = asyncio.create_task(get_open_windows())
 
+    # Clip region to screen bounds to avoid capturing black edges
+    if region:
+        clipped_region = Region(
+            x=max(0, min(region.x, SCREEN_WIDTH)),
+            y=max(0, min(region.y, SCREEN_HEIGHT)),
+            width=max(0, min(region.width, SCREEN_WIDTH - region.x)),
+            height=max(0, min(region.height, SCREEN_HEIGHT - region.y)),
+        )
+        region = clipped_region
+
     raw_png = await capture_png(region)
 
-    (cx, cy), windows, elements = await asyncio.gather(
-        cursor_task,
-        windows_task,
-        asyncio.to_thread(detect_elements, raw_png),
-    )
+    (cx, cy), windows = await asyncio.gather(cursor_task, windows_task)
 
-    if overlay:
-        from ghostdesk.screen.overlay import draw_overlay
-
-        label_offset = (region.x, region.y) if region else (0, 0)
-        img_bytes = draw_overlay(
-            raw_png, elements, fmt=format, offset=label_offset,
+    if rulers and region:
+        offset_x = region.x
+        offset_y = region.y
+        img_bytes = draw_rulers(
+            raw_png, offset_x=offset_x, offset_y=offset_y, fmt=format,
         )
+    else:
+        img_bytes = _reencode(raw_png, format)
 
-    if region:
-        apply_region_offset(elements, region)
+    metadata = build_metadata(cx, cy, windows, region)
 
-    metadata = build_metadata(cx, cy, windows, elements, region)
+    return [Image(data=img_bytes, format=format), metadata]
 
-    if overlay:
-        return [Image(data=img_bytes, format=format), metadata]
 
-    if format == "webp":
-        img = PILImage.open(io.BytesIO(raw_png))
-        buf = io.BytesIO()
-        img.save(buf, format="WEBP")
-        return [Image(data=buf.getvalue(), format="webp"), metadata]
-
-    return [Image(data=raw_png, format="png"), metadata]
+def _reencode(raw_png: bytes, fmt: ImageFormat) -> bytes:
+    """Re-encode raw PNG bytes into the requested format."""
+    if fmt == "png":
+        return raw_png
+    import io
+    from PIL import Image as PILImage
+    img = PILImage.open(io.BytesIO(raw_png))
+    return save_image_bytes(img, fmt)
