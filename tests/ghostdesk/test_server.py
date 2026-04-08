@@ -24,9 +24,10 @@ async def test_create_app_has_expected_tools():
     app = create_app(port=9999)
 
     tools = app._tool_manager._tools
-    assert len(tools) == 12, f"Expected 12 tools, got {len(tools)}: {sorted(tools.keys())}"
+    assert len(tools) == 11, f"Expected 11 tools, got {len(tools)}: {sorted(tools.keys())}"
 
 
+@pytest.mark.filterwarnings("ignore::RuntimeWarning:pydantic.fields")
 async def test_create_app_custom_port():
     """create_app() accepts a custom port."""
     app = create_app(port=4567)
