@@ -71,3 +71,27 @@ async def test_screenshot_default_format_is_png(_mock_deps):
 async def test_screenshot_webp_format(_mock_deps):
     result = await screenshot(format="webp")
     assert result[0]._format == "webp"
+
+
+def test_reencode_webp_format():
+    """Test _reencode function with webp format (exercises lines 77-80)."""
+    from ghostdesk.screen.capture import _reencode
+
+    tiny_png = _make_tiny_png()
+    result = _reencode(tiny_png, "webp")
+
+    # Verify the result is valid WebP (starts with "RIFF" signature)
+    assert result[:4] == b"RIFF", "Invalid WebP header"
+    # Verify it's larger than just headers
+    assert len(result) > 12
+
+
+def test_reencode_png_format():
+    """Test _reencode function with png format (returns unchanged)."""
+    from ghostdesk.screen.capture import _reencode
+
+    tiny_png = _make_tiny_png()
+    result = _reencode(tiny_png, "png")
+
+    # PNG format should return the original bytes unchanged
+    assert result == tiny_png
