@@ -169,27 +169,6 @@ The agent perceives the screen and locates click targets with:
 
 The agent takes a screenshot to see the screen. For precise clicking, it captures a zoomed region with `rulers=True` to display coordinate rulers on the edges (X-axis top, Y-axis left). The agent reads coordinates directly from the rulers and clicks with precision.
 
-### Lightweight mode — `inspect()`
-
-`inspect()` is a text-only alternative to `screenshot()` — it returns the same JSON metadata (screen, cursor, windows, elements) without the image, saving context tokens. Use it when the agent doesn't need to see the screen.
-
-```json
-{
-  "screen": {"width": 1280, "height": 1024},
-  "region": {"x": 0, "y": 0, "width": 1280, "height": 1024},
-  "cursor": {"x": 17, "y": 60},
-  "windows": [
-    {"app": "firefox", "title": "YouTube — Mozilla Firefox", "x": 0, "y": 0, "width": 1280, "height": 992}
-  ],
-  "elements": [
-    {"label": "Search", "x": 364, "y": 114, "width": 42, "height": 14},
-    {"label": "Sign in", "x": 1227, "y": 113, "width": 38, "height": 13},
-    {"label": "Home", "x": 36, "y": 200, "width": 32, "height": 14},
-    {"label": "Shorts", "x": 36, "y": 273, "width": 36, "height": 14}
-  ]
-}
-```
-
 Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
 
 This approach works with **any application** — web apps, native apps, legacy software, Canvas, WebGL. If it renders pixels, the agent can use it.
@@ -259,7 +238,6 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 | Tool | Description |
 |------|-------------|
 | `screenshot` | Capture the screen as an image. Use `rulers=True` with `region=` for zoomed screenshots with coordinate rulers |
-| `inspect` | Text-only alternative to `screenshot()` — same JSON metadata, no image. Saves context tokens |
 
 ### Mouse & keyboard
 | Tool | Description |
