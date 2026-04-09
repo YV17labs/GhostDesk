@@ -21,3 +21,16 @@ RUN apt-get update \
     \
     # Clean up APT cache
     && rm -rf /var/lib/apt/lists/*
+
+# Copy GhostDesk application sources
+COPY src /app/src
+COPY pyproject.toml /app/pyproject.toml
+
+# Install GhostDesk with all dependencies (including PyTorch + Ultralytics for UI detection)
+RUN cd /app && pip install -q -e .
+
+# Pre-download GPA-GUI-Detector model into the container
+# This ensures the model is baked into the image and available offline
+RUN mkdir -p /app/src/ghostdesk/models && \
+    curl -fsSL -o /app/src/ghostdesk/models/model.pt \
+    "https://huggingface.co/Salesforce/GPA-GUI-Detector/resolve/main/model.pt"

@@ -14,16 +14,20 @@ Pre-installed apps: **Firefox**, **GNOME Terminal**.
 2. Use your visual understanding to locate the target element by its text,
    icon, position, or surrounding context.
 
-**Step 2: Get precise coordinates**
+**Step 2: Get precise coordinates with auto-detection**
 
 3. Once you've identified the target area, take a **zoomed screenshot** with
-   rulers: `screenshot(region=Region(x, y, width, height), rulers=True)`.
-   **Make the region 2×–3× wider and taller** than the element.
-4. The zoomed image will have **coordinate rulers on the edges**:
-   - Horizontal ruler (top): X-axis with tick marks and labels every 50 pixels
-   - Vertical ruler (left): Y-axis with tick marks and labels every 50 pixels
-5. Read the absolute coordinates directly from the rulers.
+   automatic UI element detection: `screenshot(region=Region(x, y, width, height), detect=True)`.
+4. The system will **automatically**:
+   - Enlarge your region by 3× (centered, ensuring full element coverage)
+   - Detect all UI elements in that area using AI
+   - Draw bounding boxes and labels with center coordinates
+5. Read the center coordinates directly from the detected element's label.
 6. Call `mouse_click(x, y)` with the coordinates you read.
+
+**Why the auto-enlargement?** You don't need to worry about the region being
+too small — the system expands it for you. Just give a rough ballpark area, and
+the detector will find what's there and show you exact coordinates.
 
 **Step 3: Verify the action worked (mandatory)**
 
@@ -32,7 +36,7 @@ Pre-installed apps: **Firefox**, **GNOME Terminal**.
 8. Inspect the screenshot: did the expected change happen?
 9. If yes → proceed. If no → analyze what went wrong and retry.
 
-**Coordinates are always absolute** screen coordinates. No offset calculation.
+**Coordinates are always absolute** screen coordinates. No offset calculation needed.
 
 ## Visual feedback
 
