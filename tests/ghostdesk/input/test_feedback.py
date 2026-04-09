@@ -7,7 +7,6 @@ import pytest
 
 from ghostdesk.input.feedback import (
     ZONE_SIZE,
-    _png_hash,
     _zone_region,
     capture_before,
     poll_for_change,
@@ -42,29 +41,16 @@ def test_zone_region_bottom_right_clamp():
     assert r.y + r.height <= SCREEN_HEIGHT
 
 
-# --- _png_hash ---
-
-def test_png_hash_same_input():
-    """Identical bytes produce the same hash."""
-    data = b"fake-png-bytes"
-    assert _png_hash(data) == _png_hash(data)
-
-
-def test_png_hash_different_input():
-    """Different bytes produce different hashes."""
-    assert _png_hash(b"image-a") != _png_hash(b"image-b")
-
-
 # --- capture_before ---
 
-async def test_capture_before_returns_region_and_hash():
-    """capture_before returns the region and a hash of the captured image."""
+async def test_capture_before_returns_region_and_bytes():
+    """capture_before returns the region and the raw PNG bytes."""
     fake_png = b"fake-screenshot"
     with patch(f"{MODULE}.capture_png", new_callable=AsyncMock, return_value=fake_png):
-        region, h = await capture_before(400, 300)
+        region, before = await capture_before(400, 300)
 
     assert isinstance(region, Region)
-    assert h == _png_hash(fake_png)
+    assert before == fake_png
 
 
 # --- poll_for_change ---
@@ -72,10 +58,9 @@ async def test_capture_before_returns_region_and_hash():
 async def test_poll_detects_change():
     """poll_for_change returns changed=True when the zone image differs."""
     region = Region(0, 0, ZONE_SIZE, ZONE_SIZE)
-    before_hash = _png_hash(b"before")
 
     with patch(f"{MODULE}.capture_png", new_callable=AsyncMock, return_value=b"after"):
-        result = await poll_for_change(region, before_hash, timeout=1.0, interval=0.05)
+        result = await poll_for_change(region, b"before", timeout=1.0, interval=0.05)
 
     assert result["changed"] is True
     assert result["reaction_time_ms"] > 0
@@ -84,10 +69,9 @@ async def test_poll_detects_change():
 async def test_poll_timeout_no_change():
     """poll_for_change returns changed=False when zone never changes."""
     region = Region(0, 0, ZONE_SIZE, ZONE_SIZE)
-    before_hash = _png_hash(b"same")
 
     with patch(f"{MODULE}.capture_png", new_callable=AsyncMock, return_value=b"same"):
-        result = await poll_for_change(region, before_hash, timeout=0.2, interval=0.05)
+        result = await poll_for_change(region, b"same", timeout=0.2, interval=0.05)
 
     assert result["changed"] is False
 
@@ -95,7 +79,6 @@ async def test_poll_timeout_no_change():
 async def test_poll_detects_change_after_delay():
     """poll_for_change detects a change that happens after a few polls."""
     region = Region(0, 0, ZONE_SIZE, ZONE_SIZE)
-    before_hash = _png_hash(b"before")
 
     call_count = 0
 
@@ -105,7 +88,7 @@ async def test_poll_detects_change_after_delay():
         return b"before" if call_count < 3 else b"after"
 
     with patch(f"{MODULE}.capture_png", side_effect=changing_capture):
-        result = await poll_for_change(region, before_hash, timeout=1.0, interval=0.05)
+        result = await poll_for_change(region, b"before", timeout=1.0, interval=0.05)
 
     assert result["changed"] is True
     assert call_count >= 3

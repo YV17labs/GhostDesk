@@ -30,9 +30,9 @@ async def mouse_click(x: int, y: int, button: str = "left", humanize: bool = Tru
     """
     btn = _BUTTON_MAP.get(button, "1")
     await _move_to(x, y, humanize)
-    region, before_hash = await capture_before(x, y)
+    region, before = await capture_before(x, y)
     await run(["xdotool", "click", btn])
-    result = await poll_for_change(region, before_hash)
+    result = await poll_for_change(region, before)
     return build_feedback(f"Clicked {button} at ({x}, {y})", result)
 
 
@@ -47,9 +47,9 @@ async def mouse_double_click(x: int, y: int, button: str = "left", humanize: boo
     """
     btn = _BUTTON_MAP.get(button, "1")
     await _move_to(x, y, humanize)
-    region, before_hash = await capture_before(x, y)
+    region, before = await capture_before(x, y)
     await run(["xdotool", "click", "--repeat", "2", "--delay", "100", btn])
-    result = await poll_for_change(region, before_hash)
+    result = await poll_for_change(region, before)
     return build_feedback(f"Double-clicked {button} at ({x}, {y})", result)
 
 
@@ -67,11 +67,11 @@ async def mouse_drag(
     """
     btn = _BUTTON_MAP.get(button, "1")
     await _move_to(from_x, from_y, humanize)
-    region, before_hash = await capture_before(to_x, to_y)
+    region, before = await capture_before(to_x, to_y)
     await run(["xdotool", "mousedown", btn])
     await _move_to(to_x, to_y, humanize)
     await run(["xdotool", "mouseup", btn])
-    result = await poll_for_change(region, before_hash)
+    result = await poll_for_change(region, before)
     return build_feedback(f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})", result)
 
 
@@ -88,7 +88,7 @@ async def mouse_scroll(x: int, y: int, direction: str = "down", amount: int = 3,
     scroll_map = {"up": "4", "down": "5", "left": "6", "right": "7"}
     btn = scroll_map.get(direction, "5")
     await _move_to(x, y, humanize)
-    region, before_hash = await capture_before(x, y)
+    region, before = await capture_before(x, y)
     await run(["xdotool", "click", "--repeat", str(amount), "--delay", "50", btn])
-    result = await poll_for_change(region, before_hash)
+    result = await poll_for_change(region, before)
     return build_feedback(f"Scrolled {direction} {amount} clicks at ({x}, {y})", result)

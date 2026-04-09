@@ -52,7 +52,7 @@ async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> dic
     - reaction_time_ms: how quickly the change was detected (ms).
     """
     cx, cy = await get_cursor_position()
-    region, before_hash = await capture_before(cx, cy)
+    region, before = await capture_before(cx, cy)
 
     if humanize:
         delays = _typing_delays(text, base_delay_ms=delay_ms)
@@ -63,7 +63,7 @@ async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> dic
         for char in text:
             await _type_char(char)
 
-    result = await poll_for_change(region, before_hash)
+    result = await poll_for_change(region, before)
     return build_feedback(f"Typed {len(text)} characters", result)
 
 
@@ -79,9 +79,9 @@ async def press_key(keys: str) -> dict:
     - reaction_time_ms: how quickly the change was detected (ms).
     """
     cx, cy = await get_cursor_position()
-    region, before_hash = await capture_before(cx, cy)
+    region, before = await capture_before(cx, cy)
 
     await run(["xdotool", "key", "--clearmodifiers", keys])
 
-    result = await poll_for_change(region, before_hash)
+    result = await poll_for_change(region, before)
     return build_feedback(f"Pressed {keys}", result)
