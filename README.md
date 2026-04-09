@@ -165,9 +165,9 @@ GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP se
 
 The agent perceives the screen and locates click targets with:
 
-### Vision mode — `screenshot()` with zoom
+### Vision mode — `screenshot()` with region cropping
 
-The agent takes a screenshot to see the screen. For precise clicking, it captures a zoomed region by passing `region=` to `screenshot()` and reads coordinates directly from the cropped image.
+The agent takes a screenshot to see the screen. For precise clicking, it crops to a sub-rectangle by passing `region=` to `screenshot()` and reads coordinates directly from the cropped image. The crop is taken at native screen resolution — pixels are not enlarged, the agent simply receives fewer of them with no visual distractors.
 
 Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
 
@@ -237,7 +237,7 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` for a zoomed crop. Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
+| `screenshot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
 
 ### Mouse & keyboard
 | Tool | Description |
