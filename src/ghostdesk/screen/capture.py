@@ -19,7 +19,7 @@ from ghostdesk.screen._shared import (
     save_image_bytes,
 )
 from ghostdesk.screen.annotations import draw_detections
-from ghostdesk.screen.detector import detect
+from ghostdesk.screen.detector import detect as detect_elements
 from ghostdesk.screen.windows import get_open_windows
 
 ImageFormat = Literal["webp", "png"]
@@ -30,21 +30,56 @@ def _image_hash(image_bytes: bytes) -> str:
     return hashlib.md5(image_bytes).hexdigest()
 
 
-def _enlarge_region(region: Region, scale: int = 3) -> Region:
-    """Enlarge region by scale factor, centered on original, clamped to screen bounds.
+_DETECT_TARGET_WIDTH = 360
+_DETECT_TARGET_HEIGHT = 280
 
-    Args:
-        region: Original region
-        scale: Enlargement factor (default 3x)
 
-    Returns:
-        Enlarged region clamped to screen bounds
+def _adaptive_confidence(capture_region: Region | None) -> float:
+    """Pick a detector confidence threshold based on the captured area size.
+
+    Tight zooms can afford a strict threshold (the user already targeted a
+    precise area, so we want few/clean detections). Big captures need a
+    loose threshold so the model isn't filtered into silence on a busy
+    full screen.
+
+    Returns a value between 0.10 and 0.40.
     """
+    if capture_region is None:
+        return 0.10
+    area = capture_region.width * capture_region.height
+    screen_area = SCREEN_WIDTH * SCREEN_HEIGHT
+    ratio = area / screen_area if screen_area else 1.0
+    if ratio < 0.10:
+        return 0.40   # tight zoom — precision mode
+    if ratio < 0.50:
+        return 0.20   # mid-size capture — balanced
+    return 0.10       # large / full screen — recall mode
+
+
+def _enlarge_region(
+    region: Region,
+    target_width: int = _DETECT_TARGET_WIDTH,
+    target_height: int = _DETECT_TARGET_HEIGHT,
+) -> Region:
+    """Adaptively pad a region up to a minimum capture size.
+
+    The smaller the requested region, the more padding we add — both to
+    give the detector enough pixels and to absorb LLM aiming errors. A
+    region that is already at or above the target size is returned
+    unchanged: large regions don't need a safety margin since the LLM
+    already gave us plenty of context.
+
+    The padded region is centered on the original and clamped to screen
+    bounds.
+    """
+    new_width = max(region.width, target_width)
+    new_height = max(region.height, target_height)
+
+    if new_width == region.width and new_height == region.height:
+        return region
+
     center_x = region.x + region.width // 2
     center_y = region.y + region.height // 2
-
-    new_width = region.width * scale
-    new_height = region.height * scale
 
     new_x = max(0, center_x - new_width // 2)
     new_y = max(0, center_y - new_height // 2)
@@ -63,31 +98,41 @@ async def screenshot(
     format: ImageFormat = "png",
     detect: bool = False,
     stabilize: bool = True,
+    confidence: float | None = None,
 ) -> list:
-    """Capture the screen with optional UI element detection.
+    """Capture the screen, optionally with UI element detection.
 
-    By default returns the raw screenshot. With detect=True and a region,
-    automatically enlarges region 3x and uses GPA-GUI-Detector to annotate
-    UI elements.
+    Without ``detect``, returns the raw screen (or region) as is.
+
+    With ``detect=True`` and a ``region``, the region is adaptively padded
+    up to a minimum capture size (small/precise regions get a large safety
+    margin, regions already big enough are kept untouched), GPA-GUI-Detector
+    runs on the captured area, and every detected element is drawn on the
+    image as a colored box with a label showing its center point in absolute
+    screen coordinates (``x,y``). Those labels are the literal click points
+    to feed to ``mouse_click``.
 
     Args:
-        region: Optional area to capture (full screen if omitted).
+        region: Area to capture (full screen if omitted).
         format: "png" or "webp".
-        detect: Auto-detect UI elements using GPA-GUI-Detector.
-            Only active when region is provided. Automatically enlarges region 3x.
-        stabilize: Wait for page to stabilize before capturing (max 5 sec).
-            Compares successive screenshots to detect page movement.
+        detect: Run UI element detection on the captured area. Works
+            on a ``region`` (with adaptive padding) or on the full screen.
+        stabilize: Wait for the page to stop moving before capturing
+            (max 5 s). Useful right after navigation.
+        confidence: Detector confidence threshold (0..1). Lower = more
+            sensitive, more false positives. If omitted, an adaptive
+            value is chosen based on capture size: ~0.40 for tight zooms,
+            ~0.20 for mid-size captures, ~0.10 for full-screen.
 
-    Returns: [Image, JSON metadata (screen, cursor, windows)].
+    Returns: ``[Image, metadata]`` where metadata holds screen size,
+    cursor position, and the list of open windows.
     """
-    # Determine capture region and offset
     capture_region = region
     offset_x = 0
     offset_y = 0
 
     if detect and region:
-        # Enlarge region 3x and capture the enlarged area
-        enlarged_region = _enlarge_region(region, scale=3)
+        enlarged_region = _enlarge_region(region)
         capture_region = enlarged_region
         offset_x = enlarged_region.x
         offset_y = enlarged_region.y
@@ -95,32 +140,34 @@ async def screenshot(
         offset_x = region.x
         offset_y = region.y
 
-    # Clip region to screen bounds
     if capture_region:
-        clipped_region = Region(
+        capture_region = Region(
             x=max(0, min(capture_region.x, SCREEN_WIDTH)),
             y=max(0, min(capture_region.y, SCREEN_HEIGHT)),
             width=max(0, min(capture_region.width, SCREEN_WIDTH - capture_region.x)),
             height=max(0, min(capture_region.height, SCREEN_HEIGHT - capture_region.y)),
         )
-        capture_region = clipped_region
 
-    # Stabilize page if requested
     if stabilize:
         raw_png = await _capture_until_stable(capture_region)
     else:
         raw_png = await capture_png(capture_region)
 
-    cursor_task = asyncio.create_task(get_cursor_position())
-    windows_task = asyncio.create_task(get_open_windows())
+    (cx, cy), windows = await asyncio.gather(
+        get_cursor_position(), get_open_windows(),
+    )
 
-    (cx, cy), windows = await asyncio.gather(cursor_task, windows_task)
-
-    # Apply detection if requested
-    if detect and region:
+    if detect:
+        eff_confidence = (
+            confidence if confidence is not None
+            else _adaptive_confidence(capture_region)
+        )
+        # Decode once and reuse for both detection and annotation drawing.
         pil_img = PILImage.open(io.BytesIO(raw_png)).convert("RGB")
-        detections = await detect(pil_img, offset_x=offset_x, offset_y=offset_y)
-        img_bytes = draw_detections(raw_png, detections, fmt=format)
+        detections = await detect_elements(pil_img, confidence=eff_confidence)
+        img_bytes = draw_detections(
+            pil_img, detections, fmt=format, offset_x=offset_x, offset_y=offset_y,
+        )
     else:
         img_bytes = _reencode(raw_png, format)
 
@@ -172,7 +219,5 @@ def _reencode(raw_png: bytes, fmt: ImageFormat) -> bytes:
     """Re-encode raw PNG bytes into the requested format."""
     if fmt == "png":
         return raw_png
-    import io
-    from PIL import Image as PILImage
     img = PILImage.open(io.BytesIO(raw_png))
     return save_image_bytes(img, fmt)
