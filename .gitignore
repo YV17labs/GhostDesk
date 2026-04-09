@@ -9,4 +9,3 @@ build/
 .env.local
 .coverage
 .claude/
-models/

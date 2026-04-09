@@ -64,9 +64,9 @@ async def test_screenshot_with_region(_mock_deps):
     assert hasattr(result[0], "data")
 
 
-async def test_screenshot_default_format_is_png(_mock_deps):
+async def test_screenshot_default_format_is_webp(_mock_deps):
     result = await screenshot()
-    assert result[0]._format == "png"
+    assert result[0]._format == "webp"
 
 
 async def test_screenshot_webp_format(_mock_deps):
@@ -98,73 +98,8 @@ def test_reencode_png_format():
     assert result == tiny_png
 
 
-def test_draw_detections_creates_valid_image():
-    """Test draw_detections function produces valid PNG with annotations."""
-    from ghostdesk.screen.annotations import draw_detections
-    from PIL import Image as PILImage
-    import io
-
-    # Create a test image (200x200)
-    test_img = PILImage.new("RGB", (200, 200), (255, 255, 255))
-    test_png = io.BytesIO()
-    test_img.save(test_png, format="PNG")
-    test_png_bytes = test_png.getvalue()
-
-    # Create some test detections
-    detections = [
-        {
-            "label": "button",
-            "box": [50, 50, 100, 75],
-            "score": 0.95,
-            "center": [75, 62],
-        },
-        {
-            "label": "input",
-            "box": [50, 100, 150, 125],
-            "score": 0.88,
-            "center": [100, 112],
-        },
-    ]
-
-    # Call draw_detections
-    result = draw_detections(test_png_bytes, detections, fmt="png")
-
-    # Verify result is valid PNG
-    assert result[:8] == b"\x89PNG\r\n\x1a\n", "Invalid PNG header"
-
-    # Verify we can open the result
-    result_img = PILImage.open(io.BytesIO(result))
-    assert result_img.mode == "RGB"
-    # Annotations don't expand the image
-    assert result_img.width == 200
-    assert result_img.height == 200
-
-
-def test_draw_detections_with_empty_list():
-    """Test draw_detections handles empty detection list gracefully."""
-    from ghostdesk.screen.annotations import draw_detections
-    from PIL import Image as PILImage
-    import io
-
-    # Create a test image
-    test_img = PILImage.new("RGB", (100, 100), (255, 255, 255))
-    test_png = io.BytesIO()
-    test_img.save(test_png, format="PNG")
-    test_png_bytes = test_png.getvalue()
-
-    # Call with empty detections
-    result = draw_detections(test_png_bytes, [], fmt="png")
-
-    # Verify result is valid
-    assert result[:8] == b"\x89PNG\r\n\x1a\n", "Invalid PNG header"
-    result_img = PILImage.open(io.BytesIO(result))
-    assert result_img.width == 100
-    assert result_img.height == 100
-
-
 async def test_screenshot_stabilize_disabled():
     """Test that stabilize=False skips stabilization check."""
-    from unittest.mock import MagicMock
     tiny_png = _make_tiny_png()
 
     # Mock capture_png to track call count
@@ -208,46 +143,5 @@ async def test_screenshot_stabilize_enabled_detects_change():
         result = await screenshot(stabilize=True)
         # Should have captured at least twice (first different, then stable)
         assert call_count >= 2
-        assert isinstance(result, list)
-        assert len(result) == 2
-
-
-async def test_screenshot_detect_disabled():
-    """Test that detect=False skips detection."""
-    tiny_png = _make_tiny_png()
-
-    with (
-        patch(f"{CAPTURE}.capture_png", return_value=tiny_png),
-        patch(f"{CAPTURE}.detect") as mock_detect,
-        patch(f"{CAPTURE}.get_cursor_position", new_callable=AsyncMock, return_value=(100, 200)),
-        patch(f"{CAPTURE}.get_open_windows", new_callable=AsyncMock, return_value=[]),
-    ):
-        result = await screenshot(detect=False)
-        # detect should not be called
-        mock_detect.assert_not_called()
-        assert isinstance(result, list)
-        assert len(result) == 2
-
-
-async def test_screenshot_detect_enabled_with_region():
-    """Test that detect=True enlarges region 3x and calls detect()."""
-    tiny_png = _make_tiny_png()
-    region = Region(100, 100, 50, 50)  # Small region (100,100,50,50)
-
-    with (
-        patch(f"{CAPTURE}.capture_png", return_value=tiny_png),
-        patch(f"{CAPTURE}.detect", new_callable=AsyncMock, return_value=[]) as mock_detect,
-        patch(f"{CAPTURE}.draw_detections", return_value=tiny_png),
-        patch(f"{CAPTURE}.get_cursor_position", new_callable=AsyncMock, return_value=(100, 200)),
-        patch(f"{CAPTURE}.get_open_windows", new_callable=AsyncMock, return_value=[]),
-    ):
-        result = await screenshot(region=region, detect=True)
-        # detect should be called with enlarged region coordinates
-        mock_detect.assert_called_once()
-        # With 3x enlargement: center is (125, 125), new size is (150, 150)
-        # New box: (125-75, 125-75) = (50, 50)
-        call_args = mock_detect.call_args
-        assert call_args.kwargs["offset_x"] == 50
-        assert call_args.kwargs["offset_y"] == 50
         assert isinstance(result, list)
         assert len(result) == 2
