@@ -53,4 +53,10 @@ RUN mkdir -p /home/vscode/.config/openbox /home/vscode/.config/tint2 \
     && cp /usr/share/ghostdesk/tint2rc /home/vscode/.config/tint2/tint2rc \
     && chown -R vscode:vscode /home/vscode/.config
 
+# Pre-download GPA-GUI-Detector model for UI element detection
+# This ensures the model is available for development without internet dependency
+RUN mkdir -p /app/src/ghostdesk/models && \
+    curl -fsSL -o /app/src/ghostdesk/models/model.pt \
+    "https://huggingface.co/Salesforce/GPA-GUI-Detector/resolve/main/model.pt"
+
 EXPOSE 3000 5900 6080
