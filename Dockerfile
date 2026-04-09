@@ -31,6 +31,6 @@ RUN cd /app && pip install -q -e .
 
 # Pre-download GPA-GUI-Detector model into the container
 # This ensures the model is baked into the image and available offline
-RUN mkdir -p /app/src/ghostdesk/models && \
-    curl -fsSL -o /app/src/ghostdesk/models/model.pt \
+RUN mkdir -p /app/models && \
+    curl -fsSL -o /app/models/model.pt \
     "https://huggingface.co/Salesforce/GPA-GUI-Detector/resolve/main/model.pt"
