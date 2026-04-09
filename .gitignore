@@ -9,3 +9,4 @@ build/
 .env.local
 .coverage
 .claude/
+src/ghostdesk/models/

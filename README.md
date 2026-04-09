@@ -165,9 +165,9 @@ GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP se
 
 The agent perceives the screen and locates click targets with:
 
-### Vision mode — `screenshot()` + `rulers`
+### Vision mode — `screenshot()` + automatic UI detection
 
-The agent takes a screenshot to see the screen. For precise clicking, it captures a zoomed region with `rulers=True` to display coordinate rulers on the edges (X-axis top, Y-axis left). The agent reads coordinates directly from the rulers and clicks with precision.
+The agent takes a screenshot to see the screen. For precise clicking, it captures a zoomed region with `detect=True` to automatically detect UI elements, enlarge the region 3×, and annotate every interactive element with its center coordinates. The agent reads coordinates directly from the annotations and clicks with precision.
 
 Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
 
@@ -237,7 +237,7 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen as an image. Use `rulers=True` with `region=` for zoomed screenshots with coordinate rulers |
+| `screenshot` | Capture the screen as an image. Use `detect=True` with `region=` for zoomed screenshots with automatic UI element detection and annotation. Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
 
 ### Mouse & keyboard
 | Tool | Description |
