@@ -267,7 +267,7 @@ GhostDesk works best with models that have both **vision and tool use**. The MCP
 
 Works well with large models out of the box (Claude, GPT-4, Gemini). Best results with **Anthropic models** — all tiers including Haiku perform reliably.
 
-### Petit/Moyen modèles et LLM
+### Small and medium models
 
 For smaller and medium models, use [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) as your system prompt. It provides simplified instructions with explicit emphasis on critical rules (crop with grid before every click, use keyboard first) to work reliably with constrained vision and reasoning budgets.
 
