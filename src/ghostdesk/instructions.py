@@ -26,6 +26,17 @@ docstrings can't express.
    crop at all and you'll have to start over. A region a few times
    larger than the target absorbs aiming error and still gives you
    plenty of room to read the exact center.
+
+   On top of a crop, pass `grid=True` to draw a coordinate ruler in
+   the margins of the returned image: the top strip labels the X
+   axis every 50 px, the left strip labels the Y axis every 20 px,
+   and thin alternating magenta/cyan gridlines overlay the content.
+   Labels use *absolute screen coordinates* even on a crop, so you
+   can read the click point straight off the rulers instead of
+   estimating pixel offsets. Handy for smaller vision models that
+   struggle to count pixels on their own. Only combine `grid=True`
+   with `region=` — on a full-screen capture the ruler is visually
+   overwhelming and wastes tokens.
 3. **Click, then verify.** After the action, re-screenshot and confirm the
    UI actually reacted as intended. For destructive actions (delete, send,
    close) don't trust `screen_changed: true` alone — inspect the pixels.
