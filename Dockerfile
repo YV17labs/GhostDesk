@@ -21,3 +21,10 @@ RUN apt-get update \
     \
     # Clean up APT cache
     && rm -rf /var/lib/apt/lists/*
+
+# Copy GhostDesk application sources
+COPY src /app/src
+COPY pyproject.toml /app/pyproject.toml
+
+# Install GhostDesk
+RUN cd /app && pip install -q -e .
