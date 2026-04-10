@@ -98,6 +98,66 @@ def test_reencode_png_format():
     assert result == tiny_png
 
 
+def test_reencode_png_with_grid_reencodes():
+    """Grid ruler forces re-encode even when fmt=png."""
+    from ghostdesk.screen.capture import _reencode
+
+    # A 1x1 PNG is too small to see grid effects; make it larger by
+    # going through PIL so _reencode has real pixels to draw on.
+    import io as _io
+    from PIL import Image as _PIL
+
+    buf = _io.BytesIO()
+    _PIL.new("RGB", (120, 80), (10, 10, 10)).save(buf, format="PNG")
+    src_png = buf.getvalue()
+
+    result = _reencode(src_png, "png", grid=True)
+    assert result[:8] == b"\x89PNG\r\n\x1a\n"
+    # Pixels changed (grid drawn), so bytes must differ.
+    assert result != src_png
+
+
+async def test_screenshot_with_grid(_mock_deps):
+    """Screenshot accepts grid=True and still returns image+metadata."""
+    # Replace the tiny 1x1 PNG with something large enough for a grid.
+    import io as _io
+    from PIL import Image as _PIL
+
+    buf = _io.BytesIO()
+    _PIL.new("RGB", (200, 150), (50, 50, 50)).save(buf, format="PNG")
+    big_png = buf.getvalue()
+
+    async def fake(region=None):
+        return big_png
+
+    with patch(f"{CAPTURE}.capture_png", side_effect=fake):
+        result = await screenshot(grid=True, stabilize=False)
+
+    assert len(result) == 2
+    assert hasattr(result[0], "data")
+    assert len(result[0].data) > 0
+
+
+def test_draw_grid_adds_margins_and_respects_origin():
+    """Grid adds top/left margins for the rulers and draws content."""
+    from PIL import Image as _PIL
+
+    from ghostdesk.screen._shared import (
+        _GRID_LEFT_MARGIN,
+        _GRID_TOP_MARGIN,
+        draw_grid,
+    )
+
+    img = _PIL.new("RGB", (100, 100), (0, 0, 0))
+    out = draw_grid(img, origin=(200, 300))
+    assert out.size == (100 + _GRID_LEFT_MARGIN, 100 + _GRID_TOP_MARGIN)
+    assert out.mode == "RGB"
+    # The grid must actually have drawn something (non-empty overlay).
+    assert out.tobytes() != _PIL.new(
+        "RGB", out.size, (0, 0, 0)
+    ).tobytes()
+
+
 async def test_screenshot_stabilize_disabled():
     """Test that stabilize=False skips stabilization check."""
     tiny_png = _make_tiny_png()
