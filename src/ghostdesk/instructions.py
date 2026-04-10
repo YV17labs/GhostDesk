@@ -3,53 +3,52 @@
 
 INSTRUCTIONS = """
 You control a virtual Linux desktop via screen capture, mouse, and keyboard.
-
 Pre-installed apps: **Firefox**, **GNOME Terminal**.
 
-## How to click on screen
+Each tool's own docstring covers its parameters, return shape, and per-tool
+caveats. The notes below are only the cross-tool orchestration patterns the
+docstrings can't express.
 
-**Step 1: Identify the target visually**
+## Clicking on screen
 
-1. Call `screenshot()` to capture the full screen.
-2. Use your visual understanding to locate the target element by its text,
-   icon, position, or surrounding context.
+1. **Locate.** `screenshot()` to see the desktop and find your target
+   visually.
+2. **Resolve coordinates.** For small or dense targets, crop to the
+   area with `screenshot(region=Region(x, y, w, h))` and read the
+   center pixel directly from the image. Note that this is a true
+   crop at native screen resolution — pixels are not enlarged or
+   interpolated, you simply receive a smaller sub-rectangle of the
+   framebuffer. The benefit is fewer pixels to scan and no visual
+   distractors, not extra detail. Size the region with a comfortable
+   margin around your estimated target — don't crop tight on the
+   pixel you think it's at. If your initial guess is off by 30
+   pixels and you captured a 40×40 box, the target won't be in the
+   crop at all and you'll have to start over. A region a few times
+   larger than the target absorbs aiming error and still gives you
+   plenty of room to read the exact center.
 
-**Step 2: Get precise coordinates**
+   On top of a crop, pass `grid=True` to draw a coordinate ruler in
+   the margins of the returned image: the top strip labels the X
+   axis every 50 px, the left strip labels the Y axis every 20 px,
+   and thin alternating magenta/cyan gridlines overlay the content.
+   Labels use *absolute screen coordinates* even on a crop, so you
+   can read the click point straight off the rulers instead of
+   estimating pixel offsets. Handy for smaller vision models that
+   struggle to count pixels on their own. Only combine `grid=True`
+   with `region=` — on a full-screen capture the ruler is visually
+   overwhelming and wastes tokens.
+3. **Click, then verify.** After the action, re-screenshot and confirm the
+   UI actually reacted as intended. For destructive actions (delete, send,
+   close) don't trust `screen_changed: true` alone — inspect the pixels.
 
-3. Once you've identified the target area, take a **zoomed screenshot** with
-   rulers: `screenshot(region=Region(x, y, width, height), rulers=True)`.
-   **Make the region 2×–3× wider and taller** than the element.
-4. The zoomed image will have **coordinate rulers on the edges**:
-   - Horizontal ruler (top): X-axis with tick marks and labels every 50 pixels
-   - Vertical ruler (left): Y-axis with tick marks and labels every 50 pixels
-5. Read the absolute coordinates directly from the rulers.
-6. Call `mouse_click(x, y)` with the coordinates you read.
+If a click misses (`screen_changed: false`), do not retry the same
+coordinates. Re-crop the target area and pick fresh coordinates from the
+new capture.
 
-**Step 3: Verify the action worked (mandatory)**
+## Keyboard
 
-7. **After executing any action, immediately take a screenshot** to confirm
-   the result. Never assume success without visual confirmation.
-8. Inspect the screenshot: did the expected change happen?
-9. If yes → proceed. If no → analyze what went wrong and retry.
-
-**Coordinates are always absolute** screen coordinates. No offset calculation.
-
-## Visual feedback
-
-Mouse and keyboard actions return `screen_changed` (bool) and
-`reaction_time_ms` (int).
-
-- `screen_changed: false` → action likely had no effect. Re-screenshot.
-- `screen_changed: true` → UI reacted. Doesn't mean the **right** thing
-  happened — for destructive actions (delete, send), screenshot to confirm.
-
-## Process tracking
-
-`launch()` returns a PID + log path. Use `process_status(pid)` to check
-state and read stdout/stderr.
-
-## Tips
-
-- Prefer keyboard shortcuts over clicks when possible.
-- For accented or special characters: `set_clipboard()` + `press_key("ctrl+v")`.
+- Prefer keyboard shortcuts over clicks when both are available — they're
+  more reliable than coordinate-based clicks.
+- Accents and special characters: `set_clipboard()` then
+  `press_key("ctrl+v")`. `type_text` may not handle them on every layout.
 """

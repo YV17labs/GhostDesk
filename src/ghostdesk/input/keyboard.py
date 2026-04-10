@@ -11,6 +11,30 @@ from ghostdesk.input.feedback import build_feedback, capture_before, poll_for_ch
 _CHAR_TO_KEY = {"\n": "Return", "\t": "Tab"}
 
 
+def _normalize_keys(keys: str) -> str:
+    """Normalize a key combo so X11 keysyms match xdotool expectations.
+
+    Multi-character tokens get their first letter uppercased
+    (``tab`` → ``Tab``, ``escape`` → ``Escape``, ``ctrl`` →
+    ``Ctrl``). xdotool's multi-letter keysyms are case-sensitive
+    but modifier names aren't, so uppercasing works for both.
+
+    Single-character tokens are passed through untouched — the
+    caller is in control: ``a`` stays ``a``, ``A`` stays ``A``
+    (which xdotool reads as Shift+a). Tokens already containing
+    a mix of cases (``BackSpace``, ``XF86AudioPlay``) are also
+    left alone.
+    """
+    parts = keys.split("+")
+    normalized = []
+    for part in parts:
+        if len(part) <= 1 or part != part.lower():
+            normalized.append(part)
+        else:
+            normalized.append(part[0].upper() + part[1:])
+    return "+".join(normalized)
+
+
 def _typing_delays(text: str, base_delay_ms: int = 50) -> list[float]:
     """Generate human-like per-character delays (in seconds)."""
     delays: list[float] = []
@@ -42,17 +66,12 @@ async def _type_char(char: str) -> None:
 async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> dict:
     """Type text character by character with human-like timing.
 
-    Captures a 200×200 px zone around the current mouse cursor before and
-    after typing.
-
-    Returns a dict with:
-    - action: description of what was performed.
-    - screen_changed: whether the zone visibly changed within 2 s. If false
-      the text field may not have focus — click on it first.
-    - reaction_time_ms: how quickly the change was detected (ms).
+    Returns the standard ``{action, screen_changed, reaction_time_ms}``
+    feedback. If ``screen_changed`` is false, the text field probably
+    didn't have focus — click on it first and retry.
     """
     cx, cy = await get_cursor_position()
-    region, before_hash = await capture_before(cx, cy)
+    region, before = await capture_before(cx, cy)
 
     if humanize:
         delays = _typing_delays(text, base_delay_ms=delay_ms)
@@ -63,25 +82,29 @@ async def type_text(text: str, delay_ms: int = 50, humanize: bool = True) -> dic
         for char in text:
             await _type_char(char)
 
-    result = await poll_for_change(region, before_hash)
+    result = await poll_for_change(region, before)
     return build_feedback(f"Typed {len(text)} characters", result)
 
 
 async def press_key(keys: str) -> dict:
-    """Press a key or key combination (e.g. 'Return', 'ctrl+c', 'alt+F4').
+    """Press a key or key combination.
 
-    Captures a 200×200 px zone around the current mouse cursor before and
-    after the key press.
+    Multi-character tokens must start with an uppercase letter:
+    ``Tab``, ``Return``, ``Escape``, ``BackSpace``, ``Left``,
+    ``Page_Up``, ``F4``, ``Ctrl``, ``Alt``, ``Shift``, ``Super``.
+    Single-character keys stay lowercase (``a``, ``c``, ``5``) —
+    uppercasing them would imply Shift.
 
-    Returns a dict with:
-    - action: description of what was performed.
-    - screen_changed: whether the zone visibly changed within 2 s.
-    - reaction_time_ms: how quickly the change was detected (ms).
+    Examples: ``Tab``, ``Ctrl+c``, ``Alt+F4``, ``Ctrl+Shift+Tab``.
+
+    Returns the standard ``{action, screen_changed, reaction_time_ms}``
+    feedback.
     """
     cx, cy = await get_cursor_position()
-    region, before_hash = await capture_before(cx, cy)
+    region, before = await capture_before(cx, cy)
 
-    await run(["xdotool", "key", "--clearmodifiers", keys])
+    normalized = _normalize_keys(keys)
+    await run(["xdotool", "key", "--clearmodifiers", normalized])
 
-    result = await poll_for_change(region, before_hash)
-    return build_feedback(f"Pressed {keys}", result)
+    result = await poll_for_change(region, before)
+    return build_feedback(f"Pressed {normalized}", result)

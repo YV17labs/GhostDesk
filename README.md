@@ -165,9 +165,11 @@ GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP se
 
 The agent perceives the screen and locates click targets with:
 
-### Vision mode — `screenshot()` + `rulers`
+### Vision mode — `screenshot()` with region cropping
 
-The agent takes a screenshot to see the screen. For precise clicking, it captures a zoomed region with `rulers=True` to display coordinate rulers on the edges (X-axis top, Y-axis left). The agent reads coordinates directly from the rulers and clicks with precision.
+The agent takes a screenshot to see the screen. For precise clicking, it crops to a sub-rectangle by passing `region=` to `screenshot()` and reads coordinates directly from the cropped image. The crop is taken at native screen resolution — pixels are not enlarged, the agent simply receives fewer of them with no visual distractors.
+
+Smaller vision models that struggle to count pixels can additionally pass `grid=True` **together with a `region=` crop** to get a coordinate ruler drawn in margins around the image (X axis labeled every 50 px along the top, Y axis every 20 px along the left, with thin alternating gridlines over the content). Ruler values are absolute screen coordinates, so the agent reads the click point directly off the rulers instead of estimating offsets.
 
 Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
 
@@ -237,7 +239,7 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen as an image. Use `rulers=True` with `region=` for zoomed screenshots with coordinate rulers |
+| `screenshot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Pass `grid=True` to overlay a coordinate ruler in margins around the image (absolute screen coordinates, works with `region=` too). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
 
 ### Mouse & keyboard
 | Tool | Description |
@@ -265,7 +267,26 @@ GhostDesk works best with models that have both **vision and tool use**. The MCP
 
 Works well with large models out of the box (Claude, GPT-4, Gemini). Best results with **Anthropic models** — all tiers including Haiku perform reliably.
 
-**Best small model tested to date:** [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — a 35B MoE model with only 3B active parameters. Recommended as a starting point for local deployments. Below this size, results are possible but unreliable.
+### Small and medium models
+
+Small and medium models require the same **vision and tool use** capabilities as larger models, but with simplified guidance to work within tighter reasoning and perception budgets. Use [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) as your system prompt — it trades flexibility for reliability, emphasizing critical rules (crop with grid before every click, use keyboard first) and explicit coordinate reading.
+
+The grid overlay shows exact absolute screen coordinates so the model reads them directly instead of estimating:
+
+![Menu grid precision](demos/screenshots/menu-grid-precision.webp)
+
+### Running locally
+
+**Inference server.** We do **not** recommend LM Studio: it's closed-source proprietary software with long-standing bugs that never get fixed, and crucially it does **not handle WebP images** — which is the format GhostDesk returns by default to keep payloads small.
+
+Instead, use our fork of llama.cpp with WebP support: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP support lands upstream, we'll archive the fork and point here directly.
+
+**Recommended models.** What matters here isn't raw intelligence but **speed** — desktop control needs fast keyboard/mouse interactions, so low-activation MoE models shine on modest hardware:
+
+- [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — 35B parameters, only 3B active per token.
+- [gemma-4-26B-A4B-it](https://huggingface.co/google/gemma-4-26B-A4B-it) — 26B parameters, 4B active per token.
+
+Below these sizes, results are possible but unreliable. For these constraints, follow [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for best results.
 
 ---
 
