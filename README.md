@@ -269,9 +269,9 @@ Works well with large models out of the box (Claude, GPT-4, Gemini). Best result
 
 ### Small and medium models
 
-For smaller and medium models, use [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) as your system prompt. It provides simplified instructions with explicit emphasis on critical rules (crop with grid before every click, use keyboard first) to work reliably with constrained vision and reasoning budgets.
+Small and medium models require the same **vision and tool use** capabilities as larger models, but with simplified guidance to work within tighter reasoning and perception budgets. Use [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) as your system prompt — it trades flexibility for reliability, emphasizing critical rules (crop with grid before every click, use keyboard first) and explicit coordinate reading.
 
-The grid overlay provides exact absolute screen coordinates — no estimation needed:
+The grid overlay shows exact absolute screen coordinates so the model reads them directly instead of estimating:
 
 ![Menu grid precision](demos/screenshots/menu-grid-precision.webp)
 
