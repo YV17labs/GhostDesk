@@ -5,7 +5,13 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from ghostdesk.input.keyboard import _type_char, _typing_delays, press_key, type_text
+from ghostdesk.input.keyboard import (
+    _normalize_keys,
+    _type_char,
+    _typing_delays,
+    press_key,
+    type_text,
+)
 
 MODULE = "ghostdesk.input.keyboard"
 
@@ -112,8 +118,8 @@ async def test_press_key(_mock_deps):
     mock_run, _, mock_pos, _, _ = _mock_deps
     result = await press_key("ctrl+c")
     mock_pos.assert_awaited_once()
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "ctrl+c"])
-    assert result["action"] == "Pressed ctrl+c"
+    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Ctrl+c"])
+    assert result["action"] == "Pressed Ctrl+c"
     assert result["screen_changed"] is True
 
 
@@ -122,6 +128,25 @@ async def test_press_key_single_key(_mock_deps):
     result = await press_key("Return")
     mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Return"])
     assert result["action"] == "Pressed Return"
+
+
+async def test_press_key_lowercase_keysym_is_normalized(_mock_deps):
+    """Bare 'tab' must be sent to xdotool as 'Tab' (case-sensitive keysym)."""
+    mock_run, *_ = _mock_deps
+    result = await press_key("tab")
+    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Tab"])
+    assert result["action"] == "Pressed Tab"
+
+
+async def test_press_key_modifier_combo_normalized(_mock_deps):
+    """Every multi-char token gets capitalized — xdotool accepts
+    both ``ctrl`` and ``Ctrl`` for modifiers, and requires the
+    capital form for keysyms like ``Escape``."""
+    mock_run, *_ = _mock_deps
+    await press_key("ctrl+escape")
+    mock_run.assert_awaited_once_with(
+        ["xdotool", "key", "--clearmodifiers", "Ctrl+Escape"]
+    )
 
 
 async def test_press_key_no_change(_mock_deps):
@@ -183,3 +208,38 @@ class TestTypingDelays:
         assert len(delays) == 7
         for d in delays:
             assert d >= 0.01
+
+
+# --- _normalize_keys ---
+
+
+class TestNormalizeKeys:
+    def test_bare_lowercase_keysym(self):
+        assert _normalize_keys("tab") == "Tab"
+        assert _normalize_keys("escape") == "Escape"
+        assert _normalize_keys("home") == "Home"
+        assert _normalize_keys("left") == "Left"
+
+    def test_already_canonical_passes_through(self):
+        assert _normalize_keys("Tab") == "Tab"
+        assert _normalize_keys("BackSpace") == "BackSpace"
+        assert _normalize_keys("Page_Up") == "Page_Up"
+
+    def test_modifier_combos_capitalized(self):
+        # xdotool accepts both `ctrl` and `Ctrl` for modifiers, so
+        # capitalizing the whole combo is safe and uniform.
+        assert _normalize_keys("ctrl+tab") == "Ctrl+Tab"
+        assert _normalize_keys("alt+f4") == "Alt+F4"
+        assert _normalize_keys("ctrl+shift+escape") == "Ctrl+Shift+Escape"
+
+    def test_single_char_keys_unchanged(self):
+        # Single chars are passed through as-is — the caller decides.
+        assert _normalize_keys("a") == "a"
+        assert _normalize_keys("A") == "A"
+        assert _normalize_keys("ctrl+c") == "Ctrl+c"
+        assert _normalize_keys("ctrl+C") == "Ctrl+C"
+        assert _normalize_keys("Ctrl+A") == "Ctrl+A"
+
+    def test_mixed_case_tokens_preserved(self):
+        # Already has an uppercase letter → leave alone, don't mangle.
+        assert _normalize_keys("XF86AudioPlay") == "XF86AudioPlay"
