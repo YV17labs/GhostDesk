@@ -269,7 +269,7 @@ Works well with large models out of the box (Claude, GPT-4, Gemini). Best result
 
 ### Small models
 
-For smaller models, use [SMALL_MODEL_PROMPT.md](SMALL_MODEL_PROMPT.md) as your system prompt. It provides simplified instructions with explicit emphasis on critical rules (crop with grid before every click, use keyboard first) to work reliably with smaller vision and reasoning budgets.
+For smaller models, use [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) as your system prompt. It provides simplified instructions with explicit emphasis on critical rules (crop with grid before every click, use keyboard first) to work reliably with smaller vision and reasoning budgets.
 
 ### Running locally
 
@@ -282,7 +282,7 @@ Instead, use our fork of llama.cpp with WebP support: [YV17labs/llama.cpp](https
 - [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — 35B parameters, only 3B active per token.
 - [gemma-4-26B-A4B-it](https://huggingface.co/google/gemma-4-26B-A4B-it) — 26B parameters, 4B active per token.
 
-Below these sizes, results are possible but unreliable. For these constraints, follow [SMALL_MODEL_PROMPT.md](SMALL_MODEL_PROMPT.md) for best results.
+Below these sizes, results are possible but unreliable. For these constraints, follow [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for best results.
 
 ---
 
