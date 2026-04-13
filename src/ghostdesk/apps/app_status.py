@@ -1,10 +1,10 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Process status tool — check on a launched application."""
+"""Apps app_status tool — check on a launched application."""
 
 import os
 from pathlib import Path
 
-from ghostdesk.shell.launch import LOG_DIR
+from ghostdesk.apps.app_launch import LOG_DIR, _launched_pids
 
 # Maximum number of log lines returned by default.
 _DEFAULT_TAIL = 50
@@ -31,11 +31,13 @@ def _read_tail(path: Path, lines: int) -> str:
         return ""
 
 
-async def process_status(pid: int, lines: int = _DEFAULT_TAIL) -> dict:
-    """Check whether a launched process is still running and read its logs.
+async def app_status(pid: int, lines: int = _DEFAULT_TAIL) -> dict:
+    """Check whether a launched app is still running and read its logs.
+
+    Only PIDs returned by ``app_launch()`` in this session are accepted.
 
     Args:
-        pid: Process ID returned by ``launch()``.
+        pid: Process ID returned by ``app_launch()``.
         lines: Number of trailing log lines to return (default 50).
 
     Returns a dict with:
@@ -43,7 +45,17 @@ async def process_status(pid: int, lines: int = _DEFAULT_TAIL) -> dict:
     - running: whether the process is still alive.
     - log_file: path to the log file.
     - tail: the last *lines* lines of stdout/stderr output.
+
+    On failure, returns a dict with a single ``error`` key.
     """
+    if pid not in _launched_pids:
+        return {
+            "error": (
+                f"PID {pid} was not launched by this session. "
+                "Use app_launch() first."
+            )
+        }
+
     log_path = LOG_DIR / f"proc-{pid}.log"
     return {
         "pid": pid,

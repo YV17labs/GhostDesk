@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 from ghostdesk._logging import configure_logging
 from ghostdesk._middleware import install_middleware
 from ghostdesk.instructions import INSTRUCTIONS
-from ghostdesk import clipboard, input, screen, shell
+from ghostdesk import apps, clipboard, input, screen
 
 
 def create_app(port: int | None = None) -> FastMCP:
@@ -24,7 +24,7 @@ def create_app(port: int | None = None) -> FastMCP:
 
     screen.register(mcp)
     input.register(mcp)
-    shell.register(mcp)
+    apps.register(mcp)
     clipboard.register(mcp)
 
     install_middleware(mcp)

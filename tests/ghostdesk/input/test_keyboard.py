@@ -8,8 +8,8 @@ import pytest
 from ghostdesk.input.keyboard import (
     _normalize_chord,
     _normalize_token,
-    press_key,
-    type_text,
+    key_press,
+    key_type,
 )
 
 _FEEDBACK_RESULT = {"changed": True, "reaction_time_ms": 200}
@@ -28,93 +28,93 @@ def _mock_deps():
         yield mock_wl, mock_pos, mock_cap, mock_poll
 
 
-# --- type_text ---
+# --- key_type ---
 
-async def test_type_text_plain_ascii(_mock_deps):
+async def test_key_type_plain_ascii(_mock_deps):
     mock_wl, mock_pos, _, _ = _mock_deps
-    result = await type_text("abc")
+    result = await key_type("abc")
     mock_pos.assert_called_once()
     mock_wl.type_text.assert_awaited_once_with("abc")
     assert result["action"] == "Typed 3 characters"
     assert result["screen_changed"] is True
 
 
-async def test_type_text_empty(_mock_deps):
+async def test_key_type_empty(_mock_deps):
     mock_wl, *_ = _mock_deps
-    result = await type_text("")
+    result = await key_type("")
     mock_wl.type_text.assert_awaited_once_with("")
     assert result["action"] == "Typed 0 characters"
 
 
-async def test_type_text_with_newline(_mock_deps):
+async def test_key_type_with_newline(_mock_deps):
     """Newlines/tabs are handled inside WaylandInput.type_text, so
-    keyboard.type_text just forwards the string verbatim."""
+    key_type just forwards the string verbatim."""
     mock_wl, *_ = _mock_deps
-    await type_text("a\nb")
+    await key_type("a\nb")
     mock_wl.type_text.assert_awaited_once_with("a\nb")
 
 
-async def test_type_text_with_tab(_mock_deps):
+async def test_key_type_with_tab(_mock_deps):
     mock_wl, *_ = _mock_deps
-    await type_text("a\tb")
+    await key_type("a\tb")
     mock_wl.type_text.assert_awaited_once_with("a\tb")
 
 
-async def test_type_text_unicode(_mock_deps):
+async def test_key_type_unicode(_mock_deps):
     """Unicode characters are forwarded to WaylandInput, which builds
     an on-the-fly XKB keymap with the needed keysyms."""
     mock_wl, *_ = _mock_deps
-    await type_text("café")
+    await key_type("café")
     mock_wl.type_text.assert_awaited_once_with("café")
 
 
-async def test_type_text_no_change(_mock_deps):
+async def test_key_type_no_change(_mock_deps):
     _, _, _, mock_poll = _mock_deps
     mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
-    result = await type_text("hello")
+    result = await key_type("hello")
     assert result["screen_changed"] is False
 
 
-# --- press_key ---
+# --- key_press ---
 
-async def test_press_key_ctrl_c(_mock_deps):
+async def test_key_press_ctrl_c(_mock_deps):
     mock_wl, mock_pos, _, _ = _mock_deps
-    result = await press_key("Ctrl+c")
+    result = await key_press("Ctrl+c")
     mock_pos.assert_called_once()
     mock_wl.press_chord.assert_awaited_once_with(["leftctrl", "c"])
     assert result["action"] == "Pressed Ctrl+c"
     assert result["screen_changed"] is True
 
 
-async def test_press_key_single_key(_mock_deps):
+async def test_key_press_single_key(_mock_deps):
     mock_wl, *_ = _mock_deps
-    await press_key("Return")
+    await key_press("Return")
     mock_wl.press_chord.assert_awaited_once_with(["enter"])
 
 
-async def test_press_key_tab_alias(_mock_deps):
+async def test_key_press_tab_alias(_mock_deps):
     """Bare 'Tab' normalises to the internal ``tab`` name."""
     mock_wl, *_ = _mock_deps
-    await press_key("Tab")
+    await key_press("Tab")
     mock_wl.press_chord.assert_awaited_once_with(["tab"])
 
 
-async def test_press_key_three_token_combo(_mock_deps):
+async def test_key_press_three_token_combo(_mock_deps):
     mock_wl, *_ = _mock_deps
-    await press_key("Ctrl+Shift+Tab")
+    await key_press("Ctrl+Shift+Tab")
     mock_wl.press_chord.assert_awaited_once_with(["leftctrl", "leftshift", "tab"])
 
 
-async def test_press_key_alt_f4(_mock_deps):
+async def test_key_press_alt_f4(_mock_deps):
     mock_wl, *_ = _mock_deps
-    await press_key("Alt+F4")
+    await key_press("Alt+F4")
     mock_wl.press_chord.assert_awaited_once_with(["leftalt", "f4"])
 
 
-async def test_press_key_no_change(_mock_deps):
+async def test_key_press_no_change(_mock_deps):
     _, _, _, mock_poll = _mock_deps
     mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
-    result = await press_key("Ctrl+c")
+    result = await key_press("Ctrl+c")
     assert result["screen_changed"] is False
 
 

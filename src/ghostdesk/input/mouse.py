@@ -13,13 +13,13 @@ from ghostdesk.input.feedback import build_feedback, capture_before, poll_for_ch
 
 
 async def mouse_click(x: int, y: int, button: Button = "left") -> dict:
-    """Click at screen coordinates. Use coordinates from screenshot() or inspect().
+    """Click at screen coordinates. Use coordinates from screen_shot() or inspect().
 
     Returns a dict with:
     - action: description of what was performed.
     - screen_changed: whether the 200x200 px zone around the click visibly
       changed within 2 s. If false the click likely missed its target —
-      retry with adjusted coordinates or take a new screenshot.
+      retry with adjusted coordinates or take a new screen_shot().
     - reaction_time_ms: how quickly the change was detected (ms).
     """
     wl = await get_wayland_input()

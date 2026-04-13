@@ -1,12 +1,12 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Tests for ghostdesk.clipboard.set_ — write text via wl-copy."""
+"""Tests for ghostdesk.clipboard.clipboard_set — write text via wl-copy."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from ghostdesk.clipboard.set_ import set_clipboard
+from ghostdesk.clipboard.clipboard_set import clipboard_set
 
 
 @pytest.fixture
@@ -30,11 +30,11 @@ def patch_subprocess(mock_process):
         yield mock_exec, mock_process
 
 
-async def test_set_clipboard_success(patch_subprocess):
-    """set_clipboard() returns confirmation with character count."""
+async def test_clipboard_set_success(patch_subprocess):
+    """clipboard_set() returns confirmation with character count."""
     mock_exec, mock_process = patch_subprocess
 
-    result = await set_clipboard("hello world")
+    result = await clipboard_set("hello world")
 
     assert result == "Clipboard set (11 characters)"
     mock_exec.assert_awaited_once_with(
@@ -48,32 +48,31 @@ async def test_set_clipboard_success(patch_subprocess):
     mock_process.wait.assert_awaited_once()
 
 
-async def test_set_clipboard_empty_text(patch_subprocess):
-    """set_clipboard() handles empty text."""
+async def test_clipboard_set_empty_text(patch_subprocess):
+    """clipboard_set() handles empty text."""
     _, mock_process = patch_subprocess
 
-    result = await set_clipboard("")
+    result = await clipboard_set("")
 
     assert result == "Clipboard set (0 characters)"
     mock_process.stdin.write.assert_called_once_with(b"")
     mock_process.stdin.close.assert_called_once()
 
 
-async def test_set_clipboard_unicode(patch_subprocess):
-    """set_clipboard() encodes Unicode characters as UTF-8."""
+async def test_clipboard_set_unicode(patch_subprocess):
+    """clipboard_set() encodes Unicode characters as UTF-8."""
     _, mock_process = patch_subprocess
 
-    result = await set_clipboard("café ☕")
+    result = await clipboard_set("café ☕")
 
-    # 6 Unicode chars → len() returns 6
     assert result == "Clipboard set (6 characters)"
     mock_process.stdin.write.assert_called_once_with("café ☕".encode())
 
 
-async def test_set_clipboard_timeout(patch_subprocess):
-    """set_clipboard() raises TimeoutError when the parent process hangs."""
+async def test_clipboard_set_timeout(patch_subprocess):
+    """clipboard_set() raises TimeoutError when the parent process hangs."""
     _, mock_process = patch_subprocess
     mock_process.wait = AsyncMock(side_effect=asyncio.TimeoutError)
 
     with pytest.raises(TimeoutError):
-        await set_clipboard("some text")
+        await clipboard_set("some text")
