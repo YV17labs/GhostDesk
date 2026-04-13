@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+# Sway headless: wlroots' headless backend creates a virtual output
+# (HEADLESS-1) because WLR_HEADLESS_OUTPUTS=1 is set in the image env.
+exec s6-setuidgid vscode sway --unsupported-gpu

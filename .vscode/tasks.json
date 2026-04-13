@@ -2,16 +2,51 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Start GhostDesk (supervisord)",
+      "label": "GhostDesk: Start stack",
+      "detail": "Bring up sway, wayvnc, dbus, portals, etc. via s6-rc",
       "type": "shell",
-      "command": "sudo",
-      "args": ["supervisord", "-c", "/etc/supervisor/conf.d/ghostdesk.conf"],
-      "isBackground": false,
+      "command": "sudo /command/s6-rc -u change ghostdesk",
+      "problemMatcher": [],
       "presentation": {
-        "echo": true,
         "reveal": "always",
-        "focus": true,
-        "panel": "new"
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "GhostDesk: Stop stack",
+      "detail": "Tear down all ghostdesk services (container stays up)",
+      "type": "shell",
+      "command": "sudo /command/s6-rc -d change ghostdesk",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "GhostDesk: Restart stack",
+      "detail": "Stop then start the ghostdesk bundle",
+      "type": "shell",
+      "command": "sudo /command/s6-rc -d change ghostdesk && sudo /command/s6-rc -u change ghostdesk",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "GhostDesk: Service status",
+      "detail": "List services currently up",
+      "type": "shell",
+      "command": "/command/s6-rc -a list",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
       }
     }
   ]

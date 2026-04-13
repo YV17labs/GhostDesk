@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+# Bind wayvnc to localhost only: the public entry point is websockify
+# on :6080 (see the websockify service). No auth on wayvnc itself
+# since it's not reachable from outside the container.
+exec s6-setuidgid vscode wayvnc 127.0.0.1 5900
