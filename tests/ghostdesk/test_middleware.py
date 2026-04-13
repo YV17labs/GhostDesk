@@ -9,7 +9,6 @@ from mcp.server.fastmcp.exceptions import ToolError
 from ghostdesk._middleware import (
     _coerce_xy_args,
     _normalise_input_coords,
-    _normalise_output_coords,
     install_middleware,
 )
 
@@ -99,45 +98,6 @@ def test_normalise_input_disabled(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# _normalise_output_coords
-# ---------------------------------------------------------------------------
-
-def test_normalise_output_cursor():
-    result = [{"cursor": {"x": 640, "y": 512}}]
-    _normalise_output_coords(result)
-    assert result[0]["cursor"] == {"x": 500, "y": 500}
-
-
-def test_normalise_output_screen_becomes_model_space():
-    result = [{"screen": {"width": 1280, "height": 1024}}]
-    _normalise_output_coords(result)
-    assert result[0]["screen"] == {"width": 1000, "height": 1000}
-
-
-def test_normalise_output_region():
-    result = [{"region": {"x": 640, "y": 512, "width": 640, "height": 512}}]
-    _normalise_output_coords(result)
-    assert result[0]["region"] == {"x": 500, "y": 500, "width": 500, "height": 500}
-
-
-def test_normalise_output_windows():
-    result = [{"windows": [
-        {"app": "firefox", "title": "Mozilla",
-         "x": 0, "y": 0, "width": 640, "height": 512},
-    ]}]
-    _normalise_output_coords(result)
-    w = result[0]["windows"][0]
-    assert w["app"] == "firefox"
-    assert w["x"] == 0 and w["y"] == 0
-    assert w["width"] == 500 and w["height"] == 500
-
-
-def test_normalise_output_non_list_passthrough():
-    assert _normalise_output_coords("plain string") == "plain string"
-    assert _normalise_output_coords(None) is None
-
-
-# ---------------------------------------------------------------------------
 # install_middleware / _call_tool wrapper
 # ---------------------------------------------------------------------------
 
@@ -156,9 +116,9 @@ def _install_and_capture_call_tool(mock_mcp) -> tuple:
 
 
 async def test_call_tool_success_path():
-    """_call_tool logs success, returns result, normalises in + out."""
+    """_call_tool logs success, returns result, normalises input coords."""
     mock_mcp = MagicMock()
-    mock_original = AsyncMock(return_value=[{"cursor": {"x": 640, "y": 512}}])
+    mock_original = AsyncMock(return_value="ok")
     mock_mcp.call_tool = mock_original
 
     with patch(f"{MODULE}.logger") as mock_logger:
@@ -172,8 +132,7 @@ async def test_call_tool_success_path():
             assert args_sent_to_tool["x"] == 640
             assert args_sent_to_tool["y"] == 512
 
-            # Result was normalised back to model space
-            assert result[0]["cursor"] == {"x": 500, "y": 500}
+            assert result == "ok"
             mock_logger.info.assert_called_once()
 
 
