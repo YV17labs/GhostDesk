@@ -15,10 +15,10 @@ def create_app(port: int | None = None) -> FastMCP:
     """Create and configure the MCP server instance.
 
     Args:
-        port: Listening port. Defaults to the PORT env var, or 3000.
+        port: Listening port. Defaults to the GHOSTDESK_PORT env var, or 3000.
     """
     if port is None:
-        port = int(os.environ.get("PORT", "3000"))
+        port = int(os.environ.get("GHOSTDESK_PORT", "3000"))
 
     mcp = FastMCP("ghostdesk", instructions=INSTRUCTIONS, host="0.0.0.0", port=port)
 

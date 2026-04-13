@@ -29,8 +29,8 @@ def _parse_model_space() -> int:
 
 
 # Screen size — single source of truth for the project.
-SCREEN_WIDTH = int(os.environ.get("SCREEN_WIDTH", "1280"))
-SCREEN_HEIGHT = int(os.environ.get("SCREEN_HEIGHT", "1024"))
+SCREEN_WIDTH = int(os.environ.get("GHOSTDESK_SCREEN_WIDTH", "1280"))
+SCREEN_HEIGHT = int(os.environ.get("GHOSTDESK_SCREEN_HEIGHT", "1024"))
 
 # Normalised coordinate space the LLM operates in. 0 means pass-through.
 MODEL_SPACE = _parse_model_space()
