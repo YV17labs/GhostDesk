@@ -3,11 +3,11 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk.clipboard.get import get_clipboard
-from ghostdesk.clipboard.set_ import set_clipboard
+from ghostdesk.clipboard.clipboard_get import clipboard_get
+from ghostdesk.clipboard.clipboard_set import clipboard_set
 
 
 def register(mcp: FastMCP) -> None:
     """Register clipboard tools."""
-    mcp.tool()(get_clipboard)
-    mcp.tool()(set_clipboard)
+    mcp.tool()(clipboard_get)
+    mcp.tool()(clipboard_set)

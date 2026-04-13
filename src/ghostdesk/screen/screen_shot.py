@@ -1,5 +1,5 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Screenshot capture tool."""
+"""Screen screen_shot tool — capture the desktop display."""
 
 import asyncio
 import io
@@ -9,17 +9,14 @@ from typing import Literal
 from PIL import Image as PILImage
 from mcp.server.fastmcp import Image
 
-from ghostdesk._cursor import get_cursor_position
 from ghostdesk.screen._shared import (
     Region,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
-    build_metadata,
     capture_png,
     save_image_bytes,
     screens_stable,
 )
-from ghostdesk.screen.windows import get_open_windows
 
 ImageFormat = Literal["webp", "png"]
 
@@ -27,11 +24,11 @@ _STABILITY_TIMEOUT_S = 2.5
 _STABILITY_POLL_S = 0.15
 
 
-async def screenshot(
+async def screen_shot(
     region: Region | None = None,
     format: ImageFormat = "webp",
     stabilize: bool = True,
-) -> list:
+) -> Image:
     """Capture the screen, optionally cropped to a region.
 
     Args:
@@ -39,9 +36,6 @@ async def screenshot(
         format: "webp" (default, smaller payload) or "png" (lossless).
         stabilize: Wait for the page to stop moving before capturing
             (max 2.5 s). Useful right after navigation.
-
-    Returns: ``[Image, metadata]`` where metadata holds screen size,
-    cursor position, and the list of open windows.
     """
     capture_region = _clamp_region(region)
 
@@ -50,13 +44,8 @@ async def screenshot(
     else:
         raw_png = await capture_png(capture_region)
 
-    cx, cy = get_cursor_position()
-    windows = await get_open_windows()
-
     img_bytes = _reencode(raw_png, format)
-    metadata = build_metadata(cx, cy, windows, region)
-
-    return [Image(data=img_bytes, format=format), metadata]
+    return Image(data=img_bytes, format=format)
 
 
 def _clamp_region(region: Region | None) -> Region | None:

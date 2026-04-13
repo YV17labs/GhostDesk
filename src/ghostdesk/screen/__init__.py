@@ -3,9 +3,9 @@
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk.screen.capture import screenshot
+from ghostdesk.screen.screen_shot import screen_shot
 
 
 def register(mcp: FastMCP) -> None:
     """Register screen tools."""
-    mcp.tool()(screenshot)
+    mcp.tool()(screen_shot)

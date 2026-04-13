@@ -4,7 +4,7 @@
 from ghostdesk._cmd import run
 
 
-async def get_clipboard() -> str:
+async def clipboard_get() -> str:
     """Read the current clipboard text."""
     try:
         return await run(["wl-paste", "--no-newline"])

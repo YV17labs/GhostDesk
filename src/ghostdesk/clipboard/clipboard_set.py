@@ -4,8 +4,8 @@
 import asyncio
 
 
-async def set_clipboard(text: str) -> str:
-    """Write text to the clipboard. Use with press_key("ctrl+v") to paste."""
+async def clipboard_set(text: str) -> str:
+    """Write text to the clipboard. Use with key_press("ctrl+v") to paste."""
     # wl-copy reads stdin, then forks a background daemon that keeps
     # serving the clipboard content for other apps.  We must wait for
     # the PARENT process to exit (which happens just after the fork)

@@ -51,7 +51,7 @@ def _normalize_chord(keys: str) -> list[str]:
     return [_normalize_token(t) for t in keys.split("+") if t.strip()]
 
 
-async def type_text(text: str) -> dict:
+async def key_type(text: str) -> dict:
     """Type text. Handles Unicode, newlines, and tabs.
 
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
@@ -68,7 +68,7 @@ async def type_text(text: str) -> dict:
     return build_feedback(f"Typed {len(text)} characters", result)
 
 
-async def press_key(keys: str) -> dict:
+async def key_press(keys: str) -> dict:
     """Press a key or key combination.
 
     Friendly names accepted: ``Tab``, ``Return``, ``Escape``,
