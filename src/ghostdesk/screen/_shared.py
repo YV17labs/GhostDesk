@@ -83,15 +83,3 @@ def save_image_bytes(img: Image.Image, fmt: str = "png") -> bytes:
     return buf.getvalue()
 
 
-def build_metadata(
-    cx: int, cy: int, windows: list[dict],
-    region: Region | None = None,
-) -> dict:
-    """Build the standard metadata dict returned by screenshot()."""
-    r = region or Region(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)
-    return {
-        "screen": {"width": SCREEN_WIDTH, "height": SCREEN_HEIGHT},
-        "region": {"x": r.x, "y": r.y, "width": r.width, "height": r.height},
-        "cursor": {"x": cx, "y": cy},
-        "windows": windows,
-    }

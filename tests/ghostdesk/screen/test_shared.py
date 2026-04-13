@@ -11,7 +11,6 @@ from PIL import Image
 
 from ghostdesk.screen._shared import (
     Region,
-    build_metadata,
     capture_png,
     save_image_bytes,
     screens_stable,
@@ -209,31 +208,6 @@ class TestCapturePng:
             with pytest.raises(RuntimeError) as exc_info:
                 await capture_png(None)
             assert str(exc_info.value) == "grim failed"
-
-
-class TestBuildMetadata:
-    """Tests for build_metadata function."""
-
-    def test_build_metadata_without_region(self):
-        result = build_metadata(cx=100, cy=200, windows=[])
-        assert result["screen"]["width"] == 1280
-        assert result["screen"]["height"] == 1024
-        assert result["region"] == {"x": 0, "y": 0, "width": 1280, "height": 1024}
-        assert result["cursor"] == {"x": 100, "y": 200}
-        assert result["windows"] == []
-
-    def test_build_metadata_with_region(self):
-        region = Region(x=50, y=75, width=640, height=512)
-        result = build_metadata(cx=300, cy=400, windows=[], region=region)
-        assert result["region"] == {"x": 50, "y": 75, "width": 640, "height": 512}
-        assert result["cursor"] == {"x": 300, "y": 400}
-
-    def test_build_metadata_with_windows(self):
-        windows = [
-            {"app": "foot", "title": "term", "x": 0, "y": 0, "width": 640, "height": 480},
-        ]
-        result = build_metadata(cx=100, cy=100, windows=windows)
-        assert result["windows"] == windows
 
 
 class TestRegion:
