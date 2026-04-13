@@ -1,2 +1,0 @@
-#!/command/with-contenv sh
-exec s6-setuidgid vscode websockify --web=/usr/share/novnc 6080 127.0.0.1:5900

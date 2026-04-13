@@ -8,7 +8,7 @@
   "portsAttributes": {
     "3000": { "label": "ghostdesk MCP (HTTP)" },
     "5900": { "label": "wayvnc (VNC)" },
-    "6080": { "label": "noVNC (Web desktop)" }
+    "6080": { "label": "noVNC (Web desktop, https://)", "protocol": "https" }
   },
   "customizations": {
     "vscode": {
@@ -18,6 +18,5 @@
         "Anthropic.claude-code"
       ]
     }
-  },
-  "postCreateCommand": "rm -rf .venv && uv sync"
+  }
 }

@@ -3,9 +3,9 @@
   "tasks": [
     {
       "label": "GhostDesk: Start stack",
-      "detail": "Bring up sway, wayvnc, dbus, portals, etc. via s6-rc",
+      "detail": "Launch supervisord in the foreground — Ctrl-C to stop the whole stack",
       "type": "shell",
-      "command": "sudo /command/s6-rc -u change ghostdesk",
+      "command": "supervisord -c /etc/supervisord.conf -n",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -15,9 +15,9 @@
     },
     {
       "label": "GhostDesk: Stop stack",
-      "detail": "Tear down all ghostdesk services (container stays up)",
+      "detail": "Ask supervisord to shut down (stops every service, then exits)",
       "type": "shell",
-      "command": "sudo /command/s6-rc -d change ghostdesk",
+      "command": "supervisorctl -c /etc/supervisord.conf shutdown",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -27,9 +27,9 @@
     },
     {
       "label": "GhostDesk: Restart stack",
-      "detail": "Stop then start the ghostdesk bundle",
+      "detail": "Restart every supervisord program (supervisord itself keeps running)",
       "type": "shell",
-      "command": "sudo /command/s6-rc -d change ghostdesk && sudo /command/s6-rc -u change ghostdesk",
+      "command": "supervisorctl -c /etc/supervisord.conf restart all",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -39,9 +39,9 @@
     },
     {
       "label": "GhostDesk: Service status",
-      "detail": "List services currently up",
+      "detail": "List services and their state",
       "type": "shell",
-      "command": "/command/s6-rc -a list",
+      "command": "supervisorctl -c /etc/supervisord.conf status",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
