@@ -1,5 +1,5 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Tests for ghostdesk.clipboard.set_ — write text to clipboard."""
+"""Tests for ghostdesk.clipboard.set_ — write text via wl-copy."""
 
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -14,11 +14,11 @@ def mock_process():
     """Create a mock asyncio.subprocess.Process with stdin mock."""
     proc = AsyncMock()
     proc.returncode = 0
-    # stdin needs synchronous write() and close(), async wait_closed()
+    # stdin needs synchronous write() and close(), async wait() on the process
     proc.stdin = MagicMock()
     proc.stdin.write = MagicMock()
     proc.stdin.close = MagicMock()
-    proc.stdin.wait_closed = AsyncMock()
+    proc.wait = AsyncMock(return_value=0)
     return proc
 
 
@@ -38,14 +38,14 @@ async def test_set_clipboard_success(patch_subprocess):
 
     assert result == "Clipboard set (11 characters)"
     mock_exec.assert_awaited_once_with(
-        "xclip", "-selection", "clipboard", "-i",
+        "wl-copy",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
     )
     mock_process.stdin.write.assert_called_once_with(b"hello world")
     mock_process.stdin.close.assert_called_once()
-    mock_process.stdin.wait_closed.assert_awaited_once()
+    mock_process.wait.assert_awaited_once()
 
 
 async def test_set_clipboard_empty_text(patch_subprocess):
@@ -59,10 +59,21 @@ async def test_set_clipboard_empty_text(patch_subprocess):
     mock_process.stdin.close.assert_called_once()
 
 
-async def test_set_clipboard_timeout(patch_subprocess):
-    """set_clipboard() raises TimeoutError when stdin write hangs."""
+async def test_set_clipboard_unicode(patch_subprocess):
+    """set_clipboard() encodes Unicode characters as UTF-8."""
     _, mock_process = patch_subprocess
-    mock_process.stdin.wait_closed = AsyncMock(side_effect=asyncio.TimeoutError)
+
+    result = await set_clipboard("café ☕")
+
+    # 6 Unicode chars → len() returns 6
+    assert result == "Clipboard set (6 characters)"
+    mock_process.stdin.write.assert_called_once_with("café ☕".encode())
+
+
+async def test_set_clipboard_timeout(patch_subprocess):
+    """set_clipboard() raises TimeoutError when the parent process hangs."""
+    _, mock_process = patch_subprocess
+    mock_process.wait = AsyncMock(side_effect=asyncio.TimeoutError)
 
     with pytest.raises(TimeoutError):
         await set_clipboard("some text")
