@@ -75,6 +75,11 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 
 ```yaml
 # docker-compose.yml — 3 specialized agents, one command
+#
+# Secrets are loaded from files on disk (Docker secret convention): create
+# ./secrets/auth_token and ./secrets/vnc_password with high-entropy values
+# before running `docker compose up`. In production, back these with your
+# secret manager of choice (k8s Secrets, AWS Secrets Manager, Vault).
 services:
   sales-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
@@ -82,12 +87,16 @@ services:
     restart: unless-stopped
     cap_add: [SYS_ADMIN]
     ports: ["3001:3000", "6081:6080"]
-    volumes: ["ghostdesk-sales-agent-home:/home/agent"]
+    volumes:
+      - ghostdesk-sales-agent-home:/home/agent
+      - ./secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro
+      - ./secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro
     shm_size: 2g
     environment:
-      - VNC_PASSWORD=changeme
+      - GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token
+      - GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password
       - TZ=America/New_York
-      - LOCALE=en_US.utf8
+      - LANG=en_US.UTF-8
 
   research-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
@@ -95,12 +104,16 @@ services:
     restart: unless-stopped
     cap_add: [SYS_ADMIN]
     ports: ["3002:3000", "6082:6080"]
-    volumes: ["ghostdesk-research-agent-home:/home/agent"]
+    volumes:
+      - ghostdesk-research-agent-home:/home/agent
+      - ./secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro
+      - ./secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro
     shm_size: 2g
     environment:
-      - VNC_PASSWORD=changeme
+      - GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token
+      - GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password
       - TZ=America/Toronto
-      - LOCALE=en_CA.utf8
+      - LANG=en_CA.UTF-8
 
   accounting-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
@@ -108,12 +121,16 @@ services:
     restart: unless-stopped
     cap_add: [SYS_ADMIN]
     ports: ["3003:3000", "6083:6080"]
-    volumes: ["ghostdesk-accounting-agent-home:/home/agent"]
+    volumes:
+      - ghostdesk-accounting-agent-home:/home/agent
+      - ./secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro
+      - ./secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro
     shm_size: 2g
     environment:
-      - VNC_PASSWORD=changeme
+      - GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token
+      - GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password
       - TZ=Europe/Paris
-      - LOCALE=fr_FR.utf8
+      - LANG=fr_FR.UTF-8
 
 volumes:
   ghostdesk-sales-agent-home:
@@ -179,7 +196,20 @@ This approach works with **any application** — web apps, native apps, legacy s
 
 ## Quick start
 
-### 1. Run the container
+### 1. Provide the secrets
+
+GhostDesk refuses to boot without two secrets: an MCP auth token and a VNC
+password. Generate high-entropy values and write them to files — never pass
+them as plain env vars on a shared host.
+
+```bash
+mkdir -p secrets
+openssl rand -hex 32 > secrets/auth_token
+openssl rand -hex 16 > secrets/vnc_password
+chmod 0600 secrets/*
+```
+
+### 2. Run the container
 
 ```bash
 docker run -d --name ghostdesk-my-agent \
@@ -189,10 +219,13 @@ docker run -d --name ghostdesk-my-agent \
   -p 5900:5900 \
   -p 6080:6080 \
   -v ghostdesk-my-agent-home:/home/agent \
+  -v "$PWD/secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro" \
+  -v "$PWD/secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro" \
   --shm-size 2g \
-  -e VNC_PASSWORD=changeme \
+  -e GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token \
+  -e GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password \
   -e TZ=UTC \
-  -e LOCALE=en_US.utf8 \
+  -e LANG=en_US.UTF-8 \
   ghcr.io/yv17labs/ghostdesk:latest
 ```
 
@@ -202,7 +235,7 @@ Replace `my-agent` with whatever name fits your use case — `sales-agent`, `res
 
 The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
 
-### 2. Connect your AI
+### 3. Connect your AI
 
 GhostDesk works with any MCP-compatible client. Add it to your config:
 
@@ -212,34 +245,37 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
   "mcpServers": {
     "ghostdesk": {
       "type": "http",
-      "url": "http://localhost:3000/mcp"
+      "url": "http://localhost:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer <contents of secrets/auth_token>"
+      }
     }
   }
 }
 ```
 
-**ChatGPT, Gemini, or any LLM with MCP support** — same config, just point to `http://localhost:3000/mcp`.
+**ChatGPT, Gemini, or any LLM with MCP support** — same config, same bearer token header.
 
-### 3. Watch your agent work
+### 4. Watch your agent work
 
-Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time.
+Open `https://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time. The first visit shows a self-signed certificate warning — accept it once (see [Security](#security) below for why this is the right default and how to replace the cert in production).
 
 | Service | URL |
 |---------|-----|
-| MCP server | `http://localhost:3000/mcp` |
-| noVNC (browser) | `http://localhost:6080/vnc.html` |
-| VNC | `vnc://localhost:5900` (password: `changeme`) |
+| MCP server | `http://localhost:3000/mcp` (behind a reverse proxy in production — see [Security](#security)) |
+| noVNC (browser) | `https://localhost:6080/vnc.html` |
+| VNC | `vnc://localhost:5900` (username: `agent`, password: contents of `secrets/vnc_password`) |
 
 ---
 
 ## Tools
 
-11 tools at your agent's fingertips:
+12 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
 
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screenshot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Pass `grid=True` to overlay a coordinate ruler in margins around the image (absolute screen coordinates, works with `region=` too). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
+| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Pass `grid=True` to overlay a coordinate ruler in margins around the image (absolute screen coordinates, works with `region=` too). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
 
 ### Mouse & keyboard
 | Tool | Description |
@@ -248,16 +284,17 @@ Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop
 | `mouse_double_click` | Double-click at coordinates |
 | `mouse_drag` | Drag from one position to another |
 | `mouse_scroll` | Scroll in any direction (up/down/left/right) |
-| `type_text` | Type with realistic per-character delays |
-| `press_key` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
+| `key_type` | Type text with realistic per-character delays |
+| `key_press` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
 
-### Shell & system
+### Apps & system
 | Tool | Description |
 |------|-------------|
-| `launch` | Start GUI applications |
-| `process_status` | Check if a process is running and read its logs |
-| `get_clipboard` | Read clipboard contents |
-| `set_clipboard` | Write to clipboard |
+| `app_list` | List the GUI applications installed on the desktop |
+| `app_launch` | Start a GUI application by name |
+| `app_status` | Check if an application is running and read its logs |
+| `clipboard_get` | Read clipboard contents |
+| `clipboard_set` | Write to clipboard |
 
 ---
 
@@ -284,7 +321,6 @@ Instead, use our fork of llama.cpp with WebP support: [YV17labs/llama.cpp](https
 **Recommended models.** What matters here isn't raw intelligence but **speed** — desktop control needs fast keyboard/mouse interactions, so low-activation MoE models shine on modest hardware:
 
 - [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — 35B parameters, only 3B active per token.
-- [gemma-4-26B-A4B-it](https://huggingface.co/google/gemma-4-26B-A4B-it) — 26B parameters, 4B active per token.
 
 Below these sizes, results are possible but unreliable. For these constraints, follow [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for best results.
 
@@ -292,14 +328,60 @@ Below these sizes, results are possible but unreliable. For these constraints, f
 
 ## Configuration
 
+Every variable GhostDesk reads is namespaced under `GHOSTDESK_*`. Standard POSIX variables (`TZ`, `LANG`) are kept as-is so the existing Unix ecosystem keeps working.
+
+### Secrets (required — container refuses to boot without them)
+
+| Variable | Description |
+|----------|-------------|
+| `GHOSTDESK_AUTH_TOKEN` | Bearer token required on every MCP request. Generate with `openssl rand -hex 32`. |
+| `GHOSTDESK_VNC_PASSWORD` | VNC password used by wayvnc (username is `agent` in the prod image). Generate with `openssl rand -hex 16`. |
+| `GHOSTDESK_AUTH_TOKEN_FILE` | Path to a file containing the auth token. Preferred form for Docker secrets / k8s Secrets / Vault — avoids the value ever appearing in `docker inspect` or process env. |
+| `GHOSTDESK_VNC_PASSWORD_FILE` | Same convention for the VNC password. |
+
+Provide exactly one form (`_FILE` or inline) per secret. Inline is acceptable for local dev only.
+
+### Runtime knobs
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SCREEN_WIDTH` | `1280` | Virtual screen width |
-| `SCREEN_HEIGHT` | `1024` | Virtual screen height |
-| `VNC_PASSWORD` | `changeme` | VNC access password |
-| `PORT` | `3000` | MCP server port |
-| `TZ` | `UTC` | Timezone (e.g. `Europe/Paris`, `America/Toronto`) |
-| `LOCALE` | `en_US.utf8` | System locale (e.g. `fr_FR.utf8`, `fr_CA.utf8`) |
+| `GHOSTDESK_PORT` | `3000` | MCP server listening port |
+| `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
+| `GHOSTDESK_SCREEN_HEIGHT` | `1024` | Virtual screen height in pixels |
+| `GHOSTDESK_MODEL_SPACE` | `1000` | LLM coordinate normalisation space (`0` disables, for Claude / GPT-4o native pixels; `1000` for Qwen-VL style normalised space) |
+| `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
+| `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`, `fr_CA.UTF-8`) |
+
+---
+
+## Security
+
+GhostDesk ships hardened by default on the two axes where it is the product's own responsibility: **transport encryption** and **authentication**. Everything else (rate limiting, SSO, WAF, session recording, brute-force protection) is a reverse-proxy concern — GhostDesk is designed to run behind one, not directly on the internet.
+
+### What the product guarantees
+
+- **End-to-end TLS on noVNC.** `websockify` serves `https://` and `wss://` only, using a cert at `/etc/ghostdesk/tls/server.{crt,key}`. There is no plain-HTTP fallback.
+- **Self-signed cert auto-generated at first boot** if none is mounted. RSA-2048, SHA-256, 10-year validity, SAN `DNS:localhost, IP:127.0.0.1, IP:::1`. The algorithm and key length meet modern audit baselines — the browser warning is about trust-chain provenance, not cryptographic weakness.
+- **Bring-your-own cert for production.** Mount a real cert at the same path; the boot script detects it and skips generation:
+  ```yaml
+  volumes:
+    - /etc/letsencrypt/live/agent.example.com/fullchain.pem:/etc/ghostdesk/tls/server.crt:ro
+    - /etc/letsencrypt/live/agent.example.com/privkey.pem:/etc/ghostdesk/tls/server.key:ro
+  ```
+- **Mandatory authentication.** The MCP server refuses requests without a valid `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` header. wayvnc runs with `enable_auth=true` and RSA-AES transport encryption on the internal loopback, so even the `websockify → wayvnc` hop is authenticated and encrypted.
+- **Secrets never materialise in the image or env dump.** The `*_FILE` convention means secret values only exist in mounted files, never in `docker inspect`, never in `/proc/*/environ`, never baked into a layer.
+
+### What is explicitly *not* in scope
+
+These belong to the operator's deployment topology, not to the container:
+
+- **Rate limiting & brute-force protection** → reverse proxy (Traefik middleware, nginx `limit_req`, Cloudflare).
+- **SSO / OIDC / MFA** → identity-aware proxy (oauth2-proxy, Cloudflare Access, Tailscale, Pomerium).
+- **WAF / IP allow-listing** → edge.
+- **Session recording & audit trail** → proxy access logs + wayvnc stderr shipped to your log collector.
+- **Cert rotation & CA trust** → your PKI / cert-manager / Let's Encrypt automation.
+
+This separation is deliberate and standard: the product handles crypto and authN, the infrastructure handles policy.
 
 ---
 
