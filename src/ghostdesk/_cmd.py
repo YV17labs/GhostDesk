@@ -1,5 +1,5 @@
 # Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Async subprocess runner for system commands (xdotool, maim, xclip, etc.)."""
+"""Async subprocess runner for system commands (swaymsg, grim, wl-paste, etc.)."""
 
 import asyncio
 

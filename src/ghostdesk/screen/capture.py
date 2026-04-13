@@ -16,19 +16,21 @@ from ghostdesk.screen._shared import (
     SCREEN_WIDTH,
     build_metadata,
     capture_png,
-    draw_grid,
     save_image_bytes,
+    screens_stable,
 )
 from ghostdesk.screen.windows import get_open_windows
 
 ImageFormat = Literal["webp", "png"]
+
+_STABILITY_TIMEOUT_S = 2.5
+_STABILITY_POLL_S = 0.15
 
 
 async def screenshot(
     region: Region | None = None,
     format: ImageFormat = "webp",
     stabilize: bool = True,
-    grid: bool = False,
 ) -> list:
     """Capture the screen, optionally cropped to a region.
 
@@ -36,81 +38,59 @@ async def screenshot(
         region: Area to capture (full screen if omitted).
         format: "webp" (default, smaller payload) or "png" (lossless).
         stabilize: Wait for the page to stop moving before capturing
-            (max 5 s). Useful right after navigation.
-        grid: If True, add a coordinate ruler in margins around the
-            image — X labels every 50 px along the top, Y labels
-            every 20 px along the left, with thin alternating
-            gridlines over the content. Labels use absolute screen
-            coordinates and stay correct even on a cropped
-            ``region``. Handy for small vision models that need to
-            estimate click coordinates visually.
+            (max 2.5 s). Useful right after navigation.
 
     Returns: ``[Image, metadata]`` where metadata holds screen size,
     cursor position, and the list of open windows.
     """
-    capture_region = region
-    if capture_region:
-        capture_region = Region(
-            x=max(0, min(capture_region.x, SCREEN_WIDTH)),
-            y=max(0, min(capture_region.y, SCREEN_HEIGHT)),
-            width=max(0, min(capture_region.width, SCREEN_WIDTH - capture_region.x)),
-            height=max(0, min(capture_region.height, SCREEN_HEIGHT - capture_region.y)),
-        )
+    capture_region = _clamp_region(region)
 
     if stabilize:
         raw_png = await _capture_until_stable(capture_region)
     else:
         raw_png = await capture_png(capture_region)
 
-    (cx, cy), windows = await asyncio.gather(
-        get_cursor_position(), get_open_windows(),
-    )
+    cx, cy = get_cursor_position()
+    windows = await get_open_windows()
 
-    img_bytes = _reencode(raw_png, format, grid, capture_region)
+    img_bytes = _reencode(raw_png, format)
     metadata = build_metadata(cx, cy, windows, region)
 
     return [Image(data=img_bytes, format=format), metadata]
 
 
+def _clamp_region(region: Region | None) -> Region | None:
+    """Clamp a Region to the screen bounds so grim never sees negatives."""
+    if region is None:
+        return None
+    x = max(0, min(region.x, SCREEN_WIDTH))
+    y = max(0, min(region.y, SCREEN_HEIGHT))
+    w = max(0, min(region.width, SCREEN_WIDTH - x))
+    h = max(0, min(region.height, SCREEN_HEIGHT - y))
+    return Region(x, y, w, h)
+
+
 async def _capture_until_stable(region: Region | None = None) -> bytes:
-    """Capture screenshot repeatedly until page stabilizes.
+    """Poll grim until two consecutive frames are pixel-stable.
 
-    Compares successive raw PNG bytes from maim — they're deterministic for
-    identical pixels, so a bytewise equality check is the cheapest way to
-    confirm two consecutive captures are identical. Max wait time is 5 s.
+    Gives up after :data:`_STABILITY_TIMEOUT_S` and returns the latest
+    frame regardless — a genuinely animating screen shouldn't block the
+    agent forever.
     """
-    MAX_WAIT = 5.0
-    POLL_INTERVAL = 0.3
-
-    start_time = time.time()
-    prev = None
-
-    while True:
-        raw_png = await capture_png(region)
-        if prev is not None and raw_png == prev:
-            return raw_png
-        if time.time() - start_time >= MAX_WAIT:
-            return raw_png
-        prev = raw_png
-        await asyncio.sleep(POLL_INTERVAL)
+    prev = await capture_png(region)
+    deadline = time.monotonic() + _STABILITY_TIMEOUT_S
+    while time.monotonic() < deadline:
+        curr = await capture_png(region)
+        if screens_stable(prev, curr):
+            return curr
+        await asyncio.sleep(_STABILITY_POLL_S)
+        prev = curr
+    return prev
 
 
-def _reencode(
-    raw_png: bytes,
-    fmt: ImageFormat,
-    grid: bool = False,
-    region: Region | None = None,
-) -> bytes:
-    """Re-encode raw PNG bytes into the requested format.
-
-    If ``grid`` is True, a coordinate ruler is added around the image
-    before encoding. ``region`` is used to anchor grid labels to
-    absolute screen coordinates on cropped captures.
-    """
-    if not grid and fmt == "png":
+def _reencode(raw_png: bytes, fmt: ImageFormat) -> bytes:
+    """Re-encode raw PNG bytes into the requested format."""
+    if fmt == "png":
         return raw_png
     img = PILImage.open(io.BytesIO(raw_png))
-    if grid:
-        origin = (region.x, region.y) if region else (0, 0)
-        img = draw_grid(img, origin=origin)
     return save_image_bytes(img, fmt)
