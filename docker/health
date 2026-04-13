@@ -1,0 +1,17 @@
+#!/bin/sh
+# Docker HEALTHCHECK probe. Exits 0 only if every supervisord program is
+# RUNNING. `supervisorctl status` prints one line per program:
+#
+#     wayvnc        RUNNING   pid 123, uptime 0:00:42
+#     websockify    BACKOFF   Exited too quickly (process log may have details)
+#
+# We fail on anything that isn't RUNNING.
+set -eu
+
+output=$(supervisorctl -c /etc/supervisord.conf status 2>&1) || {
+    echo "$output" >&2
+    exit 1
+}
+
+echo "$output"
+echo "$output" | awk '$2 != "RUNNING" { exit 1 }'

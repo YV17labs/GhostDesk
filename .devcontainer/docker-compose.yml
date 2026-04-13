@@ -10,8 +10,42 @@ services:
       - "5900:5900"
       - "6080:6080"
     environment:
+      # Active runtime identity in dev. Prod sets this to `agent` via
+      # Dockerfile.base ENV. Both are UID 1000 in their respective images.
+      - GHOSTDESK_USER=vscode
+
+      # Override GHOSTDESK_DIR so the MCP server reads the bind-mounted
+      # source tree instead of the baked (and hardened) /opt/ghostdesk/.venv.
+      - GHOSTDESK_DIR=/workspaces/ghostdesk
+
+      # Locale and timezone — applied at boot by docker/entrypoint.sh.
+      # Change these and restart the container; no rebuild required.
       - TZ=America/Montreal
-      - LOCALE=fr_CA.utf8
+      - LANG=fr_CA.UTF-8
+
+      # Static Wayland / DBus / wlroots env. Declared at the container
+      # level so every shell inside the container inherits them — VS Code
+      # terminals, task runners, `docker exec`, and the manually-launched
+      # supervisord. Prod sources them from docker/entrypoint.sh exports
+      # (no compose there).
+      - XDG_RUNTIME_DIR=/run/user/1000
+      - XDG_SESSION_TYPE=wayland
+      - WAYLAND_DISPLAY=wayland-1
+      - DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+      - WLR_BACKENDS=headless
+      - WLR_HEADLESS_OUTPUTS=1
+      - WLR_LIBINPUT_NO_DEVICES=1
+      - WLR_RENDERER=pixman
+
+      # Ghostdesk runtime knobs
       - GHOSTDESK_MODEL_SPACE=1000
+
+      # Dev-only secrets. These values are NOT secrets — they are placeholders
+      # that let the container boot without real credentials, suitable only
+      # for a developer workstation where nothing is exposed outside localhost.
+      # Never copy them into a prod deployment — prod must inject real
+      # high-entropy secrets via GHOSTDESK_AUTH_TOKEN_FILE / GHOSTDESK_VNC_PASSWORD_FILE
+      # from a secret manager. See SECURITY.md.
+      - GHOSTDESK_AUTH_TOKEN=dev-token-not-for-production-change-me
+      - GHOSTDESK_VNC_PASSWORD=dev-vnc-password-change-me
     stop_grace_period: 10s
-    command: ["/init"]

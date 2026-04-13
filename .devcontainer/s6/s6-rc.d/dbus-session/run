@@ -1,6 +1,0 @@
-#!/command/with-contenv sh
-exec s6-setuidgid vscode dbus-daemon \
-    --session \
-    --nofork \
-    --nopidfile \
-    --address="${DBUS_SESSION_BUS_ADDRESS}"
