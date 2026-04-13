@@ -10,15 +10,19 @@ _APPS_DIR = Path("/usr/share/applications")
 def _parse_exec(exec_field: str) -> str:
     """Extract the executable basename from a .desktop Exec= field.
 
-    Strips field codes (``%u``, ``%F`` …) and environment variable
-    assignments (``KEY=value``) so that both of the following return
-    ``"firefox"``:
+    Strips field codes (``%u``, ``%F`` …), a leading ``env`` wrapper, and
+    environment variable assignments (``KEY=value``) so that all of the
+    following return ``"firefox"``:
 
+        firefox %u
         /usr/bin/firefox %U
+        env MOZ_ENABLE_WAYLAND=1 firefox
         env MOZ_ENABLE_WAYLAND=1 /usr/bin/firefox %u
     """
     for token in exec_field.split():
         if token.startswith("%"):   # field code
+            continue
+        if token == "env":          # env(1) wrapper before VAR=value assignments
             continue
         if "=" in token:            # env var assignment
             continue
