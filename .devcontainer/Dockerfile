@@ -84,13 +84,21 @@ COPY .devcontainer/s6/cont-init.d/ /etc/cont-init.d/
 RUN chmod +x /etc/cont-init.d/*.sh \
     && find /etc/s6-overlay/s6-rc.d -type f -name run -exec chmod +x {} \;
 
-# Auto-discover SWAYSOCK in interactive shells. The socket name embeds sway's
-# PID (which changes every container restart), so we glob it at shell start
-# rather than hardcode it.
+# Auto-discover WAYLAND_DISPLAY / XDG_RUNTIME_DIR / SWAYSOCK in
+# interactive shells so `swaymsg`, `wayland-scanner`, `wl-copy`, and
+# ghostdesk's own CLI all work out of the box for developers who
+# `docker exec -it` into the container. On a normal Linux host these
+# come from pam_systemd at login; here they come from the s6 cont-init
+# layer, which interactive shells don't inherit. The SWAYSOCK name
+# embeds sway's PID (different every container restart), so we glob
+# it rather than hardcode it.
 RUN printf '%s\n' \
-    '# Auto-discover SWAYSOCK from the running sway service.' \
-    'if [ -z "${SWAYSOCK:-}" ] && [ -d "${XDG_RUNTIME_DIR:-/tmp/runtime-1000}" ]; then' \
-    '    for _s in "${XDG_RUNTIME_DIR:-/tmp/runtime-1000}"/sway-ipc.*.sock; do' \
+    '# Auto-discover Wayland/sway env from the running sway service.' \
+    ': "${XDG_RUNTIME_DIR:=/run/user/1000}"' \
+    ': "${WAYLAND_DISPLAY:=wayland-1}"' \
+    'export XDG_RUNTIME_DIR WAYLAND_DISPLAY' \
+    'if [ -z "${SWAYSOCK:-}" ] && [ -d "${XDG_RUNTIME_DIR}" ]; then' \
+    '    for _s in "${XDG_RUNTIME_DIR}"/sway-ipc.*.sock; do' \
     '        [ -S "$_s" ] && export SWAYSOCK="$_s" && break' \
     '    done' \
     '    unset _s' \
