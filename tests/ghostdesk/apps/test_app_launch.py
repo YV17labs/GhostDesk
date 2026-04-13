@@ -46,7 +46,7 @@ async def test_app_launch_rejects_unknown_executable():
     with patch(f"{MODULE}.known_executables", return_value=frozenset({"firefox"})):
         result = await app_launch("rm -rf /")
     assert "error" in result
-    assert "not a known GUI app" in result["error"].lower()
+    assert "not a known gui app" in result["error"].lower()
 
 
 async def test_app_launch_rejects_full_path_to_unknown():
