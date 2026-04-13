@@ -6,9 +6,9 @@
   "remoteUser": "vscode",
   "forwardPorts": [3000, 5900, 6080],
   "portsAttributes": {
-    "3000": { "label": "MCP Server" },
-    "5900": { "label": "VNC" },
-    "6080": { "label": "noVNC (Desktop)" }
+    "3000": { "label": "ghostdesk MCP (HTTP)" },
+    "5900": { "label": "wayvnc (VNC)" },
+    "6080": { "label": "noVNC (Web desktop)" }
   },
   "customizations": {
     "vscode": {
@@ -19,6 +19,5 @@
       ]
     }
   },
-  "postCreateCommand": "rm -rf .venv && uv sync",
-  "postStartCommand": "sudo /usr/local/bin/init-container.sh"
+  "postCreateCommand": "rm -rf .venv && uv sync"
 }

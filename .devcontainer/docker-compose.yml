@@ -12,6 +12,6 @@ services:
     environment:
       - TZ=America/Montreal
       - LOCALE=fr_CA.utf8
-      - GHOSTDESK_MODEL_SPACE=0
+      - GHOSTDESK_MODEL_SPACE=1000
     stop_grace_period: 10s
     command: ["/init"]

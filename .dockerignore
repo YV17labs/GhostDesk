@@ -1,5 +1,6 @@
 .git
 .devcontainer
+!.devcontainer/s6
 .github
 .venv
 __pycache__

@@ -34,10 +34,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         xz-utils curl ca-certificates \
+        pkg-config python3-dev \
         dbus dbus-user-session libglib2.0-bin \
-        sway foot \
+        sway foot kitty \
         grim wl-clipboard libxkbcommon0 \
-        libwayland-client0 \
+        libwayland-client0 libwayland-dev \
         mako-notifier \
         xdg-desktop-portal xdg-desktop-portal-wlr \
         pipewire wireplumber \
