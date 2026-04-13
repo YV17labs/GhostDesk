@@ -6,240 +6,160 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from ghostdesk.input.keyboard import (
-    _normalize_keys,
-    _type_char,
-    _typing_delays,
+    _normalize_chord,
+    _normalize_token,
     press_key,
     type_text,
 )
 
-MODULE = "ghostdesk.input.keyboard"
-
 _FEEDBACK_RESULT = {"changed": True, "reaction_time_ms": 200}
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def _mock_deps():
+    mock_wl = AsyncMock()
+
     with (
-        patch(f"{MODULE}.run", new_callable=AsyncMock) as mock_run,
-        patch(f"{MODULE}._typing_delays", return_value=[0.01, 0.01, 0.01]) as mock_delays,
-        patch(f"{MODULE}.get_cursor_position", new_callable=AsyncMock, return_value=(100, 200)) as mock_pos,
-        patch(f"{MODULE}.capture_before", new_callable=AsyncMock, return_value=(None, b"h")) as mock_cap,
-        patch(f"{MODULE}.poll_for_change", new_callable=AsyncMock, return_value=_FEEDBACK_RESULT) as mock_poll,
+        patch("ghostdesk.input.keyboard.get_wayland_input", new=AsyncMock(return_value=mock_wl)),
+        patch("ghostdesk.input.keyboard.get_cursor_position", return_value=(100, 200)) as mock_pos,
+        patch("ghostdesk.input.keyboard.capture_before", new_callable=AsyncMock, return_value=(None, b"h")) as mock_cap,
+        patch("ghostdesk.input.keyboard.poll_for_change", new_callable=AsyncMock, return_value=_FEEDBACK_RESULT) as mock_poll,
     ):
-        yield mock_run, mock_delays, mock_pos, mock_cap, mock_poll
-
-
-# --- _type_char ---
-
-async def test_type_char_newline(_mock_deps):
-    mock_run, *_ = _mock_deps
-    await _type_char("\n")
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Return"])
-
-
-async def test_type_char_tab(_mock_deps):
-    mock_run, *_ = _mock_deps
-    await _type_char("\t")
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Tab"])
-
-
-async def test_type_char_ascii(_mock_deps):
-    mock_run, *_ = _mock_deps
-    await _type_char("a")
-    mock_run.assert_awaited_once_with(["xdotool", "type", "--clearmodifiers", "--delay", "0", "a"])
-
-
-async def test_type_char_non_ascii(_mock_deps):
-    mock_run, *_ = _mock_deps
-    await _type_char("\u00e8")  # e-grave
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "U00E8"])
-
-
-async def test_type_char_emoji(_mock_deps):
-    mock_run, *_ = _mock_deps
-    await _type_char("\U0001f600")  # grinning face
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "U1F600"])
+        yield mock_wl, mock_pos, mock_cap, mock_poll
 
 
 # --- type_text ---
 
-async def test_type_text_humanize(_mock_deps):
-    mock_run, mock_delays, mock_pos, _, _ = _mock_deps
-    result = await type_text("abc", delay_ms=50, humanize=True)
-    mock_pos.assert_awaited_once()
-    mock_delays.assert_called_once_with("abc", base_delay_ms=50)
-    assert mock_run.await_count == 3  # one per char
+async def test_type_text_plain_ascii(_mock_deps):
+    mock_wl, mock_pos, _, _ = _mock_deps
+    result = await type_text("abc")
+    mock_pos.assert_called_once()
+    mock_wl.type_text.assert_awaited_once_with("abc")
     assert result["action"] == "Typed 3 characters"
     assert result["screen_changed"] is True
 
 
-async def test_type_text_no_humanize(_mock_deps):
-    mock_run, mock_delays, _, _, _ = _mock_deps
-    result = await type_text("ab", humanize=False)
-    mock_delays.assert_not_called()
-    assert mock_run.await_count == 2
-    assert result["action"] == "Typed 2 characters"
-
-
 async def test_type_text_empty(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    result = await type_text("", humanize=False)
-    mock_run.assert_not_awaited()
+    mock_wl, *_ = _mock_deps
+    result = await type_text("")
+    mock_wl.type_text.assert_awaited_once_with("")
     assert result["action"] == "Typed 0 characters"
 
 
-async def test_type_text_humanize_empty(_mock_deps):
-    _, mock_delays, _, _, _ = _mock_deps
-    mock_delays.return_value = []
-    result = await type_text("", delay_ms=50, humanize=True)
-    assert result["action"] == "Typed 0 characters"
+async def test_type_text_with_newline(_mock_deps):
+    """Newlines/tabs are handled inside WaylandInput.type_text, so
+    keyboard.type_text just forwards the string verbatim."""
+    mock_wl, *_ = _mock_deps
+    await type_text("a\nb")
+    mock_wl.type_text.assert_awaited_once_with("a\nb")
 
 
-async def test_type_text_mixed_chars(_mock_deps):
-    """Verify each character dispatches correctly through _type_char."""
-    mock_run, mock_delays, _, _, _ = _mock_deps
-    mock_delays.return_value = [0.001, 0.001]
-    await type_text("a\n", humanize=True)
-    mock_run.assert_any_await(["xdotool", "type", "--clearmodifiers", "--delay", "0", "a"])
-    mock_run.assert_any_await(["xdotool", "key", "--clearmodifiers", "Return"])
+async def test_type_text_with_tab(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    await type_text("a\tb")
+    mock_wl.type_text.assert_awaited_once_with("a\tb")
+
+
+async def test_type_text_unicode(_mock_deps):
+    """Unicode characters are forwarded to WaylandInput, which builds
+    an on-the-fly XKB keymap with the needed keysyms."""
+    mock_wl, *_ = _mock_deps
+    await type_text("café")
+    mock_wl.type_text.assert_awaited_once_with("café")
 
 
 async def test_type_text_no_change(_mock_deps):
-    _, _, _, _, mock_poll = _mock_deps
+    _, _, _, mock_poll = _mock_deps
     mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
-    result = await type_text("hello", humanize=False)
+    result = await type_text("hello")
     assert result["screen_changed"] is False
 
 
 # --- press_key ---
 
-async def test_press_key(_mock_deps):
-    mock_run, _, mock_pos, _, _ = _mock_deps
-    result = await press_key("ctrl+c")
-    mock_pos.assert_awaited_once()
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Ctrl+c"])
+async def test_press_key_ctrl_c(_mock_deps):
+    mock_wl, mock_pos, _, _ = _mock_deps
+    result = await press_key("Ctrl+c")
+    mock_pos.assert_called_once()
+    mock_wl.press_chord.assert_awaited_once_with(["leftctrl", "c"])
     assert result["action"] == "Pressed Ctrl+c"
     assert result["screen_changed"] is True
 
 
 async def test_press_key_single_key(_mock_deps):
-    mock_run, *_ = _mock_deps
-    result = await press_key("Return")
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Return"])
-    assert result["action"] == "Pressed Return"
+    mock_wl, *_ = _mock_deps
+    await press_key("Return")
+    mock_wl.press_chord.assert_awaited_once_with(["enter"])
 
 
-async def test_press_key_lowercase_keysym_is_normalized(_mock_deps):
-    """Bare 'tab' must be sent to xdotool as 'Tab' (case-sensitive keysym)."""
-    mock_run, *_ = _mock_deps
-    result = await press_key("tab")
-    mock_run.assert_awaited_once_with(["xdotool", "key", "--clearmodifiers", "Tab"])
-    assert result["action"] == "Pressed Tab"
+async def test_press_key_tab_alias(_mock_deps):
+    """Bare 'Tab' normalises to the internal ``tab`` name."""
+    mock_wl, *_ = _mock_deps
+    await press_key("Tab")
+    mock_wl.press_chord.assert_awaited_once_with(["tab"])
 
 
-async def test_press_key_modifier_combo_normalized(_mock_deps):
-    """Every multi-char token gets capitalized — xdotool accepts
-    both ``ctrl`` and ``Ctrl`` for modifiers, and requires the
-    capital form for keysyms like ``Escape``."""
-    mock_run, *_ = _mock_deps
-    await press_key("ctrl+escape")
-    mock_run.assert_awaited_once_with(
-        ["xdotool", "key", "--clearmodifiers", "Ctrl+Escape"]
-    )
+async def test_press_key_three_token_combo(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    await press_key("Ctrl+Shift+Tab")
+    mock_wl.press_chord.assert_awaited_once_with(["leftctrl", "leftshift", "tab"])
+
+
+async def test_press_key_alt_f4(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    await press_key("Alt+F4")
+    mock_wl.press_chord.assert_awaited_once_with(["leftalt", "f4"])
 
 
 async def test_press_key_no_change(_mock_deps):
-    _, _, _, _, mock_poll = _mock_deps
+    _, _, _, mock_poll = _mock_deps
     mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
-    result = await press_key("ctrl+c")
+    result = await press_key("Ctrl+c")
     assert result["screen_changed"] is False
 
 
-# --- _typing_delays ---
-
-import random
+# --- _normalize_token / _normalize_chord ---
 
 
-class TestTypingDelays:
-    """Tests for _typing_delays."""
+class TestNormalizeToken:
+    def test_modifiers(self):
+        assert _normalize_token("ctrl") == "leftctrl"
+        assert _normalize_token("Control") == "leftctrl"
+        assert _normalize_token("alt") == "leftalt"
+        assert _normalize_token("shift") == "leftshift"
+        assert _normalize_token("super") == "leftmeta"
+        assert _normalize_token("win") == "leftmeta"
 
-    def test_length_matches_text(self):
-        assert len(_typing_delays("hello")) == 5
+    def test_named_keys(self):
+        assert _normalize_token("Return") == "enter"
+        assert _normalize_token("Escape") == "esc"
+        assert _normalize_token("BackSpace") == "backspace"
+        assert _normalize_token("Tab") == "tab"
+        assert _normalize_token("Page_Up") == "pageup"
+        assert _normalize_token("PageDown") == "pagedown"
 
-    def test_empty_string(self):
-        assert _typing_delays("") == []
+    def test_function_keys(self):
+        assert _normalize_token("F1") == "f1"
+        assert _normalize_token("F12") == "f12"
 
-    def test_all_delays_positive(self):
-        random.seed(42)
-        for d in _typing_delays("some text with punctuation! and spaces."):
-            assert d >= 0.01
+    def test_arrow_keys(self):
+        assert _normalize_token("Left") == "left"
+        assert _normalize_token("Right") == "right"
 
-    def test_spaces_produce_longer_delays(self):
-        random.seed(42)
-        space_delays, letter_delays = [], []
-        for _ in range(500):
-            ds = _typing_delays("a b", base_delay_ms=50)
-            letter_delays.append(ds[0])
-            space_delays.append(ds[1])
-            letter_delays.append(ds[2])
-        assert sum(space_delays) / len(space_delays) > sum(letter_delays) / len(letter_delays)
-
-    def test_punctuation_produces_longer_delays(self):
-        random.seed(42)
-        punct_delays, letter_delays = [], []
-        for _ in range(500):
-            ds = _typing_delays("a.", base_delay_ms=50)
-            letter_delays.append(ds[0])
-            punct_delays.append(ds[1])
-        assert sum(punct_delays) / len(punct_delays) > sum(letter_delays) / len(letter_delays)
-
-    def test_custom_base_delay(self):
-        random.seed(42)
-        slow = _typing_delays("abc", base_delay_ms=200)
-        random.seed(42)
-        fast = _typing_delays("abc", base_delay_ms=50)
-        for s, f in zip(slow, fast):
-            assert s > f
-
-    def test_all_punctuation_chars_handled(self):
-        random.seed(42)
-        delays = _typing_delays(".,;:!?\n")
-        assert len(delays) == 7
-        for d in delays:
-            assert d >= 0.01
+    def test_single_char_passthrough(self):
+        assert _normalize_token("a") == "a"
+        assert _normalize_token("5") == "5"
 
 
-# --- _normalize_keys ---
+class TestNormalizeChord:
+    def test_simple_chord(self):
+        assert _normalize_chord("Ctrl+c") == ["leftctrl", "c"]
 
+    def test_three_tokens(self):
+        assert _normalize_chord("Ctrl+Shift+Tab") == ["leftctrl", "leftshift", "tab"]
 
-class TestNormalizeKeys:
-    def test_bare_lowercase_keysym(self):
-        assert _normalize_keys("tab") == "Tab"
-        assert _normalize_keys("escape") == "Escape"
-        assert _normalize_keys("home") == "Home"
-        assert _normalize_keys("left") == "Left"
+    def test_alt_f4(self):
+        assert _normalize_chord("Alt+F4") == ["leftalt", "f4"]
 
-    def test_already_canonical_passes_through(self):
-        assert _normalize_keys("Tab") == "Tab"
-        assert _normalize_keys("BackSpace") == "BackSpace"
-        assert _normalize_keys("Page_Up") == "Page_Up"
-
-    def test_modifier_combos_capitalized(self):
-        # xdotool accepts both `ctrl` and `Ctrl` for modifiers, so
-        # capitalizing the whole combo is safe and uniform.
-        assert _normalize_keys("ctrl+tab") == "Ctrl+Tab"
-        assert _normalize_keys("alt+f4") == "Alt+F4"
-        assert _normalize_keys("ctrl+shift+escape") == "Ctrl+Shift+Escape"
-
-    def test_single_char_keys_unchanged(self):
-        # Single chars are passed through as-is — the caller decides.
-        assert _normalize_keys("a") == "a"
-        assert _normalize_keys("A") == "A"
-        assert _normalize_keys("ctrl+c") == "Ctrl+c"
-        assert _normalize_keys("ctrl+C") == "Ctrl+C"
-        assert _normalize_keys("Ctrl+A") == "Ctrl+A"
-
-    def test_mixed_case_tokens_preserved(self):
-        # Already has an uppercase letter → leave alone, don't mangle.
-        assert _normalize_keys("XF86AudioPlay") == "XF86AudioPlay"
+    def test_single_token(self):
+        assert _normalize_chord("Return") == ["enter"]
