@@ -1,4 +1,6 @@
 **
 
-!docker/profile/
-!docker/profile/**
+!docker/
+!docker/**
+!assets/wallpaper.png
+!assets/logo-mark.svg
