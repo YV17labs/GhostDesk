@@ -26,44 +26,160 @@
 
 ## Why GhostDesk?
 
-Most AI agents are trapped in text. They can call APIs and generate code, but they can't **use software**. GhostDesk changes that.
+Browser automation tools (Playwright, Puppeteer, Selenium…) were built for human test engineers driving a browser with selectors. They do one thing, and they do it well — inside the browser.
 
-Connect any MCP-compatible LLM (Claude, GPT, Gemini...) and it gets a full Linux desktop with 11 tools to interact with **any application** — browsers, IDEs, office suites, terminals, legacy software, internal tools. No API needed. No integration required. If it has a UI, your agent can use it.
+GhostDesk is built from the other end: for **AI agents**, driving **everything a desktop runs**. Browsers, native apps, IDEs, terminals, office suites, legacy software, internal tools. If it renders pixels on screen, your agent can see it and use it — in one conversation, across many applications, without a line of glue code.
 
-### Agentic workflows — chain anything
+You don't write selectors. You write a prompt:
 
+> *"Open the CRM, export last month's leads as CSV, open LibreOffice Calc, build a pivot table, screenshot the chart, and email it to the team."*
+
+The agent opens the browser, logs in, downloads the file, switches to LibreOffice, processes the data, captures the result, composes the email, sends it. One prompt, multiple apps, fully autonomous — no glue code, no per-site scraper, no brittle selector chain.
+
+That is what *agents using a desktop* looks like.
+
+### Runs on models you can actually host
+
+Desktop control needs to be **fast** — an agent that takes twelve seconds to decide where to click is unusable. GhostDesk's perception design (screenshots with region cropping, optional grid overlay, compact 12-tool surface) is built so that low-activation MoE models like Qwen3.5-35B-A3B on a single workstation GPU are a first-class target, not an afterthought. No API bill, no screenshots of your desktop leaving your network.
+
+Frontier models (Claude, GPT-4, Gemini) work too and remain the smoothest path — but they are not the bar. The project is explicitly designed so the medium, self-hosted tier delivers reliable results on real workflows.
+
+---
+
+## How it works
+
+GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your agent gets a sandboxed desktop with a taskbar, clock, and pre-installed applications — equivalent to what a human sees on their screen.
+
+The agent perceives the screen and locates click targets with:
+
+### Vision mode — `screenshot()` with region cropping
+
+The agent takes a screenshot to see the screen. For precise clicking, it crops to a sub-rectangle by passing `region=` to `screenshot()` and reads coordinates directly from the cropped image. The crop is taken at native screen resolution — pixels are not enlarged, the agent simply receives fewer of them with no visual distractors.
+
+Smaller vision models that struggle to count pixels can additionally pass `grid=True` **together with a `region=` crop** to get a coordinate ruler drawn in margins around the image (X axis labeled every 50 px along the top, Y axis every 20 px along the left, with thin alternating gridlines over the content). Ruler values are absolute screen coordinates, so the agent reads the click point directly off the rulers instead of estimating offsets.
+
+Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
+
+This approach works with **any application** — web apps, native apps, legacy software, Canvas, WebGL. If it renders pixels, the agent can use it.
+
+---
+
+## Quick start
+
+### 1. Run the container
+
+GhostDesk couples **TLS and auth**: mount a cert and you get `wss://` + bearer-token + VeNCrypt; mount nothing and every gate is disarmed on purpose (see [Security](#security) → *Auth ≡ TLS*). Even on localhost, the right procedure is to run the encrypted path end-to-end — [`mkcert`](https://github.com/FiloSottile/mkcert) issues a browser-trusted cert for `localhost` in two commands:
+
+```bash
+# Issue a locally-trusted cert (first time only — installs a local CA in your trust store)
+mkcert -install
+mkdir -p tls
+mkcert -cert-file tls/server.crt -key-file tls/server.key localhost 127.0.0.1 ::1
+
+# Generate the MCP and VNC secrets
+export GHOSTDESK_AUTH_TOKEN=$(openssl rand -hex 32)
+export GHOSTDESK_VNC_PASSWORD=$(openssl rand -hex 16)
+
+# Run the container — cert mounted, TLS + auth enabled everywhere
+docker run -d --name ghostdesk-my-agent \
+  --restart unless-stopped \
+  --cap-add SYS_ADMIN \
+  -p 3000:3000 \
+  -p 6080:6080 \
+  -v ghostdesk-my-agent-home:/home/agent \
+  -v "$PWD/tls/server.crt:/etc/ghostdesk/tls/server.crt:ro" \
+  -v "$PWD/tls/server.key:/etc/ghostdesk/tls/server.key:ro" \
+  --shm-size 2g \
+  -e GHOSTDESK_AUTH_TOKEN \
+  -e GHOSTDESK_VNC_PASSWORD \
+  -e TZ=America/New_York \
+  -e LANG=en_US.UTF-8 \
+  ghcr.io/yv17labs/ghostdesk:latest
+
+echo "MCP token:    $GHOSTDESK_AUTH_TOKEN"
+echo "VNC password: $GHOSTDESK_VNC_PASSWORD"
 ```
-"Go to the CRM, export last month's leads as CSV,
- open LibreOffice Calc, build a pivot table,
- take a screenshot of the chart, and email it to the team."
+
+Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
+
+> **In production, swap the `mkcert` leaf for a real cert** (Let's Encrypt, your internal PKI, cert-manager…) mounted at the same path, and inject both secrets from your secret manager. On Kubernetes, use `valueFrom.secretKeyRef`; with Docker / compose, use a `.env` file backed by Docker secrets, Vault, AWS Secrets Manager, etc. See [Security](#security) for the full contract.
+
+> **No cert, no auth.** If you skip the cert mount, GhostDesk boots in the dev posture: plain HTTP, no bearer-token gate, no VNC password — `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are ignored with a warning. That shape is intended for IDE port-forwards (VS Code, Codespaces) where the forward layer already wraps the traffic; it is not something to point at any network you don't fully trust.
+
+> **`--cap-add SYS_ADMIN`** — Required by Electron apps (VS Code, Slack, etc.) and other applications that need Linux user namespaces to run their sandbox. Safe to remove if you don't need them.
+
+> **noVNC front-door authentication is still the operator's job.** The in-container VNC password is defense in depth — production deployments should also sit behind a reverse proxy / identity-aware proxy that terminates TLS and gates access to port 6080. See [Security](#security).
+
+The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
+
+### 2. Connect your AI
+
+GhostDesk works with any MCP-compatible client. Add it to your config:
+
+**Claude Desktop / Claude Code** (Streamable HTTP)
+```json
+{
+  "mcpServers": {
+    "ghostdesk": {
+      "type": "http",
+      "url": "https://localhost:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer <your GHOSTDESK_AUTH_TOKEN>"
+      }
+    }
+  }
+}
 ```
 
-Your agent opens the browser, logs in, downloads the file, switches to another app, processes the data, captures the result, and sends it — autonomously, across multiple applications, in one conversation.
+**ChatGPT, Gemini, or any LLM with MCP support** — same config, same bearer token header.
 
-### Browse the web like a human
+### 3. Watch your agent work
 
-```
-"Search for competitors on Google, open the first 5 results,
- extract pricing from each page, and summarize in a spreadsheet."
-```
+Open `https://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time. Because the cert you mounted was issued by `mkcert`'s local CA (installed in your trust store by `mkcert -install`), the browser accepts it with no warning. In production, swap the `mkcert` leaf for a real cert mounted at the same path, or terminate TLS on a reverse proxy in front of the container.
 
-No Selenium. No CSS selectors. No Puppeteer scripts that break every week. The agent looks at the screen, clicks what it sees, fills forms naturally — with human-like mouse movement that bypasses bot detection.
+| Service | URL |
+|---------|-----|
+| MCP server | `https://localhost:3000/mcp` (behind a reverse proxy in production — see [Security](#security)) |
+| noVNC (browser) | `https://localhost:6080/vnc.html` (username `agent`, password: `$GHOSTDESK_VNC_PASSWORD`) |
+| VNC (loopback only — bound to `127.0.0.1` inside the container) | — |
 
-### Operate any software — no API required
+---
 
-```
-"Open the legacy inventory app, search for product #4521,
- update the stock count to 150, and confirm the change."
-```
+## Tools
 
-That old Java app with no API? That internal admin panel from 2010? A Windows app running in Wine? If it renders pixels on screen, your agent can operate it.
+12 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
 
-### See it in action
-
-| Demo | Description |
+### Screen
+| Tool | Description |
 |------|-------------|
-| [Amazon Scraper to Google Sheets](demos/gifs/ghostdesk-amazon-sheets-automation.gif) | AI agent scrapes Amazon laptops, extracts product data, populates Google Sheets, and visualizes with charts |
-| [Flight Search & Comparison](demos/gifs/ghostdesk-flight-search.gif) | AI agent searches Google Flights for Paris CDG → New York JFK, compares prices, and builds a chart in LibreOffice Calc |
+| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Pass `grid=True` to overlay a coordinate ruler in margins around the image (absolute screen coordinates, works with `region=` too). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
+
+### Mouse
+| Tool | Description |
+|------|-------------|
+| `mouse_click` | Click at coordinates |
+| `mouse_double_click` | Double-click at coordinates |
+| `mouse_drag` | Drag from one position to another |
+| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
+
+### Keyboard
+| Tool | Description |
+|------|-------------|
+| `key_type` | Type text with realistic per-character delays |
+| `key_press` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
+
+### Clipboard
+| Tool | Description |
+|------|-------------|
+| `clipboard_get` | Read clipboard contents |
+| `clipboard_set` | Write to clipboard |
+
+### Apps
+| Tool | Description |
+|------|-------------|
+| `app_list` | List the GUI applications installed on the desktop |
+| `app_launch` | Start a GUI application by name |
+| `app_status` | Check if an application is running and read its logs |
 
 ---
 
@@ -76,54 +192,61 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 ```yaml
 # docker-compose.yml — 3 specialized agents, one command
 #
-# Secrets come from a .env file (git-ignored) or your secret manager. On
-# Kubernetes, wire them from a Secret via `valueFrom.secretKeyRef`. See
-# SECURITY.md for the full secret-handling contract.
+# Secrets (GHOSTDESK_AUTH_TOKEN, GHOSTDESK_VNC_PASSWORD) come from a .env
+# file (git-ignored) or your secret manager. On Kubernetes, wire them from
+# a Secret via `valueFrom.secretKeyRef`. See SECURITY.md for the full
+# secret-handling contract.
+#
+# TLS cert + key are mounted from ./tls on every service — generate once
+# with `mkcert` for local runs, swap for a real cert in production:
+#
+#   mkcert -install
+#   mkdir -p tls
+#   mkcert -cert-file tls/server.crt -key-file tls/server.key \
+#     localhost 127.0.0.1 ::1
+#
+# Mounting the cert flips GhostDesk into its prod posture: wss:// on both
+# ports, bearer-token on MCP, VeNCrypt user/password on noVNC. See the
+# Security section of this README for the Auth ≡ TLS rationale.
+
+x-ghostdesk-base: &ghostdesk-base
+  image: ghcr.io/yv17labs/ghostdesk:latest
+  restart: unless-stopped
+  cap_add: [SYS_ADMIN]
+  shm_size: 2g
+  environment:
+    - GHOSTDESK_AUTH_TOKEN
+    - GHOSTDESK_VNC_PASSWORD
+    - LANG=en_US.UTF-8
+    - TZ=America/New_York
+
 services:
   sales-agent:
-    image: ghcr.io/yv17labs/ghostdesk:latest
+    <<: *ghostdesk-base
     container_name: ghostdesk-sales-agent
-    restart: unless-stopped
-    cap_add: [SYS_ADMIN]
     ports: ["3001:3000", "6081:6080"]
     volumes:
       - ghostdesk-sales-agent-home:/home/agent
-    shm_size: 2g
-    environment:
-      - GHOSTDESK_AUTH_TOKEN
-      - GHOSTDESK_VNC_PASSWORD
-      - TZ=America/New_York
-      - LANG=en_US.UTF-8
+      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
+      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
 
   research-agent:
-    image: ghcr.io/yv17labs/ghostdesk:latest
+    <<: *ghostdesk-base
     container_name: ghostdesk-research-agent
-    restart: unless-stopped
-    cap_add: [SYS_ADMIN]
     ports: ["3002:3000", "6082:6080"]
     volumes:
       - ghostdesk-research-agent-home:/home/agent
-    shm_size: 2g
-    environment:
-      - GHOSTDESK_AUTH_TOKEN
-      - GHOSTDESK_VNC_PASSWORD
-      - TZ=America/Toronto
-      - LANG=en_CA.UTF-8
+      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
+      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
 
   accounting-agent:
-    image: ghcr.io/yv17labs/ghostdesk:latest
+    <<: *ghostdesk-base
     container_name: ghostdesk-accounting-agent
-    restart: unless-stopped
-    cap_add: [SYS_ADMIN]
     ports: ["3003:3000", "6083:6080"]
     volumes:
       - ghostdesk-accounting-agent-home:/home/agent
-    shm_size: 2g
-    environment:
-      - GHOSTDESK_AUTH_TOKEN
-      - GHOSTDESK_VNC_PASSWORD
-      - TZ=Europe/Paris
-      - LANG=fr_FR.UTF-8
+      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
+      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
 
 volumes:
   ghostdesk-sales-agent-home:
@@ -169,132 +292,6 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 ---
 
-## How it works
-
-GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your agent gets a sandboxed desktop with a taskbar, clock, and pre-installed applications — equivalent to what a human sees on their screen.
-
-The agent perceives the screen and locates click targets with:
-
-### Vision mode — `screenshot()` with region cropping
-
-The agent takes a screenshot to see the screen. For precise clicking, it crops to a sub-rectangle by passing `region=` to `screenshot()` and reads coordinates directly from the cropped image. The crop is taken at native screen resolution — pixels are not enlarged, the agent simply receives fewer of them with no visual distractors.
-
-Smaller vision models that struggle to count pixels can additionally pass `grid=True` **together with a `region=` crop** to get a coordinate ruler drawn in margins around the image (X axis labeled every 50 px along the top, Y axis every 20 px along the left, with thin alternating gridlines over the content). Ruler values are absolute screen coordinates, so the agent reads the click point directly off the rulers instead of estimating offsets.
-
-Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
-
-This approach works with **any application** — web apps, native apps, legacy software, Canvas, WebGL. If it renders pixels, the agent can use it.
-
----
-
-## Quick start
-
-### 1. Run the container
-
-GhostDesk refuses to boot without an MCP auth token and a VNC password. For a local spin-up, generate both and pass them inline:
-
-```bash
-export GHOSTDESK_AUTH_TOKEN=$(openssl rand -hex 32)
-export GHOSTDESK_VNC_PASSWORD=$(openssl rand -hex 16)
-
-docker run -d --name ghostdesk-my-agent \
-  --restart unless-stopped \
-  --cap-add SYS_ADMIN \
-  -p 3000:3000 \
-  -p 6080:6080 \
-  -v ghostdesk-my-agent-home:/home/agent \
-  --shm-size 2g \
-  -e GHOSTDESK_AUTH_TOKEN \
-  -e GHOSTDESK_VNC_PASSWORD \
-  -e TZ=UTC \
-  -e LANG=en_US.UTF-8 \
-  ghcr.io/yv17labs/ghostdesk:latest
-
-echo "MCP token:    $GHOSTDESK_AUTH_TOKEN"
-echo "VNC password: $GHOSTDESK_VNC_PASSWORD"
-```
-
-Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
-
-> **In production, inject both secrets from your secret manager.** On Kubernetes, use `valueFrom.secretKeyRef`; with Docker / compose, use a `.env` file backed by Docker secrets, Vault, AWS Secrets Manager, etc. See [Security](#security) for the full contract.
-
-> **`--cap-add SYS_ADMIN`** — Required by Electron apps (VS Code, Slack, etc.) and other applications that need Linux user namespaces to run their sandbox. Safe to remove if you don't need them.
-
-> **noVNC front-door authentication is still the operator's job.** The in-container VNC password is defense in depth — production deployments should also sit behind a reverse proxy / identity-aware proxy that terminates TLS and gates access to port 6080. See [Security](#security).
-
-The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
-
-### 2. Connect your AI
-
-GhostDesk works with any MCP-compatible client. Add it to your config:
-
-**Claude Desktop / Claude Code** (Streamable HTTP)
-```json
-{
-  "mcpServers": {
-    "ghostdesk": {
-      "type": "http",
-      "url": "http://localhost:3000/mcp",
-      "headers": {
-        "Authorization": "Bearer <your GHOSTDESK_AUTH_TOKEN>"
-      }
-    }
-  }
-}
-```
-
-**ChatGPT, Gemini, or any LLM with MCP support** — same config, same bearer token header.
-
-### 3. Watch your agent work
-
-Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time. In production, terminate TLS on a reverse proxy in front of the container — or mount a cert at `/etc/ghostdesk/tls/server.{crt,key}` to let `websockify` and the MCP server serve HTTPS directly. For a locally-trusted dev cert, use [`mkcert`](https://github.com/FiloSottile/mkcert) (see [Security](#security) → Transport Security → Dev mode). GhostDesk does not generate a self-signed cert on your behalf.
-
-| Service | URL |
-|---------|-----|
-| MCP server | `http://localhost:3000/mcp` (behind a reverse proxy in production — see [Security](#security)) |
-| noVNC (browser) | `http://localhost:6080/vnc.html` (username `agent`, password: `$GHOSTDESK_VNC_PASSWORD`) |
-| VNC (loopback only — bound to `127.0.0.1` inside the container) | — |
-
----
-
-## Tools
-
-12 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
-
-### Screen
-| Tool | Description |
-|------|-------------|
-| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Pass `grid=True` to overlay a coordinate ruler in margins around the image (absolute screen coordinates, works with `region=` too). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
-
-### Mouse
-| Tool | Description |
-|------|-------------|
-| `mouse_click` | Click at coordinates |
-| `mouse_double_click` | Double-click at coordinates |
-| `mouse_drag` | Drag from one position to another |
-| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
-
-### Keyboard
-| Tool | Description |
-|------|-------------|
-| `key_type` | Type text with realistic per-character delays |
-| `key_press` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
-
-### Clipboard
-| Tool | Description |
-|------|-------------|
-| `clipboard_get` | Read clipboard contents |
-| `clipboard_set` | Write to clipboard |
-
-### Apps
-| Tool | Description |
-|------|-------------|
-| `app_list` | List the GUI applications installed on the desktop |
-| `app_launch` | Start a GUI application by name |
-| `app_status` | Check if an application is running and read its logs |
-
----
-
 ## Model requirements
 
 GhostDesk works best with models that have both **vision and tool use**. The MCP server includes built-in instructions that guide the agent on how to use the tools effectively.
@@ -303,7 +300,7 @@ Works well with large models out of the box (Claude, GPT-4, Gemini). Best result
 
 ### Small and medium models
 
-Small and medium models require the same **vision and tool use** capabilities as larger models, but with simplified guidance to work within tighter reasoning and perception budgets. Use [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) as your system prompt — it trades flexibility for reliability, emphasizing critical rules (crop with grid before every click, use keyboard first) and explicit coordinate reading.
+Small and medium models require the same **vision and tool use** capabilities as larger models, but benefit from a tightened system prompt that trades flexibility for reliability — emphasizing critical rules (crop with grid before every click, use keyboard first) and explicit coordinate reading from the grid rulers.
 
 The grid overlay shows exact absolute screen coordinates so the model reads them directly instead of estimating:
 
@@ -311,15 +308,18 @@ The grid overlay shows exact absolute screen coordinates so the model reads them
 
 ### Running locally
 
-**Inference server.** We do **not** recommend LM Studio: it's closed-source proprietary software with long-standing bugs that never get fixed, and crucially it does **not handle WebP images** — which is the format GhostDesk returns by default to keep payloads small.
+Your inference stack needs to cover four capabilities — all four are mandatory:
 
-Instead, use our fork of llama.cpp with WebP support: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP support lands upstream, we'll archive the fork and point here directly.
+1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
+2. **Tool use** — GhostDesk exposes 12 tools as function calls; the model must be able to invoke them.
+3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
+4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
+
+For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding on top of upstream: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP lands upstream we will archive the fork and point there directly.
 
 **Recommended models.** What matters here isn't raw intelligence but **speed** — desktop control needs fast keyboard/mouse interactions, so low-activation MoE models shine on modest hardware:
 
 - [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — 35B parameters, only 3B active per token.
-
-Below these sizes, results are possible but unreliable. For these constraints, follow [SYSTEM_PROMPT.md](SYSTEM_PROMPT.md) for best results.
 
 ---
 
