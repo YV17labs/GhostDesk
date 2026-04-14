@@ -36,6 +36,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get purge -y curl; \
     rm -rf /var/lib/apt/lists/*
 
+# foot's upstream default is monospace:size=8 — unreadable in a noVNC
+# viewport. Ship a system-wide config that picks a comfortable size
+# without touching $HOME.
+COPY docker/services/foot/foot.ini /etc/xdg/foot/foot.ini
+
 LABEL org.opencontainers.image.title="ghostdesk" \
       org.opencontainers.image.description="Ghostdesk distribution image — MCP-controlled desktop with Firefox, foot, mousepad and galculator" \
       org.opencontainers.image.version="${GHOSTDESK_VERSION}" \
