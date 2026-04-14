@@ -133,6 +133,7 @@ COPY --chmod=0755 docker/services/mako/run.sh       /usr/local/bin/mako-run
 COPY --chmod=0755 docker/services/websockify/run.sh /usr/local/bin/websockify-run
 COPY --chmod=0644 docker/shell/sway-env.sh          /etc/profile.d/sway-env.sh
 
+COPY docker/services/foot/foot.ini /etc/xdg/foot/foot.ini
 COPY docker/shell/bashrc-prompt.sh /etc/ghostdesk/bashrc-prompt.sh
 RUN echo '. /etc/ghostdesk/bashrc-prompt.sh' >> /home/vscode/.bashrc
 
