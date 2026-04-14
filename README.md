@@ -40,7 +40,7 @@ That is what *agents using a desktop* looks like.
 
 ### Runs on models you can actually host
 
-Desktop control needs to be **fast** — an agent that takes twelve seconds to decide where to click is unusable. GhostDesk's perception design (screenshots with region cropping, optional grid overlay, compact 12-tool surface) is built so that low-activation MoE models like Qwen3.5-35B-A3B on a single workstation GPU are a first-class target, not an afterthought. No API bill, no screenshots of your desktop leaving your network.
+Desktop control needs to be **fast** — an agent that takes twelve seconds to decide where to click is unusable. GhostDesk's perception design (screenshots with region cropping, compact 12-tool surface, configurable coordinate space) is built so that vision-language models from the Qwen3-VL family running on a single workstation GPU are a first-class target, not an afterthought. No API bill, no screenshots of your desktop leaving your network.
 
 Frontier models (Claude, GPT-4, Gemini) work too and remain the smoothest path — but they are not the bar. The project is explicitly designed so the medium, self-hosted tier delivers reliable results on real workflows.
 
@@ -55,8 +55,6 @@ The agent perceives the screen and locates click targets with:
 ### Vision mode — `screenshot()` with region cropping
 
 The agent takes a screenshot to see the screen. For precise clicking, it crops to a sub-rectangle by passing `region=` to `screenshot()` and reads coordinates directly from the cropped image. The crop is taken at native screen resolution — pixels are not enlarged, the agent simply receives fewer of them with no visual distractors.
-
-Smaller vision models that struggle to count pixels can additionally pass `grid=True` **together with a `region=` crop** to get a coordinate ruler drawn in margins around the image (X axis labeled every 50 px along the top, Y axis every 20 px along the left, with thin alternating gridlines over the content). Ruler values are absolute screen coordinates, so the agent reads the click point directly off the rulers instead of estimating offsets.
 
 Then the agent acts — clicks, types, scrolls, or runs commands using human-like input simulation (Bézier mouse curves, variable typing delays, micro-jitter) — and verifies the result.
 
@@ -152,7 +150,7 @@ Open `https://localhost:6080/vnc.html` in your browser to see the virtual deskto
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Pass `grid=True` to overlay a coordinate ruler in margins around the image (absolute screen coordinates, works with `region=` too). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
+| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
 
 ### Mouse
 | Tool | Description |
@@ -294,32 +292,36 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 ## Model requirements
 
-GhostDesk works best with models that have both **vision and tool use**. The MCP server includes built-in instructions that guide the agent on how to use the tools effectively.
-
-Works well with large models out of the box (Claude, GPT-4, Gemini). Best results with **Anthropic models** — all tiers including Haiku perform reliably.
-
-### Small and medium models
-
-Small and medium models require the same **vision and tool use** capabilities as larger models, but benefit from a tightened system prompt that trades flexibility for reliability — emphasizing critical rules (crop with grid before every click, use keyboard first) and explicit coordinate reading from the grid rulers.
-
-The grid overlay shows exact absolute screen coordinates so the model reads them directly instead of estimating:
-
-![Menu grid precision](demos/screenshots/menu-grid-precision.webp)
-
-### Running locally
-
-Your inference stack needs to cover four capabilities — all four are mandatory:
+Your inference stack must cover four capabilities — all four are mandatory:
 
 1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
 2. **Tool use** — GhostDesk exposes 12 tools as function calls; the model must be able to invoke them.
 3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
 4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
 
+### Coordinate space — pick the right `GHOSTDESK_MODEL_SPACE` for your model
+
+Vision models disagree on how they emit click coordinates, and this is the single setting that matters most for click accuracy. GhostDesk supports both conventions through `GHOSTDESK_MODEL_SPACE`:
+
+| Value | Use for | Why |
+|-------|---------|-----|
+| `0` | **Frontier models** — Claude (all tiers including Haiku), GPT-4o, Gemini. | These models emit coordinates in native screen pixels directly. No remapping needed — they are sharp enough to target small icons without any normalisation layer in between. |
+| `1000` | **Qwen vision family** — Qwen3.5, Qwen3-VL, and other Qwen vision models. | These models were trained to emit coordinates in a normalised 0-1000 space regardless of the input image size. GhostDesk rescales their output to screen pixels at the MCP boundary. Using `0` with these models produces clicks that are wildly off. |
+
+Match the setting to the model and clicks land exactly where the model intended. Mismatch it and your agent will miss targets by half a screen — this is the most common source of "it kind of works but keeps missing" reports.
+
+### Running locally
+
 For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding on top of upstream: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP lands upstream we will archive the fork and point there directly.
 
-**Recommended models.** What matters here isn't raw intelligence but **speed** — desktop control needs fast keyboard/mouse interactions, so low-activation MoE models shine on modest hardware:
+**Recommended models.** Desktop control needs *speed* more than raw intelligence — fast keyboard and mouse turns compound over a hundred-step workflow. Low-activation MoE vision models shine here: they stay responsive on modest hardware while reading icons sharply. Two solid picks from the Qwen vision family, both run with `GHOSTDESK_MODEL_SPACE=1000`:
 
-- [Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B) — 35B parameters, only 3B active per token.
+- **[Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B)** — 35B parameters, only 3B active per token. The current sweet spot for single-GPU workstations.
+- **Qwen3-VL** — the Qwen3 vision-language branch, available in several sizes on the [Qwen Hugging Face org](https://huggingface.co/Qwen). Pick the size that fits your GPU budget.
+
+Both are distinct models in the same family — not aliases of each other. Either one works reliably once `GHOSTDESK_MODEL_SPACE=1000` is set.
+
+If you prefer a hosted frontier model instead (Claude, GPT-4o, Gemini), set `GHOSTDESK_MODEL_SPACE=0` — they emit native screen pixels.
 
 ---
 
@@ -344,7 +346,7 @@ Both are plain environment variables — on Kubernetes wire them from a `Secret`
 | `GHOSTDESK_VNC_ADDRESS` | `127.0.0.1` | Address wayvnc binds on. Default is loopback-only (the VNC port is reachable only via the noVNC bridge on 6080). Set to `0.0.0.0` to expose port 5900 for direct native VNC clients; RSA-AES + `GHOSTDESK_VNC_PASSWORD` then protect the wire end-to-end. See [Security](#security). |
 | `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
 | `GHOSTDESK_SCREEN_HEIGHT` | `1024` | Virtual screen height in pixels |
-| `GHOSTDESK_MODEL_SPACE` | `1000` | LLM coordinate normalisation space (`0` disables, for Claude / GPT-4o native pixels; `1000` for Qwen-VL style normalised space) |
+| `GHOSTDESK_MODEL_SPACE` | `1000` | LLM coordinate convention. `0` for frontier models that emit native screen pixels (Claude, GPT-4o, Gemini); `1000` for the Qwen vision family (Qwen3.5, Qwen3-VL, …) which emits a normalised 0-1000 space. See [Model requirements](#model-requirements) → *Coordinate space* for the full rationale. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 
