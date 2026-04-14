@@ -67,7 +67,7 @@ else
         unset GHOSTDESK_AUTH_TOKEN
     fi
     if [ -n "${GHOSTDESK_VNC_PASSWORD:-}" ]; then
-        echo "entrypoint: WARN GHOSTDESK_VNC_PASSWORD ignored — wayvnc auth needs VeNCrypt" >&2
+        echo "entrypoint: WARN GHOSTDESK_VNC_PASSWORD ignored — wayvnc auth is only enabled under TLS" >&2
         unset GHOSTDESK_VNC_PASSWORD
     fi
 fi
@@ -108,23 +108,14 @@ install -m 0644 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" \
     /etc/ghostdesk/sway.config "${SWAY_CFG_DIR}/config"
 
 # ---- Wayvnc config ----
-# wayvnc is pinned to 127.0.0.1 regardless of operator env. The trust
-# boundary is the container netns; browser reaches wayvnc only via
-# websockify on :6080. Exposing the native VNC port outside the
-# container would add attack surface for zero gain.
-#
-# NOTE on VeNCrypt sub-types: with cert+key, wayvnc advertises RFB
-# security type 19 (VeNCrypt) with X509 sub-types. noVNC only supports
-# VeNCrypt 0.2 "Plain" sub-type (core/rfb.js) — it works because the
-# numeric ID for "Plain" (256) maps across both spaces. If this ever
-# breaks on a wayvnc upgrade, fall back to enable_auth=false and rely
-# on the loopback + websockify wss:// envelope; the trust boundary
-# still holds.
-#
-# NOTE on RSA-AES: wayvnc implements AES-EAX (RFB type 5); the browser
-# Web Crypto API only exposes GCM, so noVNC implements the "RA2ne"
-# variant (type 6). Types 5 and 6 don't interop and noVNC drops the
-# connection silently. Do NOT re-add rsa_private_key_file.
+# Pinned to 127.0.0.1. Under TLS, enable_auth + allow_broken_crypto +
+# relax_encryption + password (no username) makes wayvnc advertise
+# RFB security type 2 (classic VNC Auth) which noVNC 1.6 supports
+# directly — the browser prompts for a single password inside the
+# noVNC overlay. The DES challenge/response is weak on its own but
+# travels inside the wss:// envelope, so the effective posture is
+# "password inside a TLS tunnel". Requires wayvnc built from
+# pinned master SHA — see docker/base/Dockerfile vnc-builder stage.
 WAYVNC_CFG_DIR="${HOME}/.config/wayvnc"
 WAYVNC_CFG_FILE="${WAYVNC_CFG_DIR}/config"
 install -d -m 0700 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" "${WAYVNC_CFG_DIR}"
@@ -132,14 +123,20 @@ install -d -m 0700 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" "${WAYVNC_CFG_D
 (
     umask 077
     if [ "${TLS_ENABLED}" = "1" ]; then
+        # No certificate_file/private_key_file here on purpose: setting
+        # them makes wayvnc advertise RFB security type 19 (VeNCrypt),
+        # which noVNC 1.6 then picks first and fails on (the only
+        # sub-type wayvnc offers is X509Plain/262 while noVNC only
+        # supports Plain/256). Leaving them out keeps VNC Auth (type 2)
+        # as the first type noVNC can actually negotiate. TLS for the
+        # wire is handled by websockify one hop up.
         cat > "${WAYVNC_CFG_FILE}" <<EOF
 address=127.0.0.1
 port=5900
 enable_auth=true
-username=${GHOSTDESK_USER}
+allow_broken_crypto=true
+relax_encryption=true
 password=${GHOSTDESK_VNC_PASSWORD}
-private_key_file=${TLS_KEY}
-certificate_file=${TLS_CRT}
 EOF
     else
         cat > "${WAYVNC_CFG_FILE}" <<EOF
@@ -152,7 +149,6 @@ EOF
 chown "${GHOSTDESK_USER}:${GHOSTDESK_USER}" "${WAYVNC_CFG_FILE}"
 chmod 0600 "${WAYVNC_CFG_FILE}"
 
-# Leftover from the deprecated RSA-AES mode (see NOTE above).
 rm -f "${WAYVNC_CFG_DIR}/rsa_key.pem" "${WAYVNC_CFG_DIR}/rsa_key.pem.pub"
 
 # ---- uv sync (devcontainer only; no-op in prod) ----

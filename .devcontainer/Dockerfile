@@ -3,6 +3,61 @@
 # and adds the dev extras (compilers, *-dev, foot, GUI probes, extra
 # fonts). Supervisord config and service wrappers are shared verbatim.
 
+# ---- Stage 1: vnc-builder — wayvnc + neatvnc + aml from pinned SHAs ----
+# Same pins as docker/base/Dockerfile; keep them in lockstep.
+FROM ubuntu:24.04 AS vnc-builder
+
+ARG WAYVNC_SHA=854edbbde0673b22386086dc98d1c89bee86966e
+ARG NEATVNC_SHA=8a161c26a45706b950023df8bd8b29048e37c210
+ARG AML_SHA=ce4b82d5888a87110054b95414bd3068224d2b91
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates git patch \
+        meson ninja-build pkg-config gcc \
+        libdrm-dev libxkbcommon-dev libwayland-dev \
+        libjansson-dev libpam0g-dev libgnutls28-dev \
+        libavfilter-dev libavcodec-dev libavutil-dev libturbojpeg0-dev \
+        libpixman-1-dev nettle-dev libgmp-dev \
+        zlib1g-dev scdoc
+
+WORKDIR /src
+COPY docker/base/patches/ /patches/
+RUN git clone https://github.com/any1/aml.git \
+    && git -C aml checkout ${AML_SHA} \
+    && git clone https://github.com/any1/neatvnc.git \
+    && git -C neatvnc checkout ${NEATVNC_SHA} \
+    && mkdir neatvnc/subprojects \
+    && ln -s ../../aml neatvnc/subprojects/aml \
+    && git clone https://github.com/any1/wayvnc.git \
+    && git -C wayvnc checkout ${WAYVNC_SHA} \
+    && mkdir wayvnc/subprojects \
+    && ln -s ../../neatvnc wayvnc/subprojects/neatvnc \
+    && ln -s ../../aml wayvnc/subprojects/aml \
+    # See docker/base/Dockerfile vnc-builder for the rationale.
+    && sed -i '/ADD_SECURITY_TYPE(RFB_SECURITY_TYPE_APPLE_DH)/d' \
+        neatvnc/src/server.c \
+    && patch -p1 -d wayvnc < /patches/wayvnc-async-auth.patch \
+    && meson setup wayvnc/build wayvnc --prefix=/usr -Dbuildtype=release \
+    && ninja -C wayvnc/build \
+    && DESTDIR=/out ninja -C wayvnc/build install
+
+# ---- Stage 2: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
+# Mirrors docker/base/Dockerfile § novnc. Isolated so the dev image
+# stays free of curl+tarball clutter for the noVNC fetch itself.
+FROM ubuntu:24.04 AS novnc
+ARG NOVNC_VERSION=1.6.0
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+        | tar -xz -C /tmp \
+    && mv "/tmp/noVNC-${NOVNC_VERSION}" /opt/novnc
+
+COPY docker/services/novnc/index.html /opt/novnc/index.html
+COPY assets/logo-mark.svg              /opt/novnc/app/images/ghostdesk-logo.svg
+
+# ---- Stage 3: runtime — devcontainer base + prod runtime stack ----
 FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 
 ARG TARGETARCH
@@ -14,18 +69,23 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Dev extras on top of the prod stack: compilers + *-dev for pywayland
 # wheels, curl for the Mozilla APT key, foot, GUI probes, fonts.
+# Runtime libs (libdrm2 etc.) feed the wayvnc binary copied from the
+# vnc-builder stage — the apt wayvnc package is NOT installed here.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         sway mako-notifier \
         grim wl-clipboard \
         libwayland-client0 libxkbcommon0 \
         dbus dbus-user-session libglib2.0-bin \
-        wayvnc websockify \
+        websockify \
         supervisor \
         python3 \
         fonts-dejavu \
         tzdata locales xdg-user-dirs \
         ca-certificates \
+        libdrm2 libjansson4 libpam0g libgnutls30 \
+        libavfilter9 libavcodec60 libavutil58 libturbojpeg \
+        libpixman-1-0 libnettle8 libgmp10 zlib1g \
         curl \
         python3-dev libwayland-dev pkg-config build-essential \
         foot \
@@ -34,16 +94,13 @@ RUN apt-get update \
     && locale-gen en_US.UTF-8 fr_CA.UTF-8 C.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
-# Ubuntu 24.04 ships noVNC 1.3; we pull 1.6 for bug fixes, clipboard
-# handling, mobile input.
-ARG NOVNC_VERSION=1.6.0
-RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
-        | tar -xz -C /tmp \
-    && rm -rf /usr/share/novnc \
-    && mv "/tmp/noVNC-${NOVNC_VERSION}" /usr/share/novnc
+# wayvnc (+ wayvncctl + libneatvnc + libaml) built from pinned master
+# SHA — see vnc-builder.
+COPY --from=vnc-builder /out/usr/bin /usr/bin
+COPY --from=vnc-builder /out/usr/lib /usr/lib
+RUN ldconfig
 
-COPY docker/services/novnc/index.html /usr/share/novnc/index.html
-COPY assets/logo-mark.svg              /usr/share/novnc/app/images/ghostdesk-logo.svg
+COPY --from=novnc /opt/novnc /usr/share/novnc
 
 RUN install -d -m 0755 /usr/share/ghostdesk
 COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png

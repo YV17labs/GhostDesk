@@ -49,7 +49,7 @@ GhostDesk is a **single-tenant** service designed to run **behind a reverse prox
 
 **Auth ≡ TLS.** GhostDesk has exactly two postures, decided at boot by whether the operator mounted a cert+key at `/etc/ghostdesk/tls/server.{crt,key}`:
 
-- **Cert mounted → prod posture.** Every exposed surface runs TLS *and* authenticated: `wss://` + bearer-token on the MCP server, `wss://` + VeNCrypt (username/password) on noVNC → wayvnc. `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are mandatory — the container refuses to boot without them.
+- **Cert mounted → prod posture.** Every exposed surface runs TLS *and* authenticated: `wss://` + bearer-token on the MCP server, `wss://` on `websockify` with password auth delegated down to wayvnc (RFB security type 2, single password prompt in the noVNC overlay). `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are mandatory — the container refuses to boot without them.
 - **No cert → dev posture.** Every exposed surface runs plain and **unauthenticated**. This is the devcontainer shape: the ports are reachable only via the IDE's localhost-scoped forward, so shipping a static bearer token or VNC password over cleartext would add no real defense (no rotation, no per-user identity, no per-request revocation). We intentionally disable the application-level gate in this posture rather than give a false sense of security; setting `GHOSTDESK_AUTH_TOKEN` or `GHOSTDESK_VNC_PASSWORD` without a cert logs a warning and is ignored.
 
 The threat boundary the container itself is responsible for defending:
@@ -57,11 +57,11 @@ The threat boundary the container itself is responsible for defending:
 | In scope (product) | Out of scope (deployment) |
 |---|---|
 | TLS termination on every exposed port when a cert is mounted | Rate limiting, brute-force protection |
-| Mandatory bearer-token auth on the MCP server and VeNCrypt user/password on wayvnc — **when TLS is on** | Per-user identity / SSO / OIDC / MFA on noVNC |
+| Mandatory bearer-token auth on the MCP server and single-password auth at the wayvnc layer (RFB type 2) — **when TLS is on** | Per-user identity / SSO / OIDC / MFA on noVNC |
 | Read-only application code under the runtime user | WAF, IP allow-listing |
 | Container isolation (filesystem, process, network namespaces) | Network segmentation between agents |
 | wayvnc hard-pinned to `127.0.0.1` (loopback only, inside the container's netns) | Trusted cert / TLS termination on the client-facing edge |
-| VeNCrypt-protected VNC transport (RFB security type 19 + username/password) under TLS | Session recording & audit trail aggregation |
+| Password challenge/response on wayvnc, wrapped by `wss://` TLS end-to-end from the browser to `websockify` on :6080 | Session recording & audit trail aggregation |
 
 If your deployment exposes GhostDesk without a proxy and an authenticated edge, that is a deployment vulnerability, not a product one. The sections below document exactly what the product does and does not guarantee so operators can close the gap deliberately.
 
@@ -69,13 +69,9 @@ If your deployment exposes GhostDesk without a proxy and an authenticated edge, 
 
 GhostDesk's transport model is driven by a single switch: **is a cert mounted at `/etc/ghostdesk/tls/server.{crt,key}`?** The answer flips every exposed surface between *plain + unauthenticated* (dev) and *TLS + authenticated* (prod). The product does not generate or manage a TLS trust chain on its own.
 
-- **Port 6080 — `websockify` / noVNC.** With a cert mounted, [`docker/services/websockify/run.sh`](docker/services/websockify/run.sh) starts `websockify` with `--cert`, `--key`, `--ssl-only`, serving `https://` + `wss://`. Without a cert, it serves plain `http://` + `ws://`. `websockify` itself performs no authentication in either posture; the auth gate that matters on this port is **inside the tunnelled RFB stream**, terminated by wayvnc (see below) — and it is only armed when TLS is on.
+- **Port 6080 — `websockify` / noVNC.** With a cert mounted, [`docker/services/websockify/run.sh`](docker/services/websockify/run.sh) starts `websockify` with `--cert`, `--key`, `--ssl-only`, serving `https://` + `wss://`. Without a cert it serves plain `http://` + `ws://`. websockify is the transport bridge only — authentication lives in wayvnc below.
 - **Port 3000 — MCP server.** With a cert mounted, [`src/ghostdesk/server.py`](src/ghostdesk/server.py) runs uvicorn with `ssl_certfile` / `ssl_keyfile` and installs an ASGI middleware that rejects any request missing `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` (constant-time compare via `hmac.compare_digest`). Without a cert, it serves plain HTTP with **no authentication gate** — the intended dev posture, described in [Authentication](#authentication) below.
-- **Port 5900 — wayvnc.** Hard-pinned to `127.0.0.1` inside the container's netns by [`docker/init/entrypoint.sh`](docker/init/entrypoint.sh) § 7; `GHOSTDESK_VNC_ADDRESS` overrides are actively ignored with a warning. The native VNC port is never reachable from outside the container, in either posture. Browser → wayvnc always goes through `websockify` on `:6080`.
-  - **With a cert mounted**, wayvnc is configured with `enable_auth=true` + `username=${GHOSTDESK_USER}` + `password=${GHOSTDESK_VNC_PASSWORD}` + the mounted `private_key_file`/`certificate_file`, running **VeNCrypt** (RFB security type 19) with X509+Plain sub-type. TLS is terminated *inside* wayvnc, so the browser → wayvnc path is doubly enveloped: `wss://` on the `websockify` leg and VeNCrypt-TLS on the RFB leg. Auth (user/password) travels inside the VeNCrypt-encrypted channel.
-  - **Without a cert**, wayvnc runs with `enable_auth=false`. Plain RFB over loopback is acceptable here because the netns isolation is the real boundary, and bolting a static password onto a cleartext channel would be theater.
-
-  **Note on wayvnc security-type choice.** Earlier builds used wayvnc's RSA-AES mode (RFB type 129). It was removed because noVNC implements the incompatible "RA2ne" variant (type 6) while wayvnc's nettle backend only implements AES-EAX (type 5); the two don't interop and noVNC drops the connection during security-type negotiation. VeNCrypt's `X509Plain` sub-type is what actually works end-to-end browser ↔ wayvnc today. See `docker/init/entrypoint.sh` § 7 for the full commentary.
+- **Port 5900 — wayvnc.** Hard-pinned to `127.0.0.1` inside the container's netns by [`docker/init/entrypoint.sh`](docker/init/entrypoint.sh); `GHOSTDESK_VNC_ADDRESS` overrides are ignored. Under TLS, wayvnc is configured with `enable_auth=true` + `allow_broken_crypto=true` + `relax_encryption=true` + `password=${GHOSTDESK_VNC_PASSWORD}` (no username) so it advertises **RFB security type 2** (classic VNC Auth). noVNC 1.6 handles this natively and shows a single-password prompt in its overlay. The DES challenge/response used by RFB type 2 is cryptographically weak on its own — the upstream maintainer explicitly labels it "broken crypto" and it is only enabled because noVNC 1.6 still does not interoperate with wayvnc's modern security types (VeNCrypt X509Plain / RSA-AES). Confidentiality is provided end-to-end by the `wss://` envelope on the websockify leg; the DES flow is only an authentication token carried inside that tunnel. Because this configuration depends on a code path that only lives in wayvnc `master` (commit 1497397fc4, 2026-04-06), GhostDesk ships wayvnc built from pinned source — see [`docker/base/Dockerfile`](docker/base/Dockerfile) `vnc-builder` stage. Replace with a tag once upstream releases one that contains the commit.
 
 ### Cert provisioning
 
@@ -109,7 +105,7 @@ Then mount `./tls/server.crt` and `./tls/server.key` at `/etc/ghostdesk/tls/serv
 | Surface | TLS off (dev) | TLS on (prod) |
 |---|---|---|
 | MCP server — port 3000 | Plain HTTP, **no auth** | `https://` + `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` required on every request (constant-time compare) |
-| wayvnc — port 5900 (via `websockify` on 6080) | Plain RFB on loopback, `enable_auth=false` | `wss://` on `websockify` leg, VeNCrypt + `username=${GHOSTDESK_USER}` / `password=${GHOSTDESK_VNC_PASSWORD}` on the RFB leg |
+| wayvnc — port 5900 (via `websockify` on 6080) | Plain RFB on loopback, `enable_auth=false` | `wss://` on websockify + RFB security type 2 password challenge inside wayvnc (`GHOSTDESK_VNC_PASSWORD`, no username) |
 
 ### Prod posture (cert mounted)
 
@@ -128,7 +124,7 @@ Both secrets are **ignored**, with a warning logged at boot if they are set anyw
 
 ```
 entrypoint: WARN GHOSTDESK_AUTH_TOKEN is set but TLS is off — ignored (no point shipping a static token over cleartext)
-entrypoint: WARN GHOSTDESK_VNC_PASSWORD is set but TLS is off — ignored (wayvnc auth is only enabled under VeNCrypt)
+entrypoint: WARN GHOSTDESK_VNC_PASSWORD is set but TLS is off — ignored (wayvnc auth is only enabled under TLS)
 ```
 
 The rationale is deliberate: GhostDesk's credentials are **static shared secrets** with no rotation, no per-user identity, and no revocation story. Over a cleartext channel they buy no real defense against anyone who can observe the transport — they only paper over the dev surface with a thin veneer of "auth is on" that a `tcpdump` peels off in seconds. The alternatives are both worse:
@@ -162,7 +158,7 @@ No `*_FILE` indirection is supported. The rationale: on Kubernetes with `secretK
 ### Rotation
 
 - **MCP auth token** — update the `Secret` / env source, `kubectl rollout restart` or `docker restart`. The new token becomes active on the next container boot. Clients must be updated in the same window.
-- **VNC password** — same procedure. `entrypoint.sh` re-renders `~/.config/wayvnc/config` at every boot, so the new password is picked up without touching the image.
+- **VNC password** — same procedure. `entrypoint.sh` re-renders `~/.config/wayvnc/config` at every boot, so the new password is picked up on the next container restart without touching the image.
 - **TLS cert** — see [Transport Security](#transport-security) above.
 
 There is no support for hot-reloading credentials without a restart. This is deliberate: the blast radius of a container restart is a few seconds of unavailability for a single agent, which is acceptable and easier to reason about than a live credential swap.
