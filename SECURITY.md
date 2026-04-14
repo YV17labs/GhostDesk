@@ -47,39 +47,39 @@ Security fixes are provided for the current major version. Users are encouraged 
 
 GhostDesk is a **single-tenant** service designed to run **behind a reverse proxy** on a trusted internal network or an identity-aware edge (Tailscale, Cloudflare Access, oauth2-proxy, Pomerium, etc.). It is **not designed to be exposed directly on the public internet**.
 
+**Auth ≡ TLS.** GhostDesk has exactly two postures, decided at boot by whether the operator mounted a cert+key at `/etc/ghostdesk/tls/server.{crt,key}`:
+
+- **Cert mounted → prod posture.** Every exposed surface runs TLS *and* authenticated: `wss://` + bearer-token on the MCP server, `wss://` + VeNCrypt (username/password) on noVNC → wayvnc. `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are mandatory — the container refuses to boot without them.
+- **No cert → dev posture.** Every exposed surface runs plain and **unauthenticated**. This is the devcontainer shape: the ports are reachable only via the IDE's localhost-scoped forward, so shipping a static bearer token or VNC password over cleartext would add no real defense (no rotation, no per-user identity, no per-request revocation). We intentionally disable the application-level gate in this posture rather than give a false sense of security; setting `GHOSTDESK_AUTH_TOKEN` or `GHOSTDESK_VNC_PASSWORD` without a cert logs a warning and is ignored.
+
 The threat boundary the container itself is responsible for defending:
 
 | In scope (product) | Out of scope (deployment) |
 |---|---|
-| Transport encryption (TLS) on every exposed port | Rate limiting, brute-force protection |
-| Mandatory authentication on MCP and VNC | SSO / OIDC / MFA |
-| Secret material never leaves the container in env dumps | WAF, IP allow-listing |
-| Read-only application code under the runtime user | Network segmentation between agents |
-| Container isolation (filesystem, process, network namespaces) | Session recording & audit trail aggregation |
-| Cert algorithm, length, and SAN meeting modern baselines | Cert trust chain provenance (CA / Let's Encrypt) |
+| TLS termination on every exposed port when a cert is mounted | Rate limiting, brute-force protection |
+| Mandatory bearer-token auth on the MCP server and VeNCrypt user/password on wayvnc — **when TLS is on** | Per-user identity / SSO / OIDC / MFA on noVNC |
+| Read-only application code under the runtime user | WAF, IP allow-listing |
+| Container isolation (filesystem, process, network namespaces) | Network segmentation between agents |
+| wayvnc hard-pinned to `127.0.0.1` (loopback only, inside the container's netns) | Trusted cert / TLS termination on the client-facing edge |
+| VeNCrypt-protected VNC transport (RFB security type 19 + username/password) under TLS | Session recording & audit trail aggregation |
 
 If your deployment exposes GhostDesk without a proxy and an authenticated edge, that is a deployment vulnerability, not a product one. The sections below document exactly what the product does and does not guarantee so operators can close the gap deliberately.
 
 ## Transport Security
 
-**TLS is mandatory on every network surface.** The product refuses to run without a certificate at `/etc/ghostdesk/tls/server.{crt,key}`.
+GhostDesk's transport model is driven by a single switch: **is a cert mounted at `/etc/ghostdesk/tls/server.{crt,key}`?** The answer flips every exposed surface between *plain + unauthenticated* (dev) and *TLS + authenticated* (prod). The product does not generate or manage a TLS trust chain on its own.
 
-- `websockify` serves `https://` and `wss://` only on port 6080 — there is no plain-HTTP fallback.
-- `wayvnc` runs with `enable_auth=true` and a 2048-bit RSA key for **RSA-AES** transport encryption on the internal loopback hop (`websockify` ↔ `wayvnc`). Even the loopback traffic is encrypted and authenticated.
-- The MCP server on port 3000 is served over HTTP by design: TLS termination and trust-chain handling belong to the reverse proxy in front of it. **Do not expose port 3000 directly.**
+- **Port 6080 — `websockify` / noVNC.** With a cert mounted, [`docker/services/websockify/run.sh`](docker/services/websockify/run.sh) starts `websockify` with `--cert`, `--key`, `--ssl-only`, serving `https://` + `wss://`. Without a cert, it serves plain `http://` + `ws://`. `websockify` itself performs no authentication in either posture; the auth gate that matters on this port is **inside the tunnelled RFB stream**, terminated by wayvnc (see below) — and it is only armed when TLS is on.
+- **Port 3000 — MCP server.** With a cert mounted, [`src/ghostdesk/server.py`](src/ghostdesk/server.py) runs uvicorn with `ssl_certfile` / `ssl_keyfile` and installs an ASGI middleware that rejects any request missing `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` (constant-time compare via `hmac.compare_digest`). Without a cert, it serves plain HTTP with **no authentication gate** — the intended dev posture, described in [Authentication](#authentication) below.
+- **Port 5900 — wayvnc.** Hard-pinned to `127.0.0.1` inside the container's netns by [`docker/init/entrypoint.sh`](docker/init/entrypoint.sh) § 7; `GHOSTDESK_VNC_ADDRESS` overrides are actively ignored with a warning. The native VNC port is never reachable from outside the container, in either posture. Browser → wayvnc always goes through `websockify` on `:6080`.
+  - **With a cert mounted**, wayvnc is configured with `enable_auth=true` + `username=${GHOSTDESK_USER}` + `password=${GHOSTDESK_VNC_PASSWORD}` + the mounted `private_key_file`/`certificate_file`, running **VeNCrypt** (RFB security type 19) with X509+Plain sub-type. TLS is terminated *inside* wayvnc, so the browser → wayvnc path is doubly enveloped: `wss://` on the `websockify` leg and VeNCrypt-TLS on the RFB leg. Auth (user/password) travels inside the VeNCrypt-encrypted channel.
+  - **Without a cert**, wayvnc runs with `enable_auth=false`. Plain RFB over loopback is acceptable here because the netns isolation is the real boundary, and bolting a static password onto a cleartext channel would be theater.
+
+  **Note on wayvnc security-type choice.** Earlier builds used wayvnc's RSA-AES mode (RFB type 129). It was removed because noVNC implements the incompatible "RA2ne" variant (type 6) while wayvnc's nettle backend only implements AES-EAX (type 5); the two don't interop and noVNC drops the connection during security-type negotiation. VeNCrypt's `X509Plain` sub-type is what actually works end-to-end browser ↔ wayvnc today. See `docker/init/entrypoint.sh` § 7 for the full commentary.
 
 ### Cert provisioning
 
-At first boot, `docker/entrypoint.sh` generates a **self-signed** cert if none is mounted:
-
-- Algorithm: **RSA-2048 + SHA-256**
-- Validity: 10 years
-- SAN: `DNS:localhost, IP:127.0.0.1, IP:::1`
-- Subject: `CN=localhost, O=GhostDesk, OU=dev`
-
-The self-signed cert is **cryptographically sound** — the browser warning is about trust-chain provenance (no CA signature), not algorithm weakness. This is appropriate for local dev only.
-
-For production, mount a real cert over the default path:
+Mount a real cert over the default path in prod:
 
 ```yaml
 volumes:
@@ -87,43 +87,81 @@ volumes:
   - /etc/letsencrypt/live/agent.example.com/privkey.pem:/etc/ghostdesk/tls/server.key:ro
 ```
 
-The entrypoint detects the existing files and skips generation. Rotation is handled by whatever writes the mounted paths (cert-manager, Let's Encrypt cron, your PKI) — `docker restart` is enough for the new cert to take effect on the next websockify start.
+Both `websockify-run` and the MCP server detect the files at startup and enable TLS automatically. Rotation is handled by whatever writes the mounted paths (cert-manager, Let's Encrypt cron, your PKI); a `docker restart` picks up the new cert. Alternatively, terminate TLS on a reverse proxy / cloud LB in front of the container and leave both ports plain — that is the canonical deployment shape.
+
+### Dev mode
+
+In the devcontainer, no cert is mounted. `websockify` and MCP both serve plain HTTP inside the container with no application-level auth, and the IDE's port-forwarding layer (VS Code, GitHub Codespaces) wraps ports 6080 and 3000 in HTTPS with its own public cert on the client-facing leg. VS Code / Codespaces also scopes the host-side bind to the developer's machine, so the plain-HTTP leg between the IDE port-forward proxy and the container stays inside the trusted dev environment — it never hits the LAN.
+
+If you want a locally-trusted cert for direct `https://localhost:6080` access (no IDE port-forward in between), [`mkcert`](https://github.com/FiloSottile/mkcert) is the recommended tool. It installs a local CA into your host trust store and issues short-lived leaf certs that your browser accepts without warnings:
+
+```bash
+mkcert -install
+mkcert -cert-file ./tls/server.crt -key-file ./tls/server.key localhost 127.0.0.1 ::1
+```
+
+Then mount `./tls/server.crt` and `./tls/server.key` at `/etc/ghostdesk/tls/server.{crt,key}` in your compose file (same shape as the prod example above) and restart the container. GhostDesk does **not** generate a self-signed cert on your behalf — unmanaged self-signed certs train operators to click through browser warnings, and `mkcert` solves the same problem without that tradeoff.
 
 ## Authentication
 
-Two independent credentials, one per surface:
+**Auth is gated on TLS.** The presence of a mounted cert at `/etc/ghostdesk/tls/server.{crt,key}` is the single switch that arms (or disarms) both credentials:
 
-| Credential | Used for | How it travels |
+| Surface | TLS off (dev) | TLS on (prod) |
 |---|---|---|
-| `GHOSTDESK_AUTH_TOKEN` | MCP server on port 3000 | `Authorization: Bearer <token>` header on every request |
-| `GHOSTDESK_VNC_PASSWORD` | wayvnc | RFB password auth over RSA-AES inside TLS |
+| MCP server — port 3000 | Plain HTTP, **no auth** | `https://` + `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` required on every request (constant-time compare) |
+| wayvnc — port 5900 (via `websockify` on 6080) | Plain RFB on loopback, `enable_auth=false` | `wss://` on `websockify` leg, VeNCrypt + `username=${GHOSTDESK_USER}` / `password=${GHOSTDESK_VNC_PASSWORD}` on the RFB leg |
 
-Both are **mandatory** — the container refuses to boot if either is unset:
+### Prod posture (cert mounted)
+
+`GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are **mandatory**. The container refuses to boot if either is missing:
 
 ```
-entrypoint: FATAL GHOSTDESK_AUTH_TOKEN is required (or provide GHOSTDESK_AUTH_TOKEN_FILE)
+entrypoint: FATAL GHOSTDESK_AUTH_TOKEN is required when TLS is enabled (cert mounted at /etc/ghostdesk/tls/server.crt)
+entrypoint: FATAL GHOSTDESK_VNC_PASSWORD is required when TLS is enabled (cert mounted at /etc/ghostdesk/tls/server.crt)
 ```
 
-There is **no default credential**. There is **no "disable auth" toggle** — the dev and prod code paths are identical.
+The MCP server has a belt-and-braces check that raises `SystemExit` with the same message for non-container invocations (e.g. `uv run ghostdesk` locally with a cert mounted but no token exported). See [`src/ghostdesk/server.py`](src/ghostdesk/server.py) `main()`.
+
+### Dev posture (no cert)
+
+Both secrets are **ignored**, with a warning logged at boot if they are set anyway:
+
+```
+entrypoint: WARN GHOSTDESK_AUTH_TOKEN is set but TLS is off — ignored (no point shipping a static token over cleartext)
+entrypoint: WARN GHOSTDESK_VNC_PASSWORD is set but TLS is off — ignored (wayvnc auth is only enabled under VeNCrypt)
+```
+
+The rationale is deliberate: GhostDesk's credentials are **static shared secrets** with no rotation, no per-user identity, and no revocation story. Over a cleartext channel they buy no real defense against anyone who can observe the transport — they only paper over the dev surface with a thin veneer of "auth is on" that a `tcpdump` peels off in seconds. The alternatives are both worse:
+
+1. **Require secrets unconditionally**, as earlier builds did. This trains operators to paste placeholder tokens into committed compose files and forget they are there when the container moves to a public host.
+2. **Enforce bearer auth even without TLS**, then document "it's fine because loopback." That's correct today but fragile — a small refactor or a misread `ports:` stanza is enough to leak a cleartext token to the LAN.
+
+Instead, auth is bound to the posture that actually protects it. If you want auth, you get TLS with it; if you don't have TLS, the surface is honest about being open, and the operator is expected to constrain reachability some other way (devcontainer forward, Unix socket, loopback bind, reverse proxy). There is no middle ground and no "disable auth" toggle — just mount a cert or don't.
+
+### The noVNC deployment contract
+
+When TLS is on, the in-container VNC password is defense in depth, not a substitute for a proper front door. Port 6080 **must still not be exposed in clear on the public internet**, and in the dev posture (no cert, no VNC password) it must not be exposed anywhere except a trusted loopback forward. Any of the following satisfy the contract for the prod posture:
+
+- **Reverse proxy with Basic Auth / OAuth2-proxy** (Caddy, nginx, Traefik, Apache) — the canonical prod setup. Pair with a real TLS cert on the edge.
+- **Identity-aware proxy** — Cloudflare Access, Tailscale Funnel + ACLs, Pomerium, GCP IAP, AWS ALB + Cognito. The most robust option, recommended for multi-operator deployments.
+- **Private network only** — Tailscale, WireGuard, VPC peering. Port 6080 is never reachable from outside the private network.
+- **Devcontainer / Codespaces port forward** — the IDE port-forwarding layer gates access with your GitHub / VS Code identity and terminates TLS with its own public cert. Intended dev posture, satisfied out-of-the-box.
+
+Why a front door on top of the in-container password? Two reasons: (1) the in-container password is a **single shared credential** with no per-user identity, audit trail, or revocation story — a reverse proxy with OAuth2-proxy gives you all three; (2) TLS termination on the client-facing leg is still the operator's job (the in-container TLS path is optional and defaults off). Exposing port 6080 directly to the internet — even with the VNC password enabled — is a **deployment vulnerability**, not a product one.
 
 ## Secrets Handling & Rotation
 
-Secrets should be provided via the `*_FILE` convention, never as inline env vars on shared hosts:
+Both secrets are provided as plain environment variables, and only consulted in the prod posture (cert mounted). The recommended wiring depends on your orchestrator:
 
-```bash
-GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token
-GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password
-```
+- **Kubernetes** — `valueFrom.secretKeyRef` pointing at a `Secret`. The value never appears in `kubectl describe pod` (only the reference does). With encryption-at-rest enabled on etcd (a baseline SOC2 / ISO 27001 / PCI control), the secret is protected at every stage.
+- **Docker / compose** — inject via `environment:` backed by a git-ignored `.env` file, Docker secrets, Vault agent templating, or External Secrets Operator. Never inline secrets in a committed compose file.
+- **Local dev** — the devcontainer ships **no** `GHOSTDESK_AUTH_TOKEN` / `GHOSTDESK_VNC_PASSWORD` in [`.devcontainer/docker-compose.yml`](.devcontainer/docker-compose.yml), because no cert is mounted there and auth is disabled on purpose. If you want to exercise the prod code path locally, mount an `mkcert`-issued cert (see [Transport Security § Dev mode](#dev-mode)) and `export GHOSTDESK_AUTH_TOKEN=...` + `export GHOSTDESK_VNC_PASSWORD=...` before bringing the container up.
 
-`entrypoint.sh` reads the file, exports the value for the current process tree, and lets the file permissions (set by Docker secrets / k8s Secrets / Vault) stay at mode 0400. This avoids three common leaks:
-
-- Values never appear in `docker inspect` output.
-- Values never appear in `/proc/*/environ` of other processes that might be readable by a sidecar.
-- Values are never baked into an image layer or CI log.
+No `*_FILE` indirection is supported. The rationale: on Kubernetes with `secretKeyRef`, env vars are already at parity with file mounts for audit purposes (both result in the value living in the pod's env; neither shows up in the pod spec). Maintaining a second code path for `*_FILE` bought nothing on the platform operators actually run, and made the API surface larger. TLS material stays on disk because PEM files are the natural format for OpenSSL-based libraries and cert-manager / Let's Encrypt rotation writes files, not env vars.
 
 ### Rotation
 
-- **MCP auth token** — update the mounted file, `docker restart`. The new token becomes active on the next container boot. Clients must be updated in the same window.
+- **MCP auth token** — update the `Secret` / env source, `kubectl rollout restart` or `docker restart`. The new token becomes active on the next container boot. Clients must be updated in the same window.
 - **VNC password** — same procedure. `entrypoint.sh` re-renders `~/.config/wayvnc/config` at every boot, so the new password is picked up without touching the image.
 - **TLS cert** — see [Transport Security](#transport-security) above.
 
@@ -133,7 +171,7 @@ There is no support for hot-reloading credentials without a restart. This is del
 
 ### Read-only application code
 
-In the prod image (`Dockerfile.base`), after `uv sync` installs the Python venv at `/opt/ghostdesk/.venv`:
+In the prod image (`docker/base/Dockerfile`), after `uv sync` installs the Python venv at `/opt/ghostdesk/.venv`:
 
 1. Source `.py` files are compiled to PEP 3147 sourceless `.pyc` (`compileall -b`) next to the originals.
 2. All `.py` and `__pycache__` are deleted — only the flat `.pyc` remain.
@@ -168,9 +206,10 @@ docker run ... ghcr.io/yv17labs/ghostdesk:latest \
 
 ## Known Limitations
 
-- **Single shared VNC credential.** There is one username and one password per container, shared by every viewer. For per-user identity, audit trail, and revocation, use an identity-aware proxy in front of noVNC.
+- **Single shared VNC credential.** `GHOSTDESK_VNC_PASSWORD` is one password shared by every viewer — the container has no notion of per-user identity on the noVNC surface. For per-user audit trail and revocation, front port 6080 with an identity-aware proxy; see [The noVNC deployment contract](#the-novnc-deployment-contract).
+- **Single shared MCP token.** Same story for `GHOSTDESK_AUTH_TOKEN`: one static bearer, no rotation, no per-client identity. Treat it as a coarse gate on a trusted hop, not a user-facing credential.
 - **No hot reload.** Credential and cert rotation require a container restart.
-- **Self-signed cert in dev triggers browser warnings.** This is a feature, not a bug — it signals to the developer that trust-chain setup is pending. Do not suppress the warning by disabling TLS.
+- **TLS termination is the operator's responsibility.** The container serves plain HTTP *and disables auth* on 6080 and 3000 unless a cert is mounted at `/etc/ghostdesk/tls/server.{crt,key}`. Deploying either port in that state outside a trusted loopback forward is a deployment vulnerability, not a product one — see [Authentication](#authentication).
 - **Supply-chain trust on the base image.** `:base` is `ubuntu:24.04` + a fixed set of apt packages pinned to distribution repositories. Upstream CVEs in those packages are your responsibility to track (Dependabot + Trivy on your registry, or pull `:base` regularly to pick up base-image rebuilds). Supply-chain provenance is attached to every published image (SLSA provenance + SBOM, verifiable with `cosign verify-attestation`).
 
 ## Contact

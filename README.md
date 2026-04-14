@@ -76,10 +76,9 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 ```yaml
 # docker-compose.yml — 3 specialized agents, one command
 #
-# Secrets are loaded from files on disk (Docker secret convention): create
-# ./secrets/auth_token and ./secrets/vnc_password with high-entropy values
-# before running `docker compose up`. In production, back these with your
-# secret manager of choice (k8s Secrets, AWS Secrets Manager, Vault).
+# Secrets come from a .env file (git-ignored) or your secret manager. On
+# Kubernetes, wire them from a Secret via `valueFrom.secretKeyRef`. See
+# SECURITY.md for the full secret-handling contract.
 services:
   sales-agent:
     image: ghcr.io/yv17labs/ghostdesk:latest
@@ -89,12 +88,10 @@ services:
     ports: ["3001:3000", "6081:6080"]
     volumes:
       - ghostdesk-sales-agent-home:/home/agent
-      - ./secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro
-      - ./secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro
     shm_size: 2g
     environment:
-      - GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token
-      - GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password
+      - GHOSTDESK_AUTH_TOKEN
+      - GHOSTDESK_VNC_PASSWORD
       - TZ=America/New_York
       - LANG=en_US.UTF-8
 
@@ -106,12 +103,10 @@ services:
     ports: ["3002:3000", "6082:6080"]
     volumes:
       - ghostdesk-research-agent-home:/home/agent
-      - ./secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro
-      - ./secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro
     shm_size: 2g
     environment:
-      - GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token
-      - GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password
+      - GHOSTDESK_AUTH_TOKEN
+      - GHOSTDESK_VNC_PASSWORD
       - TZ=America/Toronto
       - LANG=en_CA.UTF-8
 
@@ -123,12 +118,10 @@ services:
     ports: ["3003:3000", "6083:6080"]
     volumes:
       - ghostdesk-accounting-agent-home:/home/agent
-      - ./secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro
-      - ./secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro
     shm_size: 2g
     environment:
-      - GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token
-      - GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password
+      - GHOSTDESK_AUTH_TOKEN
+      - GHOSTDESK_VNC_PASSWORD
       - TZ=Europe/Paris
       - LANG=fr_FR.UTF-8
 
@@ -196,46 +189,42 @@ This approach works with **any application** — web apps, native apps, legacy s
 
 ## Quick start
 
-### 1. Provide the secrets
+### 1. Run the container
 
-GhostDesk refuses to boot without two secrets: an MCP auth token and a VNC
-password. Generate high-entropy values and write them to files — never pass
-them as plain env vars on a shared host.
+GhostDesk refuses to boot without an MCP auth token and a VNC password. For a local spin-up, generate both and pass them inline:
 
 ```bash
-mkdir -p secrets
-openssl rand -hex 32 > secrets/auth_token
-openssl rand -hex 16 > secrets/vnc_password
-chmod 0600 secrets/*
-```
+export GHOSTDESK_AUTH_TOKEN=$(openssl rand -hex 32)
+export GHOSTDESK_VNC_PASSWORD=$(openssl rand -hex 16)
 
-### 2. Run the container
-
-```bash
 docker run -d --name ghostdesk-my-agent \
   --restart unless-stopped \
   --cap-add SYS_ADMIN \
   -p 3000:3000 \
-  -p 5900:5900 \
   -p 6080:6080 \
   -v ghostdesk-my-agent-home:/home/agent \
-  -v "$PWD/secrets/auth_token:/run/secrets/ghostdesk_auth_token:ro" \
-  -v "$PWD/secrets/vnc_password:/run/secrets/ghostdesk_vnc_password:ro" \
   --shm-size 2g \
-  -e GHOSTDESK_AUTH_TOKEN_FILE=/run/secrets/ghostdesk_auth_token \
-  -e GHOSTDESK_VNC_PASSWORD_FILE=/run/secrets/ghostdesk_vnc_password \
+  -e GHOSTDESK_AUTH_TOKEN \
+  -e GHOSTDESK_VNC_PASSWORD \
   -e TZ=UTC \
   -e LANG=en_US.UTF-8 \
   ghcr.io/yv17labs/ghostdesk:latest
+
+echo "MCP token:    $GHOSTDESK_AUTH_TOKEN"
+echo "VNC password: $GHOSTDESK_VNC_PASSWORD"
 ```
 
 Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
 
+> **In production, inject both secrets from your secret manager.** On Kubernetes, use `valueFrom.secretKeyRef`; with Docker / compose, use a `.env` file backed by Docker secrets, Vault, AWS Secrets Manager, etc. See [Security](#security) for the full contract.
+
 > **`--cap-add SYS_ADMIN`** — Required by Electron apps (VS Code, Slack, etc.) and other applications that need Linux user namespaces to run their sandbox. Safe to remove if you don't need them.
+
+> **noVNC front-door authentication is still the operator's job.** The in-container VNC password is defense in depth — production deployments should also sit behind a reverse proxy / identity-aware proxy that terminates TLS and gates access to port 6080. See [Security](#security).
 
 The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
 
-### 3. Connect your AI
+### 2. Connect your AI
 
 GhostDesk works with any MCP-compatible client. Add it to your config:
 
@@ -247,7 +236,7 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
       "type": "http",
       "url": "http://localhost:3000/mcp",
       "headers": {
-        "Authorization": "Bearer <contents of secrets/auth_token>"
+        "Authorization": "Bearer <your GHOSTDESK_AUTH_TOKEN>"
       }
     }
   }
@@ -256,15 +245,15 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
 
 **ChatGPT, Gemini, or any LLM with MCP support** — same config, same bearer token header.
 
-### 4. Watch your agent work
+### 3. Watch your agent work
 
-Open `https://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time. The first visit shows a self-signed certificate warning — accept it once (see [Security](#security) below for why this is the right default and how to replace the cert in production).
+Open `http://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time. In production, terminate TLS on a reverse proxy in front of the container — or mount a cert at `/etc/ghostdesk/tls/server.{crt,key}` to let `websockify` and the MCP server serve HTTPS directly. For a locally-trusted dev cert, use [`mkcert`](https://github.com/FiloSottile/mkcert) (see [Security](#security) → Transport Security → Dev mode). GhostDesk does not generate a self-signed cert on your behalf.
 
 | Service | URL |
 |---------|-----|
 | MCP server | `http://localhost:3000/mcp` (behind a reverse proxy in production — see [Security](#security)) |
-| noVNC (browser) | `https://localhost:6080/vnc.html` |
-| VNC | `vnc://localhost:5900` (username: `agent`, password: contents of `secrets/vnc_password`) |
+| noVNC (browser) | `http://localhost:6080/vnc.html` (username `agent`, password: `$GHOSTDESK_VNC_PASSWORD`) |
+| VNC (loopback only — bound to `127.0.0.1` inside the container) | — |
 
 ---
 
@@ -277,24 +266,32 @@ Open `https://localhost:6080/vnc.html` in your browser to see the virtual deskto
 |------|-------------|
 | `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Pass `grid=True` to overlay a coordinate ruler in margins around the image (absolute screen coordinates, works with `region=` too). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
 
-### Mouse & keyboard
+### Mouse
 | Tool | Description |
 |------|-------------|
 | `mouse_click` | Click at coordinates |
 | `mouse_double_click` | Double-click at coordinates |
 | `mouse_drag` | Drag from one position to another |
 | `mouse_scroll` | Scroll in any direction (up/down/left/right) |
+
+### Keyboard
+| Tool | Description |
+|------|-------------|
 | `key_type` | Type text with realistic per-character delays |
 | `key_press` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
 
-### Apps & system
+### Clipboard
+| Tool | Description |
+|------|-------------|
+| `clipboard_get` | Read clipboard contents |
+| `clipboard_set` | Write to clipboard |
+
+### Apps
 | Tool | Description |
 |------|-------------|
 | `app_list` | List the GUI applications installed on the desktop |
 | `app_launch` | Start a GUI application by name |
 | `app_status` | Check if an application is running and read its logs |
-| `clipboard_get` | Read clipboard contents |
-| `clipboard_set` | Write to clipboard |
 
 ---
 
@@ -335,22 +332,21 @@ Every variable GhostDesk reads is namespaced under `GHOSTDESK_*`. Standard POSIX
 | Variable | Description |
 |----------|-------------|
 | `GHOSTDESK_AUTH_TOKEN` | Bearer token required on every MCP request. Generate with `openssl rand -hex 32`. |
-| `GHOSTDESK_VNC_PASSWORD` | VNC password used by wayvnc (username is `agent` in the prod image). Generate with `openssl rand -hex 16`. |
-| `GHOSTDESK_AUTH_TOKEN_FILE` | Path to a file containing the auth token. Preferred form for Docker secrets / k8s Secrets / Vault — avoids the value ever appearing in `docker inspect` or process env. |
-| `GHOSTDESK_VNC_PASSWORD_FILE` | Same convention for the VNC password. |
+| `GHOSTDESK_VNC_PASSWORD` | Password for wayvnc (username is `agent` in the prod image). Generate with `openssl rand -hex 16`. |
 
-Provide exactly one form (`_FILE` or inline) per secret. Inline is acceptable for local dev only.
+Both are plain environment variables — on Kubernetes wire them from a `Secret` via `valueFrom.secretKeyRef`; on Docker / compose inject them via `environment:` backed by Docker secrets or your secret manager. A front-door reverse proxy / identity-aware proxy in front of port 6080 is still recommended in production (the in-container VNC password is defense in depth) — see [Security](#security).
 
 ### Runtime knobs
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GHOSTDESK_PORT` | `3000` | MCP server listening port |
+| `GHOSTDESK_VNC_ADDRESS` | `127.0.0.1` | Address wayvnc binds on. Default is loopback-only (the VNC port is reachable only via the noVNC bridge on 6080). Set to `0.0.0.0` to expose port 5900 for direct native VNC clients; RSA-AES + `GHOSTDESK_VNC_PASSWORD` then protect the wire end-to-end. See [Security](#security). |
 | `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
 | `GHOSTDESK_SCREEN_HEIGHT` | `1024` | Virtual screen height in pixels |
 | `GHOSTDESK_MODEL_SPACE` | `1000` | LLM coordinate normalisation space (`0` disables, for Claude / GPT-4o native pixels; `1000` for Qwen-VL style normalised space) |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
-| `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`, `fr_CA.UTF-8`) |
+| `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 
 ---
 
@@ -360,16 +356,15 @@ GhostDesk ships hardened by default on the two axes where it is the product's ow
 
 ### What the product guarantees
 
-- **End-to-end TLS on noVNC.** `websockify` serves `https://` and `wss://` only, using a cert at `/etc/ghostdesk/tls/server.{crt,key}`. There is no plain-HTTP fallback.
-- **Self-signed cert auto-generated at first boot** if none is mounted. RSA-2048, SHA-256, 10-year validity, SAN `DNS:localhost, IP:127.0.0.1, IP:::1`. The algorithm and key length meet modern audit baselines — the browser warning is about trust-chain provenance, not cryptographic weakness.
-- **Bring-your-own cert for production.** Mount a real cert at the same path; the boot script detects it and skips generation:
+- **Operator-owned TLS, with an in-container fallback.** By default, `websockify` (port 6080) and the MCP server (port 3000) serve plain HTTP — TLS is expected to be terminated upstream (reverse proxy, cloud LB, devcontainer port forward). If the operator prefers in-container termination instead, mount a cert at `/etc/ghostdesk/tls/server.{crt,key}`; both services detect it at startup and switch to HTTPS / WSS automatically.
   ```yaml
   volumes:
     - /etc/letsencrypt/live/agent.example.com/fullchain.pem:/etc/ghostdesk/tls/server.crt:ro
     - /etc/letsencrypt/live/agent.example.com/privkey.pem:/etc/ghostdesk/tls/server.key:ro
   ```
-- **Mandatory authentication.** The MCP server refuses requests without a valid `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` header. wayvnc runs with `enable_auth=true` and RSA-AES transport encryption on the internal loopback, so even the `websockify → wayvnc` hop is authenticated and encrypted.
-- **Secrets never materialise in the image or env dump.** The `*_FILE` convention means secret values only exist in mounted files, never in `docker inspect`, never in `/proc/*/environ`, never baked into a layer.
+- **wayvnc end-to-end RSA-AES + password auth, loopback by default.** `wayvnc` listens on `127.0.0.1:5900` out of the box and is not reachable from outside the container. Operators who need a native VNC client to connect directly to port 5900 (bypassing the browser / noVNC) can opt in with `GHOSTDESK_VNC_ADDRESS=0.0.0.0` and publish the port. In **both** configurations wayvnc is always configured with `enable_auth=true` + RSA-AES (RFB security type 129): RSA key exchange → AES-128 session encryption → username/password auth inside the encrypted channel — negotiated end-to-end between the VNC client and wayvnc (`websockify` is a transparent bridge, it does not terminate the RFB stream). `GHOSTDESK_VNC_PASSWORD` is mandatory whether the port is loopback or exposed.
+- **Mandatory MCP authentication.** The MCP server refuses requests without a valid `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` header.
+- **Secrets as plain env vars, sourced from your secret store.** Both `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are read from the process environment. On Kubernetes, wire them from a `Secret` via `valueFrom.secretKeyRef` (values never appear in `kubectl describe pod`); on Docker, inject via `environment:` backed by Docker secrets / Vault / AWS Secrets Manager. The container never bakes a secret into an image layer.
 
 ### What is explicitly *not* in scope
 
@@ -378,6 +373,7 @@ These belong to the operator's deployment topology, not to the container:
 - **Rate limiting & brute-force protection** → reverse proxy (Traefik middleware, nginx `limit_req`, Cloudflare).
 - **SSO / OIDC / MFA** → identity-aware proxy (oauth2-proxy, Cloudflare Access, Tailscale, Pomerium).
 - **WAF / IP allow-listing** → edge.
+- **Per-user identity / SSO on noVNC (port 6080)** → reverse proxy with OAuth2-proxy, Cloudflare Access, Tailscale ACLs, Pomerium, devcontainer port forward, etc. The in-container VNC password is a single shared credential — for per-user audit trail and revocation, gate port 6080 with an identity-aware proxy. See [SECURITY.md](SECURITY.md#the-novnc-deployment-contract).
 - **Session recording & audit trail** → proxy access logs + wayvnc stderr shipped to your log collector.
 - **Cert rotation & CA trust** → your PKI / cert-manager / Let's Encrypt automation.
 
