@@ -7,10 +7,10 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
 Major platform overhaul: migration from X11 / Openbox to a native Wayland / Sway stack, end-to-end TLS, split Docker images, and a simplified agent-first documentation story.
 
 ### Added
-- **Native Wayland stack.** Migrated the devcontainer and runtime to a Wayland / Sway session running under s6-overlay. `wl-copy` / `wl-paste` replace the X11 clipboard path, and `grim` replaces the X11 capture tool.
+- **Native Wayland stack.** Migrated the devcontainer and runtime to a Wayland / Sway session managed by supervisord. `wl-copy` / `wl-paste` replace the X11 clipboard path, and `grim` replaces the X11 capture tool.
 - **wayvnc from pinned source.** `wayvnc` / `neatvnc` / `aml` are now built from a pinned `master` commit inside a dedicated `vnc-builder` Docker stage so classic VNC Auth (RFB security type 2) can be advertised — required for noVNC 1.6 interop. See `docker/base/Dockerfile`.
 - **End-to-end TLS.** `websockify` and the MCP server auto-detect a mounted certificate at `/etc/ghostdesk/tls/server.{crt,key}` (or via `GHOSTDESK_TLS_CERT` / `GHOSTDESK_TLS_KEY`) and switch to `wss://` / `https://` at boot.
-- **supervisord → s6-overlay split image.** The runtime process manager moved to supervisord with TLS enforced end-to-end; the devcontainer uses an s6-overlay Wayland/Sway stack.
+- **Unified supervisord stack.** Both the runtime and devcontainer images use supervisord as the process manager, with TLS enforced end-to-end.
 - **arm64 base image.** The base image now builds cleanly on arm64 from a clean checkout.
 - **Dialog handling** in the agent click loop (`SYSTEM_PROMPT.md`).
 - **mkcert quickstart** for local HTTPS in the README.
