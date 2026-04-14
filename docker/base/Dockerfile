@@ -5,6 +5,8 @@
 ARG UBUNTU_VERSION=24.04
 ARG UV_VERSION=0.11
 
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 # ---- Stage 1: builder — Python venv with full build toolchain ----
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 
@@ -16,9 +18,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         python3 python3-dev \
         libwayland-dev pkg-config \
+        build-essential \
         ca-certificates
 
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 
 WORKDIR /opt/ghostdesk
 # hatchling reads README.md at wheel-build time but its content is
