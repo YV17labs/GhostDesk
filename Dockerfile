@@ -1,10 +1,8 @@
 # syntax=docker/dockerfile:1.7
-#
-# ghostdesk:latest — opinionated distribution image on top of :base.
-# Adds Firefox and a small set of Wayland-native GUI apps (foot terminal,
-# mousepad text editor, galculator — all GTK-on-Wayland, no XWayland in
-# the path), colour emoji fonts, and passwordless sudo for `agent`. See
-# SECURITY.md for the sudo NOPASSWD threat model and how to disable it.
+# ghostdesk:latest — distribution image on top of :base.
+# Adds Firefox + Wayland-native GUI apps (foot, mousepad, galculator),
+# colour emoji fonts, and passwordless sudo for `agent`. See SECURITY.md
+# for the sudo NOPASSWD threat model.
 
 FROM ghcr.io/yv17labs/ghostdesk:base
 
@@ -13,6 +11,8 @@ ARG GHOSTDESK_GIT_SHA=unknown
 
 USER root
 
+# Firefox must come from packages.mozilla.org — Ubuntu's `firefox` package
+# is a snap wrapper that does not work in containers.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     set -eux; \
@@ -25,9 +25,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         fonts-noto-color-emoji; \
     echo "agent ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/agent; \
     chmod 0440 /etc/sudoers.d/agent; \
-    \
-    # Firefox must come from packages.mozilla.org — Ubuntu's `firefox`
-    # package is a snap wrapper that doesn't work in containers.
     apt-get install -y --no-install-recommends curl; \
     install -d -m 0755 /etc/apt/keyrings; \
     curl -fsSL https://packages.mozilla.org/apt/repo-signing-key.gpg \

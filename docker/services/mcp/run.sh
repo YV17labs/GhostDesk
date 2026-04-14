@@ -1,21 +1,14 @@
 #!/bin/sh
-# GhostDesk MCP server wrapper (supervisord [program:mcp-server]).
-#
-# supervisord's priority= ordering guarantees sway is *started* before
-# mcp-server, but not that its IPC socket is ready. The sway socket name
-# embeds sway's PID (`sway-ipc.$UID.$PID.sock`), so we must discover it via
-# glob and export SWAYSOCK before exec'ing the server — otherwise the
-# first `swaymsg -t get_tree` call from the screen/windows tool would race
-# and fail.
-#
-# supervisord runs this as $GHOSTDESK_USER (user=%(ENV_GHOSTDESK_USER)s in
-# supervisord.conf), so we do NOT wrap in runuser.
+# MCP server wrapper. sway's IPC socket name embeds sway's PID
+# (`sway-ipc.$UID.$PID.sock`), so we discover it via glob and export
+# SWAYSOCK before exec'ing the binary. Without this, the first
+# `swaymsg -t get_tree` call would race sway startup.
+# Runs as $GHOSTDESK_USER via supervisord's user=, so no runuser.
 set -eu
 
 BIN="${GHOSTDESK_DIR}/.venv/bin/ghostdesk"
 if [ ! -x "${BIN}" ]; then
     echo "mcp-server: ${BIN} not found or not executable" >&2
-    echo "mcp-server: init.d/05-uv-sync.sh should have created the venv" >&2
     exit 1
 fi
 

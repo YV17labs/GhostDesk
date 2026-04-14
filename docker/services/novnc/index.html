@@ -1,0 +1,235 @@
+<!doctype html>
+<!--
+    GhostDesk noVNC launcher — replaces the upstream noVNC index.html
+    (which was a symlink to vnc.html) with a branded landing page that
+    hands off to vnc.html?autoconnect=1&… so the operator lands on the
+    session with zero extra clicks.
+
+    Everything here is served statically by websockify out of
+    /usr/share/novnc. No JS dependencies — vanilla DOM + a <link> to the
+    noVNC vendor bundle is intentionally NOT loaded; this page is pure
+    launcher.
+
+    Colors come from the ghost logo / wallpaper palette:
+      --gd-bg       #1A1B2E   deep navy
+      --gd-ink      #E8E6FF   lavender ink
+      --gd-accent   #7B6FDE   purple
+      --gd-term     #5DCAA5   terminal green
+      --gd-screen   #0D0E1A   monitor black
+
+    The launcher params are the ones that matter for an LLM-agent desktop:
+    autoconnect, resize=remote (lets the server resize to the browser
+    viewport), reconnect (the session will ride through network blips),
+    show_dot (fallback cursor when no hardware cursor is reported).
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <meta name="color-scheme" content="dark">
+    <title>GhostDesk</title>
+    <link rel="icon" type="image/svg+xml" href="app/images/ghostdesk-logo.svg">
+    <style>
+        :root {
+            --gd-bg: #1A1B2E;
+            --gd-ink: #E8E6FF;
+            --gd-accent: #7B6FDE;
+            --gd-term: #5DCAA5;
+            --gd-screen: #0D0E1A;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background: var(--gd-bg);
+            color: var(--gd-ink);
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+                         "Segoe UI", Roboto, sans-serif;
+            font-weight: 400;
+            -webkit-font-smoothing: antialiased;
+            overflow: hidden;
+        }
+
+        /* Subtle radial glow behind the logo — same navy palette, just
+           lifts the center of the viewport a hair above the flat bg. */
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(
+                ellipse at center,
+                rgba(123, 111, 222, 0.08) 0%,
+                rgba(26, 27, 46, 0) 60%
+            );
+            pointer-events: none;
+        }
+
+        main {
+            position: relative;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            gap: 2.5rem;
+        }
+
+        .brand {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.25rem;
+        }
+
+        .brand img {
+            width: 140px;
+            height: 140px;
+            display: block;
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 2.75rem;
+            font-weight: 500;
+            letter-spacing: 0.06em;
+            color: var(--gd-ink);
+        }
+
+        .brand .tagline {
+            margin: 0;
+            font-size: 0.75rem;
+            font-weight: 400;
+            letter-spacing: 0.25em;
+            text-transform: uppercase;
+            color: var(--gd-accent);
+            opacity: 0.85;
+        }
+
+        .connect {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.95rem 2.25rem;
+            border: 1px solid var(--gd-accent);
+            border-radius: 999px;
+            background: var(--gd-accent);
+            color: var(--gd-ink);
+            font-size: 1rem;
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            text-decoration: none;
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.2s ease,
+                        background 0.2s ease;
+            box-shadow: 0 10px 30px -12px rgba(123, 111, 222, 0.55);
+        }
+        .connect:hover {
+            transform: translateY(-1px);
+            background: #8A7FEA;
+            box-shadow: 0 14px 36px -12px rgba(123, 111, 222, 0.7);
+        }
+        .connect:active { transform: translateY(0); }
+        .connect .arrow {
+            display: inline-block;
+            transition: transform 0.2s ease;
+        }
+        .connect:hover .arrow { transform: translateX(3px); }
+
+        /* Status strip under the button. Pulses terminal-green while the
+           page is mounted so the operator can tell the launcher is live
+           even if they stare at it for a second before clicking. */
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            font-size: 0.75rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--gd-ink);
+            opacity: 0.55;
+            font-feature-settings: "tnum";
+        }
+        .status .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--gd-term);
+            box-shadow: 0 0 0 0 rgba(93, 202, 165, 0.6);
+            animation: pulse 2s ease-out infinite;
+        }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(93, 202, 165, 0.45); }
+            70%  { box-shadow: 0 0 0 10px rgba(93, 202, 165, 0);  }
+            100% { box-shadow: 0 0 0 0 rgba(93, 202, 165, 0);     }
+        }
+
+        footer {
+            position: fixed;
+            bottom: 1.25rem;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 0.7rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--gd-ink);
+            opacity: 0.35;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div class="brand">
+            <img src="app/images/ghostdesk-logo.svg" alt="GhostDesk">
+            <h1>GhostDesk</h1>
+            <p class="tagline">Virtual Desktop Control</p>
+        </div>
+
+        <a id="connect" class="connect" href="#">
+            Enter desktop
+            <span class="arrow">→</span>
+        </a>
+
+        <div class="status">
+            <span class="dot" aria-hidden="true"></span>
+            <span>Launcher ready</span>
+        </div>
+    </main>
+    <footer>YV17</footer>
+
+    <script>
+        // Build the vnc.html URL with the params that matter for the
+        // agent-desktop UX. Any additional params passed to index.html
+        // via ?foo=bar are forwarded, so operators can still override
+        // things like scale, quality, or compression from the outside.
+        //
+        // `?auto=1` on THIS page short-circuits the button and jumps
+        // straight to vnc.html — useful for embedding in an iframe or
+        // for headless automated checks where no human ever clicks.
+        (function () {
+            const defaults = {
+                autoconnect: "1",
+                resize: "remote",
+                reconnect: "1",
+                reconnect_delay: "2000",
+                show_dot: "1",
+            };
+            const incoming = new URLSearchParams(window.location.search);
+            const auto = incoming.get("auto") === "1";
+            incoming.delete("auto");
+
+            const out = new URLSearchParams();
+            for (const [k, v] of Object.entries(defaults)) out.set(k, v);
+            for (const [k, v] of incoming.entries()) out.set(k, v);
+
+            const target = "vnc.html?" + out.toString();
+            document.getElementById("connect").href = target;
+            if (auto) window.location.replace(target);
+        })();
+    </script>
+</body>
+</html>
