@@ -8,7 +8,7 @@
   "portsAttributes": {
     "3000": { "label": "ghostdesk MCP (HTTP)" },
     "5900": { "label": "wayvnc (VNC)" },
-    "6080": { "label": "noVNC (Web desktop, https://)", "protocol": "https" }
+    "6080": { "label": "noVNC (Web desktop)" }
   },
   "customizations": {
     "vscode": {
