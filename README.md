@@ -66,7 +66,7 @@ This approach works with **any application** — web apps, native apps, legacy s
 
 ### 1. Run the container
 
-GhostDesk couples **TLS and auth**: mount a cert and you get `wss://` + bearer-token + VeNCrypt; mount nothing and every gate is disarmed on purpose (see [Security](#security) → *Auth ≡ TLS*). Even on localhost, the right procedure is to run the encrypted path end-to-end — [`mkcert`](https://github.com/FiloSottile/mkcert) issues a browser-trusted cert for `localhost` in two commands:
+GhostDesk couples **TLS and auth**: mount a cert and you get `wss://` + bearer-token on MCP + a single-password prompt on noVNC; mount nothing and every gate is disarmed on purpose (see [Security](#security) → *Auth ≡ TLS*). Even on localhost, the right procedure is to run the encrypted path end-to-end — [`mkcert`](https://github.com/FiloSottile/mkcert) issues a browser-trusted cert for `localhost` in two commands:
 
 ```bash
 # Issue a locally-trusted cert (first time only — installs a local CA in your trust store)
@@ -204,7 +204,7 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 #     localhost 127.0.0.1 ::1
 #
 # Mounting the cert flips GhostDesk into its prod posture: wss:// on both
-# ports, bearer-token on MCP, VeNCrypt user/password on noVNC. See the
+# ports, bearer-token on MCP, single-password prompt on noVNC. See the
 # Security section of this README for the Auth ≡ TLS rationale.
 
 x-ghostdesk-base: &ghostdesk-base

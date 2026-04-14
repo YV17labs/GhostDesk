@@ -1,0 +1,70 @@
+wayvnc master src/main.c — bridge on_auth to the async neatvnc API.
+
+neatvnc commit 96651c9787 (2026-03-07) changed the auth callback from a
+synchronous `bool (*)(creds, ud)` to an asynchronous
+`void (*)(future, creds, ud)` that must resolve the future by calling
+nvnc_auth_accept / nvnc_auth_reject. wayvnc master (as of SHA
+854edbbde0673b22386086dc98d1c89bee86966e) still uses the old sync
+signature, so neatvnc's SecurityResult is never sent and the RFB
+handshake hangs after the client delivers its credentials.
+
+This patch rewrites on_auth to take nvnc_auth_future* and dispatches
+the result via the accept/reject helpers, keeping the existing
+credential-verification logic intact. Drop this patch once upstream
+wayvnc catches up with the new neatvnc API.
+--- a/src/main.c
++++ b/src/main.c
+@@ -705,37 +705,37 @@
+ 	return wlr_output_manager_resize_output(output, width, height);
+ }
+
+-bool on_auth(const struct nvnc_auth_creds* credentials, void* ud)
++void on_auth(struct nvnc_auth_future* future,
++		const struct nvnc_auth_creds* credentials, void* ud)
+ {
+ 	struct wayvnc* self = ud;
++	bool authenticated = false;
+
+ 	const char* username = nvnc_auth_creds_get_username(credentials);
+ 	const char* password = nvnc_auth_creds_get_password(credentials);
+
+ 	const char* cfg_username = self->cfg.username ? self->cfg.username : "";
+ 	const char* cfg_password = self->cfg.password ? self->cfg.password : "";
+
+ #ifdef ENABLE_PAM
+ 	if (self->cfg.enable_pam) {
+-		if (!username || !password)
+-			return false;
+-		return pam_auth(username, password);
+-	}
++		if (username && password)
++			authenticated = pam_auth(username, password);
++	} else
+ #endif
++	if (!password) {
++		authenticated = nvnc_auth_creds_verify(credentials, cfg_password);
++	} else if (username &&
++			strcmp(username, cfg_username) == 0 &&
++			strcmp(password, cfg_password) == 0) {
++		authenticated = true;
++	}
+
+-	if (!password)
+-		return nvnc_auth_creds_verify(credentials, cfg_password);
+-
+-	if (!username)
+-		return false;
+-
+-	if (strcmp(username, cfg_username) != 0)
+-		return false;
+-
+-	if (strcmp(password, cfg_password) != 0)
+-		return false;
+-	return true;
++	if (authenticated)
++		nvnc_auth_accept(future);
++	else
++		nvnc_auth_reject(future, "Authentication failed");
+ }
+
+ static struct nvnc_frame* create_placeholder_buffer(uint16_t width, uint16_t height)

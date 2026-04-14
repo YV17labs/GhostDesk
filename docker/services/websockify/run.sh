@@ -1,8 +1,7 @@
 #!/bin/sh
-# websockify wrapper. TLS is opt-in: with a cert+key mounted at
-# /etc/ghostdesk/tls/server.{crt,key} we serve wss:// (--ssl-only),
-# otherwise plain ws/http and TLS is expected upstream.
-# For local dev with a browser-trusted cert, see SECURITY.md (mkcert).
+# websockify wrapper. With a cert+key mounted, serve wss:// (--ssl-only).
+# Auth lives one hop down, in wayvnc itself (RFB security type 2 under
+# allow_broken_crypto). Without a cert: plain ws/http, no auth.
 set -eu
 
 TLS_CRT="${GHOSTDESK_TLS_CERT:-/etc/ghostdesk/tls/server.crt}"

@@ -31,7 +31,56 @@ COPY src/ ./src/
 RUN echo 'See https://github.com/yv17labs/ghostdesk' > README.md \
     && uv sync --frozen --no-dev --compile-bytecode --no-editable
 
-# ---- Stage 2: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
+# ---- Stage 2: vnc-builder — wayvnc + neatvnc + aml from pinned SHAs ----
+# Ubuntu 24.04 ships wayvnc 0.7.2, which does not advertise RFB security
+# type 2 (classic VNC Auth) to its clients. wayvnc added opt-in DES auth
+# in commit 1497397fc4 (2026-04-06); neatvnc in 6109e61b04 (2026-03-08).
+# Until these land in a tagged release, we build from pinned master SHAs.
+# Replace with a tag once wayvnc ships one that contains 1497397fc4.
+FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
+
+ARG WAYVNC_SHA=854edbbde0673b22386086dc98d1c89bee86966e
+ARG NEATVNC_SHA=8a161c26a45706b950023df8bd8b29048e37c210
+ARG AML_SHA=ce4b82d5888a87110054b95414bd3068224d2b91
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates git patch \
+        meson ninja-build pkg-config gcc \
+        libdrm-dev libxkbcommon-dev libwayland-dev \
+        libjansson-dev libpam0g-dev libgnutls28-dev \
+        libavfilter-dev libavcodec-dev libavutil-dev libturbojpeg0-dev \
+        libpixman-1-dev nettle-dev libgmp-dev \
+        zlib1g-dev scdoc
+
+WORKDIR /src
+COPY docker/base/patches/ /patches/
+RUN git clone https://github.com/any1/aml.git \
+    && git -C aml checkout ${AML_SHA} \
+    && git clone https://github.com/any1/neatvnc.git \
+    && git -C neatvnc checkout ${NEATVNC_SHA} \
+    && mkdir neatvnc/subprojects \
+    && ln -s ../../aml neatvnc/subprojects/aml \
+    && git clone https://github.com/any1/wayvnc.git \
+    && git -C wayvnc checkout ${WAYVNC_SHA} \
+    && mkdir wayvnc/subprojects \
+    && ln -s ../../neatvnc wayvnc/subprojects/neatvnc \
+    && ln -s ../../aml wayvnc/subprojects/aml \
+    # Drop Apple Diffie-Hellman (RFB security type 30) from the list
+    # neatvnc advertises so noVNC 1.6 falls through to classic VNC Auth
+    # (type 2). See neatvnc/src/server.c `init_security_types`.
+    && sed -i '/ADD_SECURITY_TYPE(RFB_SECURITY_TYPE_APPLE_DH)/d' \
+        neatvnc/src/server.c \
+    # Bridge wayvnc's on_auth to the async neatvnc API; wayvnc master is
+    # still on the sync signature and would hang the RFB handshake after
+    # auth. See the patch header for the full rationale.
+    && patch -p1 -d wayvnc < /patches/wayvnc-async-auth.patch \
+    && meson setup wayvnc/build wayvnc --prefix=/usr -Dbuildtype=release \
+    && ninja -C wayvnc/build \
+    && DESTDIR=/out ninja -C wayvnc/build install
+
+# ---- Stage 3: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
 # Isolated so the runtime image stays free of curl and build tooling.
 FROM ubuntu:${UBUNTU_VERSION} AS novnc
 ARG NOVNC_VERSION=1.6.0
@@ -46,7 +95,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY docker/services/novnc/index.html /opt/novnc/index.html
 COPY assets/logo-mark.svg              /opt/novnc/app/images/ghostdesk-logo.svg
 
-# ---- Stage 3: runtime — Wayland stack + supervisord + hardened venv ----
+# ---- Stage 4: runtime — Wayland stack + supervisord + hardened venv ----
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
 ARG TARGETARCH
@@ -69,13 +118,23 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         grim wl-clipboard \
         libwayland-client0 libxkbcommon0 \
         dbus dbus-user-session libglib2.0-bin \
-        wayvnc websockify \
+        websockify \
         supervisor \
         python3 \
         fonts-dejavu \
         tzdata locales xdg-user-dirs \
         ca-certificates \
+        libdrm2 libjansson4 libpam0g libgnutls30 \
+        libavfilter9 libavcodec60 libavutil58 libturbojpeg \
+        libpixman-1-0 libnettle8 libgmp10 zlib1g \
     && locale-gen en_US.UTF-8 C.UTF-8
+
+# wayvnc (+ wayvncctl + libneatvnc + libaml shared libs) built from
+# pinned master SHA — see vnc-builder stage. Master offers RFB type 2
+# under allow_broken_crypto; the apt wayvnc 0.7.2 does not.
+COPY --from=vnc-builder /out/usr/bin /usr/bin
+COPY --from=vnc-builder /out/usr/lib /usr/lib
+RUN ldconfig
 
 COPY --from=novnc /opt/novnc /usr/share/novnc
 
