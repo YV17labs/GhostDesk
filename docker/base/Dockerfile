@@ -1,14 +1,11 @@
 # syntax=docker/dockerfile:1.7
-#
 # ghostdesk:base — headless Wayland desktop for a single LLM agent.
 # See SECURITY.md for threat model, auth requirements, and rotation.
 
 ARG UBUNTU_VERSION=24.04
 ARG UV_VERSION=0.11
 
-# ============================================================================
-# Stage 1 — builder: compile the Python venv with full build toolchain.
-# ============================================================================
+# ---- Stage 1: builder — Python venv with full build toolchain ----
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -24,18 +21,29 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /usr/local/bin/uv
 
 WORKDIR /opt/ghostdesk
-# README.md is read by hatchling at wheel-build time (pyproject.toml's
-# `readme = "README.md"`), but its content is irrelevant to the build.
-# Stubbing it here instead of COPYing the real file keeps the expensive
-# `uv sync` layer cache-stable across doc edits.
+# hatchling reads README.md at wheel-build time but its content is
+# irrelevant. Stubbing keeps the `uv sync` layer cache-stable across doc edits.
 COPY pyproject.toml uv.lock ./
 COPY src/ ./src/
 RUN echo 'See https://github.com/yv17labs/ghostdesk' > README.md \
     && uv sync --frozen --no-dev --compile-bytecode --no-editable
 
-# ============================================================================
-# Stage 2 — runtime: minimal Wayland stack + supervisord + hardened venv.
-# ============================================================================
+# ---- Stage 2: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
+# Isolated so the runtime image stays free of curl and build tooling.
+FROM ubuntu:${UBUNTU_VERSION} AS novnc
+ARG NOVNC_VERSION=1.6.0
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl \
+    && curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+        | tar -xz -C /tmp \
+    && mv "/tmp/noVNC-${NOVNC_VERSION}" /opt/novnc
+
+# Override upstream's index.html (a symlink to vnc.html) with a branded
+# landing page that auto-forwards with the right query params.
+COPY docker/services/novnc/index.html /opt/novnc/index.html
+COPY assets/logo-mark.svg              /opt/novnc/app/images/ghostdesk-logo.svg
+
+# ---- Stage 3: runtime — Wayland stack + supervisord + hardened venv ----
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
 ARG TARGETARCH
@@ -49,10 +57,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     GHOSTDESK_DIR=/opt/ghostdesk \
     PATH=/opt/ghostdesk/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# python3 is runtime-only — NO python3-dev, NO compilers. TZ and LANG are
-# applied at boot by docker/entrypoint.sh, so only the en_US / C fallbacks
-# are pre-generated here. `supervisor` is the PID-1 process supervisor; see
-# docker/supervisord.conf for the service graph.
+# Runtime-only python3 (no -dev, no compilers). TZ/LANG are re-applied at
+# boot by entrypoint.sh, so only en_US/C fallbacks are pre-generated.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
@@ -60,7 +66,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         grim wl-clipboard \
         libwayland-client0 libxkbcommon0 \
         dbus dbus-user-session libglib2.0-bin \
-        wayvnc novnc websockify \
+        wayvnc websockify \
         supervisor \
         python3 \
         fonts-dejavu \
@@ -68,40 +74,32 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         ca-certificates \
     && locale-gen en_US.UTF-8 C.UTF-8
 
+COPY --from=novnc /opt/novnc /usr/share/novnc
+
 # ubuntu:24.04 ships a default `ubuntu` user at UID 1000 — remove it
-# before claiming the UID for `agent` (the prod runtime identity).
+# before claiming the UID for `agent`.
 RUN userdel -r ubuntu 2>/dev/null || true \
     && groupadd -g 1000 agent \
     && useradd -m -u 1000 -g agent -s /bin/bash agent
 
-# supervisord drives the service graph defined in docker/supervisord.conf.
-# entrypoint.sh is PID 1 — it sets up env, runtime dir, locales, sway &
-# wayvnc config, resolves *_FILE secrets, then execs supervisord (no CMD
-# → autostart mode; see the `$# -eq 0` branch in entrypoint.sh).
-COPY docker/supervisord.conf    /etc/supervisord.conf
-COPY docker/entrypoint.sh       /usr/local/bin/entrypoint
-COPY docker/mcp-run.sh          /usr/local/bin/mcp-run
-COPY docker/health              /usr/local/bin/health
-COPY docker/sway.config         /etc/ghostdesk/sway.config
-RUN chmod +x /usr/local/bin/entrypoint \
-             /usr/local/bin/mcp-run \
-             /usr/local/bin/health
-
-COPY docker/profile/sway-env.sh /etc/profile.d/sway-env.sh
-RUN chmod 0644 /etc/profile.d/sway-env.sh
+COPY docker/supervisor/supervisord.conf /etc/supervisord.conf
+COPY docker/supervisor/conf.d/          /etc/supervisor/conf.d/
+COPY docker/services/sway/config        /etc/ghostdesk/sway.config
+COPY --chmod=0755 docker/init/entrypoint.sh         /usr/local/bin/entrypoint
+COPY --chmod=0755 docker/init/healthcheck.sh        /usr/local/bin/health
+COPY --chmod=0755 docker/services/mcp/run.sh        /usr/local/bin/mcp-run
+COPY --chmod=0755 docker/services/mako/run.sh       /usr/local/bin/mako-run
+COPY --chmod=0755 docker/services/websockify/run.sh /usr/local/bin/websockify-run
+COPY --chmod=0644 docker/shell/sway-env.sh          /etc/profile.d/sway-env.sh
 
 RUN install -d -m 0755 /usr/share/ghostdesk
-COPY assets/wallpaper_1280x1024.png /usr/share/ghostdesk/wallpaper.png
+COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
 
 RUN install -d -o agent -g agent /opt/ghostdesk
 COPY --from=builder /opt/ghostdesk/.venv /opt/ghostdesk/.venv
 
-# Harden the venv:
-#   1. `compileall -b` produces PEP 3147 sourceless .pyc files next to
-#      the .py (not in __pycache__/cpython-XY.pyc).
-#   2. Delete all .py and __pycache__ — only the flat .pyc remain.
-#   3. chown root:root + 0555/0444: `agent` can import and execute,
-#      nothing running as `agent` can modify the code.
+# Harden the venv: sourceless .pyc, root-owned, 0555/0444. `agent` can
+# import and execute, nothing running as `agent` can modify the code.
 # See SECURITY.md for rationale.
 RUN python3 -m compileall -qb /opt/ghostdesk/.venv \
     && find /opt/ghostdesk/.venv -type f -name '*.py' -delete \

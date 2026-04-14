@@ -1,4 +1,8 @@
-# wlroots creates a virtual HEADLESS-1 output because WLR_HEADLESS_OUTPUTS=1
+# Pure Wayland stack — no Xwayland. Avoids its attack surface and the
+# noisy startup error when the Xwayland binary is absent.
+xwayland disable
+
+# Single virtual output (WLR_HEADLESS_OUTPUTS=1).
 output HEADLESS-1 resolution 1280x1024 position 0,0
 output HEADLESS-1 bg /usr/share/ghostdesk/wallpaper.png fill #1a1b2e
 
@@ -8,9 +12,16 @@ default_floating_border none
 gaps inner 0
 gaps outer 0
 
-# ---------- Status bar ----------
-# Minimal bar at the bottom — date/time only, no workspaces (we run a
-# single fixed workspace). Colours match the ghostdesk wallpaper.
+# Tabbed layout gives the agent a predictable, taskbar-like surface: every
+# running app is a tab in the top header, no tiling or z-order to track.
+workspace_layout tabbed
+
+#                       border   background  text     indicator  child_border
+client.focused          #7b68ee  #7b68ee     #ffffff  #7b68ee    #7b68ee
+client.focused_inactive #1a1b2e  #1a1b2e     #8879d9  #1a1b2e    #1a1b2e
+client.unfocused        #1a1b2e  #1a1b2e     #8879d9  #1a1b2e    #1a1b2e
+client.urgent           #ff5c8a  #ff5c8a     #ffffff  #ff5c8a    #ff5c8a
+
 bar {
     position bottom
     status_command while date +'%Y-%m-%d  %H:%M'; do sleep 30; done
