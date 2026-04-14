@@ -1,9 +1,9 @@
 [project]
 name = "ghostdesk"
-version = "7.0.0"
+version = "7.0.0.dev0"
 description = "MCP server to control a virtual Linux desktop from an LLM agent"
 readme = "README.md"
-license = "AGPL-3.0-only"
+license = { file = "LICENSE" }
 requires-python = ">=3.12"
 authors = [
     { name = "Yoann Vanitou", email = "yvanitou@gmail.com" },
