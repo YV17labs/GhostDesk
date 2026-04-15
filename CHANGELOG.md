@@ -16,6 +16,7 @@ Major platform overhaul: migration from X11 / Openbox to a native Wayland / Sway
 - **mkcert quickstart** for local HTTPS in the README.
 
 ### Changed
+- **License:** AGPL-3.0 with Commons Clause → **[Functional Source License 1.1, ALv2 Future License](https://fsl.software/) (FSL-1.1-ALv2)**. The new license is cleaner and less ambiguous than the previous pairing: permitted purposes explicitly cover internal commercial use, non-commercial research/education, and professional services, while prohibiting Competing Use (reselling GhostDesk or offering it as a managed service). Each released version transitions automatically to Apache 2.0 on its second anniversary. File headers, PyPI classifier, OCI image labels, README, and CONTRIBUTING updated accordingly. Licensor: Yoann Vanitou.
 - **Environment variables namespaced under `GHOSTDESK_*`.** All Python runtime vars now live under a single namespace (`GHOSTDESK_PORT`, `GHOSTDESK_SCREEN_WIDTH`, `GHOSTDESK_MODEL_SPACE`, …). Standard POSIX vars (`TZ`, `LANG`) are kept as-is.
 - **Input stack.** Replaced `dotool` with direct Wayland virtual-pointer / virtual-keyboard protocols.
 - **Coordinate normalisation.** Middleware now normalises coordinates between model space and pixels (`GHOSTDESK_MODEL_SPACE=0` for frontier models, `1000` for Qwen-family models).
