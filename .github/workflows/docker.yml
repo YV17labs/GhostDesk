@@ -52,7 +52,7 @@ jobs:
             org.opencontainers.image.description=MCP server to control a virtual Linux desktop from an LLM agent
             org.opencontainers.image.authors=Yoann Vanitou <yvanitou@gmail.com>
             org.opencontainers.image.vendor=YV17
-            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.licenses=LicenseRef-FSL-1.1-ALv2
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -111,7 +111,7 @@ jobs:
             org.opencontainers.image.description=MCP server to control a virtual Linux desktop from an LLM agent
             org.opencontainers.image.authors=Yoann Vanitou <yvanitou@gmail.com>
             org.opencontainers.image.vendor=YV17
-            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.licenses=LicenseRef-FSL-1.1-ALv2
 
       - name: Build and push
         uses: docker/build-push-action@v6

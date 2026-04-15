@@ -132,6 +132,6 @@ Check existing issues and discussions, or open a new one.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the same AGPL-3.0 with Commons Clause as the project. See [LICENSE](LICENSE) for details.
+By contributing, you agree that your contributions will be licensed under the same [Functional Source License 1.1 (FSL-1.1-ALv2)](https://fsl.software/) as the project. See [LICENSE](LICENSE) for details.
 
 Thank you for contributing to GhostDesk!

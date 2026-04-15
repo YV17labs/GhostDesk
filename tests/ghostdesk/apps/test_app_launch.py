@@ -1,4 +1,4 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
 """Tests for ghostdesk.apps.app_launch — GUI launcher with process tracking."""
 
 import asyncio

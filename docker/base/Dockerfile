@@ -174,7 +174,7 @@ RUN python3 -m compileall -qb /opt/ghostdesk/.venv \
 LABEL org.opencontainers.image.title="ghostdesk" \
       org.opencontainers.image.description="MCP server controlling a headless Wayland desktop for LLM agents" \
       org.opencontainers.image.source="https://github.com/yv17labs/ghostdesk" \
-      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.licenses="LicenseRef-FSL-1.1-ALv2" \
       org.opencontainers.image.version="${GHOSTDESK_VERSION}" \
       org.opencontainers.image.revision="${GHOSTDESK_GIT_SHA}" \
       org.opencontainers.image.vendor="YV17" \

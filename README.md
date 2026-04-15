@@ -5,7 +5,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
   <img src="https://img.shields.io/badge/python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12+">
-  <img src="https://img.shields.io/badge/license-AGPL--3.0-green?style=for-the-badge" alt="AGPL-3.0 License">
+  <img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge" alt="FSL-1.1-ALv2 License">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Docker-orange?style=for-the-badge&logo=docker&logoColor=white" alt="Platform">
 </p>
 
@@ -469,11 +469,12 @@ See the project's [Dockerfile](Dockerfile) for a complete example.
 
 ## License
 
-**AGPL-3.0 with Commons Clause** — see [LICENSE](LICENSE) for the authoritative terms.
+**[Functional Source License, Version 1.1, ALv2 Future License](https://fsl.software/) (FSL-1.1-ALv2)** — see [LICENSE](LICENSE) for the authoritative terms.
 
-**What this means in practice** *(informal summary — not legal advice; the LICENSE file governs)*:
+**What this means in practice** *(informal summary — the LICENSE file governs; this is not legal advice)*:
 
-- The **AGPL-3.0** side means any modifications you make and run as a network service must be shared under the same license. Self-hosting and modifying GhostDesk for your own use is fine; making those modifications available over a network to users generally triggers the source-disclosure obligation.
-- The **Commons Clause** side restricts commercial resale: you cannot sell GhostDesk itself, or sell a product whose value derives substantially from GhostDesk, without a separate agreement.
+- **Permitted purposes** cover the use cases that matter for the vast majority of users: internal use and access inside your company, non-commercial education and research, and professional services you provide to a licensee who is using GhostDesk in accordance with the license. Self-hosting GhostDesk to run your own agents — even commercial, revenue-generating workflows that power *your* product — is a permitted internal use.
+- **Competing Use is prohibited.** You may not make GhostDesk available to others in a commercial product or service that substitutes for GhostDesk, substitutes for any product or service the project offers using GhostDesk, or provides the same or substantially similar functionality. In short: you cannot take GhostDesk and rebrand it, host it as a paid service, or build a competing desktop-automation-for-agents product from it.
+- **Apache 2.0 in two years.** Each released version of GhostDesk becomes available under the Apache License 2.0 on the second anniversary of its release, automatically and irrevocably. The Competing Use restriction only applies for those first two years.
 
-**Commercial use** (resale, paid SaaS built on GhostDesk, rebranded hosting, etc.) requires written permission from the project owner. If you're unsure whether your use case fits, open an issue or contact the maintainers before deploying.
+**Commercial licensing.** If your intended use falls under Competing Use — you want to resell GhostDesk, offer it as a managed service, or build a competing product — contact the maintainers to discuss a commercial license before deploying. Open a GitHub issue or reach out directly; we are happy to talk.

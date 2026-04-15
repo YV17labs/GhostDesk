@@ -1,4 +1,4 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
 """Persistent Wayland input controller.
 
 Opens a single Wayland connection at first use and reuses it for every
