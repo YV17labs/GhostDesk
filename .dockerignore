@@ -1,6 +1,42 @@
-**
+# Secrets — TLS material, local agent state, MCP config
+tls/
+.claude/
+.mcp.json
 
-!docker/
-!docker/**
-!assets/wallpaper.png
-!assets/logo-mark.svg
+# Version control / CI / editor metadata
+.git
+.gitignore
+.gitattributes
+.github
+.vscode
+.devcontainer
+
+# Python build / cache / venv
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+dist
+build
+*.egg-info
+
+# Node (if any)
+node_modules
+
+# Tests, demos, docs not needed inside the image
+tests
+demos
+docs
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Docker-related files that don't belong inside the image context itself
+**/.dockerignore
