@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="GhostDesk" width="200">
+  <img src="assets/banner.svg" alt="GhostDesk — Virtual Desktop Control" width="100%">
 </p>
 
 <p align="center">
