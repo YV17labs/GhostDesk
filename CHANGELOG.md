@@ -2,7 +2,14 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
-## [Unreleased] — v7.0.0
+## [v7.0.1] — 2026-04-15
+
+### Fixed
+- **Missing `envsubst` in runtime images.** `entrypoint.sh` uses `envsubst` to inject `GHOSTDESK_SCREEN_WIDTH` / `GHOSTDESK_SCREEN_HEIGHT` into the Sway config, but the binary was not part of the runtime stack — containers booted into a crash loop (`envsubst: command not found`). Added `gettext-base` to both `docker/base/Dockerfile` and `.devcontainer/Dockerfile`.
+
+---
+
+## [v7.0.0] — 2026-04-15
 
 Major platform overhaul: migration from X11 / Openbox to a native Wayland / Sway stack, end-to-end TLS, split Docker images, and a simplified agent-first documentation story.
 
