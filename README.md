@@ -60,7 +60,55 @@ This works with **any application** — web apps, native apps, legacy software, 
 
 ### 1. Run the container
 
-GhostDesk couples **TLS and auth**: mount a cert and you get `wss://` + bearer-token on MCP + a single-password prompt on noVNC; mount nothing and every gate is disarmed on purpose (see [Security](#security) → *Auth ≡ TLS*). Even on localhost, the right procedure is to run the encrypted path end-to-end — [`mkcert`](https://github.com/FiloSottile/mkcert) issues a browser-trusted cert for `localhost` in two commands:
+One command, plain HTTP, no password. Fine for kicking the tires on a laptop you trust — **not fit for anything beyond that**. Ready to harden it? Jump to [Secure local run](#secure-local-run-tls--auth).
+
+```bash
+docker run -d --name ghostdesk-demo \
+  --shm-size 2g \
+  -p 3000:3000 \
+  -p 6080:6080 \
+  ghcr.io/yv17labs/ghostdesk:latest
+```
+
+The container boots in the dev posture: plain HTTP on both ports, every auth gate disarmed on purpose. You'll see warnings in the logs reminding you of that — they go away once you follow the secured path below.
+
+### 2. Connect your AI
+
+GhostDesk works with any MCP-compatible client. Add it to your config:
+
+**Claude Desktop / Claude Code** (Streamable HTTP)
+```json
+{
+  "mcpServers": {
+    "ghostdesk": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}
+```
+
+**ChatGPT, Gemini, or any LLM with MCP support** — same URL, no extra headers. Once you switch to the [secure local run](#secure-local-run-tls--auth) the URL becomes `https://` and you add an `Authorization: Bearer <token>` header.
+
+> **Recommended system prompt.** Drop [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) into your agent's system prompt for a battle-tested baseline — a handful of principles (keyboard first, see/act/confirm, clear popups, scroll-to-read) that measurably improve reliability across both frontier and self-hosted models.
+
+### 3. Watch your agent work
+
+Open `http://localhost:6080/` in your browser to see the virtual desktop in real time. No password prompt — the dev posture skips it.
+
+| Service | URL |
+|---------|-----|
+| MCP server | `http://localhost:3000/mcp` |
+| noVNC (browser) | `http://localhost:6080/` |
+| VNC (loopback only — bound to `127.0.0.1` inside the container) | — |
+
+---
+
+## Secure local run (TLS + auth)
+
+The Quick start above drops every gate so you can kick the tires in thirty seconds. The moment you want to expose this to anything beyond your own laptop — another machine on your LAN, a devcontainer port-forward on an untrusted network, a teammate's browser — flip to the secured posture: real TLS + bearer-token auth on MCP + password prompt on noVNC.
+
+GhostDesk couples **TLS and auth**: mount a cert and you get `wss://` + bearer-token on MCP + a single-password prompt on noVNC (see [Security](#security) → *Auth ≡ TLS*). [`mkcert`](https://github.com/FiloSottile/mkcert) issues a browser-trusted cert for `localhost` in two commands:
 
 ```bash
 # Issue a locally-trusted cert (first time only — installs a local CA in your trust store)
@@ -76,12 +124,12 @@ export GHOSTDESK_VNC_PASSWORD=$(openssl rand -hex 16)
 docker run -d --name ghostdesk-my-agent \
   --restart unless-stopped \
   --cap-add SYS_ADMIN \
+  --shm-size 2g \
   -p 3000:3000 \
   -p 6080:6080 \
   -v ghostdesk-my-agent-home:/home/agent \
   -v "$PWD/tls/server.crt:/etc/ghostdesk/tls/server.crt:ro" \
   -v "$PWD/tls/server.key:/etc/ghostdesk/tls/server.key:ro" \
-  --shm-size 2g \
   -e GHOSTDESK_AUTH_TOKEN \
   -e GHOSTDESK_VNC_PASSWORD \
   -e TZ=America/New_York \
@@ -94,46 +142,15 @@ echo "VNC password: $GHOSTDESK_VNC_PASSWORD"
 
 Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
 
-> **In production, swap the `mkcert` leaf for a real cert** (Let's Encrypt, your internal PKI, cert-manager…) mounted at the same path, and inject both secrets from your secret manager. On Kubernetes, use `valueFrom.secretKeyRef`; with Docker / compose, use a `.env` file backed by Docker secrets, Vault, AWS Secrets Manager, etc. See [Security](#security) for the full contract.
+Once the container is up, point your MCP client at `https://localhost:3000/mcp` with an `Authorization: Bearer $GHOSTDESK_AUTH_TOKEN` header, and open `https://localhost:6080/` in your browser — the `mkcert` CA installed by `mkcert -install` is already in your trust store, so the browser accepts the cert with no warning. noVNC will prompt for `$GHOSTDESK_VNC_PASSWORD`.
 
-> **No cert, no auth.** If you skip the cert mount, GhostDesk boots in the dev posture: plain HTTP, no bearer-token gate, no VNC password — `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are ignored with a warning. That shape is intended for IDE port-forwards (VS Code, Codespaces) where the forward layer already wraps the traffic; it is not something to point at any network you don't fully trust.
+> **In production, swap the `mkcert` leaf for a real cert** (Let's Encrypt, your internal PKI, cert-manager…) mounted at the same path, and inject both secrets from your secret manager. On Kubernetes, use `valueFrom.secretKeyRef`; with Docker / compose, use a `.env` file backed by Docker secrets, Vault, AWS Secrets Manager, etc. See [Security](#security) for the full contract.
 
 > **`--cap-add SYS_ADMIN`** — Required by Electron apps (VS Code, Slack, etc.) and other applications that need Linux user namespaces to run their sandbox. Safe to remove if you don't need them.
 
 > **noVNC front-door authentication is still the operator's job.** The in-container VNC password is defense in depth — production deployments should also sit behind a reverse proxy / identity-aware proxy that terminates TLS and gates access to port 6080. See [Security](#security).
 
 The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
-
-### 2. Connect your AI
-
-GhostDesk works with any MCP-compatible client. Add it to your config:
-
-**Claude Desktop / Claude Code** (Streamable HTTP)
-```json
-{
-  "mcpServers": {
-    "ghostdesk": {
-      "type": "http",
-      "url": "https://localhost:3000/mcp",
-      "headers": {
-        "Authorization": "Bearer <your GHOSTDESK_AUTH_TOKEN>"
-      }
-    }
-  }
-}
-```
-
-**ChatGPT, Gemini, or any LLM with MCP support** — same config, same bearer token header.
-
-### 3. Watch your agent work
-
-Open `https://localhost:6080/vnc.html` in your browser to see the virtual desktop in real time. Because the cert you mounted was issued by `mkcert`'s local CA (installed in your trust store by `mkcert -install`), the browser accepts it with no warning. In production, swap the `mkcert` leaf for a real cert mounted at the same path, or terminate TLS on a reverse proxy in front of the container.
-
-| Service | URL |
-|---------|-----|
-| MCP server | `https://localhost:3000/mcp` (behind a reverse proxy in production — see [Security](#security)) |
-| noVNC (browser) | `https://localhost:6080/vnc.html` (username `agent`, password: `$GHOSTDESK_VNC_PASSWORD`) |
-| VNC (loopback only — bound to `127.0.0.1` inside the container) | — |
 
 ---
 
@@ -201,7 +218,7 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 # ports, bearer-token on MCP, single-password prompt on noVNC. See the
 # Security section of this README for the Auth ≡ TLS rationale.
 
-x-ghostdesk-base: &ghostdesk-base
+x-ghostdesk-defaults: &ghostdesk-defaults
   image: ghcr.io/yv17labs/ghostdesk:latest
   restart: unless-stopped
   cap_add: [SYS_ADMIN]
@@ -209,12 +226,12 @@ x-ghostdesk-base: &ghostdesk-base
   environment:
     - GHOSTDESK_AUTH_TOKEN
     - GHOSTDESK_VNC_PASSWORD
-    - LANG=en_US.UTF-8
     - TZ=America/New_York
+    - LANG=en_US.UTF-8
 
 services:
   sales-agent:
-    <<: *ghostdesk-base
+    <<: *ghostdesk-defaults
     container_name: ghostdesk-sales-agent
     ports: ["3001:3000", "6081:6080"]
     volumes:
@@ -223,7 +240,7 @@ services:
       - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
 
   research-agent:
-    <<: *ghostdesk-base
+    <<: *ghostdesk-defaults
     container_name: ghostdesk-research-agent
     ports: ["3002:3000", "6082:6080"]
     volumes:
@@ -232,7 +249,7 @@ services:
       - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
 
   accounting-agent:
-    <<: *ghostdesk-base
+    <<: *ghostdesk-defaults
     container_name: ghostdesk-accounting-agent
     ports: ["3003:3000", "6083:6080"]
     volumes:
