@@ -161,11 +161,9 @@ Once the container is up, update your MCP client config — same shape as the de
 
 Then open `https://localhost:6080/` in your browser — the `mkcert` CA installed by `mkcert -install` is already in your trust store, so the browser accepts the cert with no warning. noVNC will prompt for `$GHOSTDESK_VNC_PASSWORD`.
 
-> **In production, swap the `mkcert` leaf for a real cert** (Let's Encrypt, your internal PKI, cert-manager…) mounted at the same path, and inject both secrets from your secret manager. On Kubernetes, use `valueFrom.secretKeyRef`; with Docker / compose, use a `.env` file backed by Docker secrets, Vault, AWS Secrets Manager, etc. See [Security](#security) for the full contract.
+> **Going to production?** Swap the `mkcert` leaf for a real cert, source both secrets from your secret manager, and front port 6080 with an identity-aware proxy — [SECURITY.md](SECURITY.md) has the full contract.
 
 > **`--cap-add SYS_ADMIN`** — Required by Electron apps (VS Code, Slack, etc.) and other applications that need Linux user namespaces to run their sandbox. Safe to remove if you don't need them.
-
-> **noVNC front-door authentication is still the operator's job.** The in-container VNC password is defense in depth — production deployments should also sit behind a reverse proxy / identity-aware proxy that terminates TLS and gates access to port 6080. See [Security](#security).
 
 The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
 
@@ -366,7 +364,7 @@ Every variable GhostDesk reads is namespaced under `GHOSTDESK_*`. Standard POSIX
 | `GHOSTDESK_AUTH_TOKEN` | Bearer token required on every MCP request. Generate with `openssl rand -hex 32`. |
 | `GHOSTDESK_VNC_PASSWORD` | Password for wayvnc (username is `agent` in the prod image). Generate with `openssl rand -hex 16`. |
 
-Both are plain environment variables — on Kubernetes wire them from a `Secret` via `valueFrom.secretKeyRef`; on Docker / compose inject them via `environment:` backed by Docker secrets or your secret manager. A front-door reverse proxy / identity-aware proxy in front of port 6080 is still recommended in production (the in-container VNC password is defense in depth) — see [Security](#security).
+Both are plain environment variables. Wire them from your secret store (`secretKeyRef` on Kubernetes, Docker secrets / Vault / AWS SM on compose) — see [SECURITY.md](SECURITY.md#secrets-handling--rotation) for the full contract.
 
 ### Runtime knobs
 
@@ -386,32 +384,11 @@ Both are plain environment variables — on Kubernetes wire them from a `Secret`
 
 ## Security
 
-GhostDesk ships hardened by default on the two axes where it is the product's own responsibility: **transport encryption** and **authentication**. Everything else (rate limiting, SSO, WAF, session recording, brute-force protection) is a reverse-proxy concern — GhostDesk is designed to run behind one, not directly on the internet.
+GhostDesk owns two things: **transport encryption** and **authentication**. Everything else (rate limiting, SSO, WAF, session recording, brute-force protection, per-user identity on noVNC) is a reverse-proxy concern — the container is designed to run behind one, not directly on the internet.
 
-### What the product guarantees
+The full threat model, the *Auth ≡ TLS* posture switch, the wayvnc RFB-type-2-inside-`wss://` rationale, the secrets handling contract, and the exhaustive in-scope / out-of-scope table all live in **[SECURITY.md](SECURITY.md)** — single source of truth. Start there before deploying to anything you don't fully trust.
 
-- **Operator-owned TLS, with an in-container fallback.** By default, `websockify` (port 6080) and the MCP server (port 3000) serve plain HTTP — TLS is expected to be terminated upstream (reverse proxy, cloud LB, devcontainer port forward). If the operator prefers in-container termination instead, mount a cert at `/etc/ghostdesk/tls/server.{crt,key}`; both services detect it at startup and switch to HTTPS / WSS automatically.
-  ```yaml
-  volumes:
-    - /etc/letsencrypt/live/agent.example.com/fullchain.pem:/etc/ghostdesk/tls/server.crt:ro
-    - /etc/letsencrypt/live/agent.example.com/privkey.pem:/etc/ghostdesk/tls/server.key:ro
-  ```
-- **wayvnc pinned to loopback, password auth inside the `wss://` envelope.** `wayvnc` is hard-pinned to `127.0.0.1:5900` inside the container's network namespace and is not reachable from outside — every browser session goes through the `websockify` bridge on port 6080. Under TLS, wayvnc is configured with `enable_auth=true` + `password=${GHOSTDESK_VNC_PASSWORD}` (no username) and advertises **RFB security type 2** (classic VNC Auth): noVNC 1.6 handles this natively and shows a single-password prompt in its overlay. The DES challenge/response used by RFB type 2 is cryptographically weak on its own — confidentiality on the wire is provided end-to-end by the `wss://` envelope on the websockify leg, and the VNC password acts as an authentication token carried inside that tunnel. This configuration is a deliberate compromise because noVNC 1.6 does not yet interoperate with wayvnc's stronger security types (VeNCrypt X509Plain / RSA-AES); GhostDesk ships wayvnc built from a pinned `master` commit that enables this path. `GHOSTDESK_VNC_PASSWORD` is mandatory. See [SECURITY.md](SECURITY.md#transport-security) for the full rationale.
-- **Mandatory MCP authentication.** The MCP server refuses requests without a valid `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` header.
-- **Secrets as plain env vars, sourced from your secret store.** Both `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` are read from the process environment. On Kubernetes, wire them from a `Secret` via `valueFrom.secretKeyRef` (values never appear in `kubectl describe pod`); on Docker, inject via `environment:` backed by Docker secrets / Vault / AWS Secrets Manager. The container never bakes a secret into an image layer.
-
-### What is explicitly *not* in scope
-
-These belong to the operator's deployment topology, not to the container:
-
-- **Rate limiting & brute-force protection** → reverse proxy (Traefik middleware, nginx `limit_req`, Cloudflare).
-- **SSO / OIDC / MFA** → identity-aware proxy (oauth2-proxy, Cloudflare Access, Tailscale, Pomerium).
-- **WAF / IP allow-listing** → edge.
-- **Per-user identity / SSO on noVNC (port 6080)** → reverse proxy with OAuth2-proxy, Cloudflare Access, Tailscale ACLs, Pomerium, devcontainer port forward, etc. The in-container VNC password is a single shared credential — for per-user audit trail and revocation, gate port 6080 with an identity-aware proxy. See [SECURITY.md](SECURITY.md#the-novnc-deployment-contract).
-- **Session recording & audit trail** → proxy access logs + wayvnc stderr shipped to your log collector.
-- **Cert rotation & CA trust** → your PKI / cert-manager / Let's Encrypt automation.
-
-This separation is deliberate and standard: the product handles crypto and authN, the infrastructure handles policy.
+Reporting a vulnerability? Use GitHub's [private security advisory](../../security/advisories) — see [SECURITY.md § Reporting](SECURITY.md#reporting-security-vulnerabilities).
 
 ---
 
