@@ -15,7 +15,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git patch \
-        meson ninja-build pkg-config gcc \
+        meson ninja-build pkg-config gcc dpkg-dev \
         libdrm-dev libxkbcommon-dev libwayland-dev \
         libjansson-dev libpam0g-dev libgnutls28-dev \
         libavfilter-dev libavcodec-dev libavutil-dev libturbojpeg0-dev \
@@ -24,24 +24,24 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 WORKDIR /src
 COPY docker/base/patches/ /patches/
-RUN git clone https://github.com/any1/aml.git \
+# See docker/base/Dockerfile vnc-builder for the rationale.
+RUN set -eux \
+    && git clone https://github.com/any1/aml.git \
     && git -C aml checkout ${AML_SHA} \
     && git clone https://github.com/any1/neatvnc.git \
     && git -C neatvnc checkout ${NEATVNC_SHA} \
-    && mkdir neatvnc/subprojects \
-    && ln -s ../../aml neatvnc/subprojects/aml \
     && git clone https://github.com/any1/wayvnc.git \
     && git -C wayvnc checkout ${WAYVNC_SHA} \
-    && mkdir wayvnc/subprojects \
-    && ln -s ../../neatvnc wayvnc/subprojects/neatvnc \
-    && ln -s ../../aml wayvnc/subprojects/aml \
-    # See docker/base/Dockerfile vnc-builder for the rationale.
     && sed -i '/ADD_SECURITY_TYPE(RFB_SECURITY_TYPE_APPLE_DH)/d' \
         neatvnc/src/server.c \
     && patch -p1 -d wayvnc < /patches/wayvnc-async-auth.patch \
-    && meson setup wayvnc/build wayvnc --prefix=/usr -Dbuildtype=release \
-    && ninja -C wayvnc/build \
-    && DESTDIR=/out ninja -C wayvnc/build install
+    && for proj in aml neatvnc wayvnc; do \
+        meson setup "$proj/build" "$proj" \
+            --prefix=/usr -Dbuildtype=release \
+        && ninja -C "$proj/build" \
+        && ninja -C "$proj/build" install \
+        && DESTDIR=/out ninja -C "$proj/build" install; \
+    done
 
 # ---- Stage 2: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
 # Mirrors docker/base/Dockerfile § novnc. Isolated so the dev image
@@ -103,9 +103,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # wayvnc (+ wayvncctl + libneatvnc + libaml) built from pinned master
-# SHA — see vnc-builder.
-COPY --from=vnc-builder /out/usr/bin /usr/bin
-COPY --from=vnc-builder /out/usr/lib /usr/lib
+# SHA — see vnc-builder. Single `COPY /out/ /` keeps meson's multiarch
+# libdir (`lib/x86_64-linux-gnu`, `lib/aarch64-linux-gnu`, …) intact
+# regardless of the target architecture.
+COPY --from=vnc-builder /out/ /
 RUN ldconfig
 
 COPY --from=novnc /opt/novnc /usr/share/novnc
