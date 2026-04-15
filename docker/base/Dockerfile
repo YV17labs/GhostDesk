@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git patch \
-        meson ninja-build pkg-config gcc \
+        meson ninja-build pkg-config gcc dpkg-dev \
         libdrm-dev libxkbcommon-dev libwayland-dev \
         libjansson-dev libpam0g-dev libgnutls28-dev \
         libavfilter-dev libavcodec-dev libavutil-dev libturbojpeg0-dev \
@@ -58,17 +58,21 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 WORKDIR /src
 COPY docker/base/patches/ /patches/
-RUN git clone https://github.com/any1/aml.git \
+# Build aml, neatvnc and wayvnc as standalone projects (not as meson
+# subprojects) so every .so / .pc file meson produces lands in /out at
+# its real multiarch location — `lib/x86_64-linux-gnu` on amd64,
+# `lib/aarch64-linux-gnu` on arm64, etc. — without any triplet
+# hardcoded here. Each project is installed twice: first to the system
+# `/usr` so the next meson setup resolves the previous one via
+# pkg-config, then staged under `/out` for the runtime stage's single
+# `COPY --from=vnc-builder /out/ /`.
+RUN set -eux \
+    && git clone https://github.com/any1/aml.git \
     && git -C aml checkout ${AML_SHA} \
     && git clone https://github.com/any1/neatvnc.git \
     && git -C neatvnc checkout ${NEATVNC_SHA} \
-    && mkdir neatvnc/subprojects \
-    && ln -s ../../aml neatvnc/subprojects/aml \
     && git clone https://github.com/any1/wayvnc.git \
     && git -C wayvnc checkout ${WAYVNC_SHA} \
-    && mkdir wayvnc/subprojects \
-    && ln -s ../../neatvnc wayvnc/subprojects/neatvnc \
-    && ln -s ../../aml wayvnc/subprojects/aml \
     # Drop Apple Diffie-Hellman (RFB security type 30) from the list
     # neatvnc advertises so noVNC 1.6 falls through to classic VNC Auth
     # (type 2). See neatvnc/src/server.c `init_security_types`.
@@ -78,9 +82,13 @@ RUN git clone https://github.com/any1/aml.git \
     # still on the sync signature and would hang the RFB handshake after
     # auth. See the patch header for the full rationale.
     && patch -p1 -d wayvnc < /patches/wayvnc-async-auth.patch \
-    && meson setup wayvnc/build wayvnc --prefix=/usr -Dbuildtype=release \
-    && ninja -C wayvnc/build \
-    && DESTDIR=/out ninja -C wayvnc/build install
+    && for proj in aml neatvnc wayvnc; do \
+        meson setup "$proj/build" "$proj" \
+            --prefix=/usr -Dbuildtype=release \
+        && ninja -C "$proj/build" \
+        && ninja -C "$proj/build" install \
+        && DESTDIR=/out ninja -C "$proj/build" install; \
+    done
 
 # ---- Stage 3: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
 # Isolated so the runtime image stays free of curl and build tooling.
@@ -140,10 +148,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && locale-gen en_US.UTF-8 C.UTF-8
 
 # wayvnc (+ wayvncctl + libneatvnc + libaml shared libs) built from
-# pinned master SHA — see vnc-builder stage. Master offers RFB type 2
-# under allow_broken_crypto; the apt wayvnc 0.7.2 does not.
-COPY --from=vnc-builder /out/usr/bin /usr/bin
-COPY --from=vnc-builder /out/usr/lib /usr/lib
+# pinned master SHAs — see vnc-builder stage. Master offers RFB type 2
+# under allow_broken_crypto; the apt wayvnc 0.7.2 does not. A single
+# `COPY /out/ /` lets meson's multiarch libdir land at the same path
+# in the runtime image regardless of the target architecture.
+COPY --from=vnc-builder /out/ /
 RUN ldconfig
 
 COPY --from=novnc /opt/novnc /usr/share/novnc
