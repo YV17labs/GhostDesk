@@ -1,5 +1,11 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Tests for ghostdesk.input.mouse."""
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
+"""Tests for ghostdesk.input.mouse.
+
+The mouse module is a thin orchestration layer over ``WaylandInput``.
+We mock the singleton and assert on the ordered sequence of calls it
+receives, which keeps the tests close to the real wire behaviour while
+staying pure unit tests (no real Wayland connection needed).
+"""
 
 from unittest.mock import AsyncMock, patch
 
@@ -12,150 +18,132 @@ from ghostdesk.input.mouse import (
     mouse_scroll,
 )
 
-MODULE = "ghostdesk.input.mouse"
-
-# Stub feedback so mouse tests stay focused on xdotool calls.
 _FEEDBACK_RESULT = {"changed": True, "reaction_time_ms": 150}
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def _mock_deps():
+    mock_wl = AsyncMock()
+
     with (
-        patch(f"{MODULE}.run", new_callable=AsyncMock) as mock_run,
-        patch(f"{MODULE}.get_cursor_position", new_callable=AsyncMock, return_value=(10, 20)) as mock_pos,
-        patch(f"{MODULE}.human_move", new_callable=AsyncMock) as mock_hmove,
-        patch(f"{MODULE}.capture_before", new_callable=AsyncMock, return_value=(None, b"h")) as mock_cap,
-        patch(f"{MODULE}.poll_for_change", new_callable=AsyncMock, return_value=_FEEDBACK_RESULT) as mock_poll,
+        patch("ghostdesk.input.mouse.get_wayland_input", new=AsyncMock(return_value=mock_wl)),
+        patch("ghostdesk.input.mouse.capture_before", new_callable=AsyncMock, return_value=(None, b"h")) as mock_cap,
+        patch("ghostdesk.input.mouse.poll_for_change", new_callable=AsyncMock, return_value=_FEEDBACK_RESULT) as mock_poll,
     ):
-        yield mock_run, mock_pos, mock_hmove, mock_cap, mock_poll
-
-
-def _mocks(_mock_deps):
-    return _mock_deps
+        yield mock_wl, mock_cap, mock_poll
 
 
 # --- mouse_click ---
 
-async def test_mouse_click_humanize(_mock_deps):
-    mock_run, _, mock_hmove, mock_cap, _ = _mock_deps
-    result = await mouse_click(50, 60, button="left", humanize=True)
-    mock_hmove.assert_awaited_once()
-    # capture_before is called after move, before click
-    mock_cap.assert_awaited_once_with(50, 60)
-    mock_run.assert_awaited_once_with(["xdotool", "click", "1"])
-    assert result["action"] == "Clicked left at (50, 60)"
+async def test_mouse_click_left(_mock_deps):
+    """Left click moves the pointer then clicks left."""
+    mock_wl, mock_cap, _ = _mock_deps
+    result = await mouse_click(640, 512, button="left")
+
+    mock_wl.move.assert_awaited_once_with(640, 512)
+    mock_wl.click.assert_awaited_once_with("left")
+    mock_cap.assert_awaited_once_with(640, 512)
+    assert result["action"] == "Clicked left at (640, 512)"
     assert result["screen_changed"] is True
 
 
-async def test_mouse_click_no_humanize(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    result = await mouse_click(50, 60, button="right", humanize=False)
-    assert mock_run.await_count == 2
-    mock_run.assert_any_await(["xdotool", "mousemove", "50", "60"])
-    mock_run.assert_any_await(["xdotool", "click", "3"])
-    assert result["action"] == "Clicked right at (50, 60)"
+async def test_mouse_click_right(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    await mouse_click(100, 200, button="right")
+    mock_wl.click.assert_awaited_once_with("right")
 
 
-async def test_mouse_click_middle_button(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    await mouse_click(1, 2, button="middle", humanize=False)
-    mock_run.assert_any_await(["xdotool", "click", "2"])
+async def test_mouse_click_middle(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    await mouse_click(0, 0, button="middle")
+    mock_wl.click.assert_awaited_once_with("middle")
 
 
-async def test_mouse_click_unknown_button_defaults_to_1(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    await mouse_click(1, 2, button="unknown", humanize=False)
-    mock_run.assert_any_await(["xdotool", "click", "1"])
+async def test_mouse_click_passes_raw_pixels(_mock_deps):
+    """mouse_click forwards screen pixels straight through to WaylandInput."""
+    mock_wl, *_ = _mock_deps
+    await mouse_click(-100, 5000, button="left")
+    mock_wl.move.assert_awaited_once_with(-100, 5000)
 
 
 async def test_mouse_click_no_change(_mock_deps):
-    _, _, _, _, mock_poll = _mock_deps
+    _, _, mock_poll = _mock_deps
     mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
     result = await mouse_click(50, 60)
     assert result["screen_changed"] is False
-    assert result["reaction_time_ms"] == 2000
 
 
 # --- mouse_double_click ---
 
-async def test_mouse_double_click_humanize(_mock_deps):
-    mock_run, _, mock_hmove, _, _ = _mock_deps
-    result = await mouse_double_click(30, 40, button="left", humanize=True)
-    mock_hmove.assert_awaited_once()
-    mock_run.assert_awaited_once_with(["xdotool", "click", "--repeat", "2", "--delay", "100", "1"])
+async def test_mouse_double_click(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    result = await mouse_double_click(30, 40, button="left")
+
+    mock_wl.move.assert_awaited_once_with(30, 40)
+    assert mock_wl.click.await_count == 2
+    mock_wl.click.assert_awaited_with("left")
     assert result["action"] == "Double-clicked left at (30, 40)"
-    assert result["screen_changed"] is True
 
 
-async def test_mouse_double_click_no_humanize(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    result = await mouse_double_click(30, 40, button="right", humanize=False)
-    mock_run.assert_any_await(["xdotool", "mousemove", "30", "40"])
-    mock_run.assert_any_await(["xdotool", "click", "--repeat", "2", "--delay", "100", "3"])
-    assert "Double-clicked right" in result["action"]
+async def test_mouse_double_click_right(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    await mouse_double_click(30, 40, button="right")
+    assert mock_wl.click.await_count == 2
+    mock_wl.click.assert_awaited_with("right")
 
 
 # --- mouse_drag ---
 
-async def test_mouse_drag_humanize(_mock_deps):
-    mock_run, mock_pos, mock_hmove, _, _ = _mock_deps
-    result = await mouse_drag(10, 20, 100, 200, button="left", humanize=True)
-    assert mock_hmove.await_count == 2
-    assert mock_run.await_count == 2  # mousedown + mouseup
-    mock_run.assert_any_await(["xdotool", "mousedown", "1"])
-    mock_run.assert_any_await(["xdotool", "mouseup", "1"])
+async def test_mouse_drag(_mock_deps):
+    """Drag delegates to the batched WaylandInput.drag method."""
+    mock_wl, mock_cap, _ = _mock_deps
+    result = await mouse_drag(10, 20, 100, 200, button="left")
+
+    mock_wl.drag.assert_awaited_once_with(10, 20, 100, 200, "left")
+    mock_cap.assert_awaited_once_with(100, 200)
     assert result["action"] == "Dragged from (10, 20) to (100, 200)"
-    assert result["screen_changed"] is True
 
 
-async def test_mouse_drag_no_humanize(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    result = await mouse_drag(10, 20, 100, 200, button="right", humanize=False)
-    assert mock_run.await_count == 4  # 2x mousemove + mousedown + mouseup
-    mock_run.assert_any_await(["xdotool", "mousemove", "10", "20"])
-    mock_run.assert_any_await(["xdotool", "mousedown", "3"])
-    mock_run.assert_any_await(["xdotool", "mousemove", "100", "200"])
-    mock_run.assert_any_await(["xdotool", "mouseup", "3"])
-    assert "Dragged from" in result["action"]
+async def test_mouse_drag_right_button(_mock_deps):
+    mock_wl, *_ = _mock_deps
+    await mouse_drag(10, 20, 100, 200, button="right")
+    mock_wl.drag.assert_awaited_once_with(10, 20, 100, 200, "right")
 
 
 # --- mouse_scroll ---
 
 async def test_mouse_scroll_down(_mock_deps):
-    mock_run, _, mock_hmove, _, _ = _mock_deps
-    result = await mouse_scroll(50, 50, direction="down", amount=3, humanize=True)
-    mock_hmove.assert_awaited_once()
-    mock_run.assert_awaited_once_with(["xdotool", "click", "--repeat", "3", "--delay", "50", "5"])
+    mock_wl, *_ = _mock_deps
+    result = await mouse_scroll(50, 50, direction="down", amount=3)
+    mock_wl.move.assert_awaited_once_with(50, 50)
+    mock_wl.scroll.assert_awaited_once_with("down", 3)
     assert result["action"] == "Scrolled down 3 clicks at (50, 50)"
-    assert result["screen_changed"] is True
 
 
 async def test_mouse_scroll_up(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    await mouse_scroll(50, 50, direction="up", amount=5, humanize=False)
-    mock_run.assert_any_await(["xdotool", "click", "--repeat", "5", "--delay", "50", "4"])
+    mock_wl, *_ = _mock_deps
+    await mouse_scroll(50, 50, direction="up", amount=2)
+    mock_wl.scroll.assert_awaited_once_with("up", 2)
 
 
 async def test_mouse_scroll_left(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    await mouse_scroll(0, 0, direction="left", amount=1, humanize=False)
-    mock_run.assert_any_await(["xdotool", "click", "--repeat", "1", "--delay", "50", "6"])
+    mock_wl, *_ = _mock_deps
+    await mouse_scroll(0, 0, direction="left", amount=1)
+    mock_wl.scroll.assert_awaited_once_with("left", 1)
 
 
 async def test_mouse_scroll_right(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    await mouse_scroll(0, 0, direction="right", amount=2, humanize=False)
-    mock_run.assert_any_await(["xdotool", "click", "--repeat", "2", "--delay", "50", "7"])
+    mock_wl, *_ = _mock_deps
+    await mouse_scroll(0, 0, direction="right", amount=2)
+    mock_wl.scroll.assert_awaited_once_with("right", 2)
 
 
-async def test_mouse_scroll_unknown_direction_defaults_to_down(_mock_deps):
-    mock_run, _, _, _, _ = _mock_deps
-    await mouse_scroll(0, 0, direction="diagonal", amount=1, humanize=False)
-    mock_run.assert_any_await(["xdotool", "click", "--repeat", "1", "--delay", "50", "5"])
+async def test_mouse_scroll_amount_clamped(_mock_deps):
+    """Amount is clamped to [1, 5]."""
+    mock_wl, *_ = _mock_deps
+    await mouse_scroll(0, 0, direction="down", amount=10)
+    mock_wl.scroll.assert_awaited_with("down", 5)
 
-
-async def test_mouse_scroll_no_humanize(_mock_deps):
-    mock_run, _, mock_hmove, _, _ = _mock_deps
-    await mouse_scroll(50, 50, direction="down", amount=3, humanize=False)
-    mock_hmove.assert_not_awaited()
-    mock_run.assert_any_await(["xdotool", "mousemove", "50", "50"])
+    mock_wl.scroll.reset_mock()
+    await mouse_scroll(0, 0, direction="down", amount=0)
+    mock_wl.scroll.assert_awaited_with("down", 1)

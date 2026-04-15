@@ -1,11 +1,11 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
 """Screen domain — capture and analyze the display."""
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk.screen.capture import screenshot
+from ghostdesk.screen.screen_shot import screen_shot
 
 
 def register(mcp: FastMCP) -> None:
     """Register screen tools."""
-    mcp.tool()(screenshot)
+    mcp.tool()(screen_shot)
