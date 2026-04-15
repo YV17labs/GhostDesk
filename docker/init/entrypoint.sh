@@ -15,19 +15,14 @@ export USER="${GHOSTDESK_USER}"
 export LOGNAME="${GHOSTDESK_USER}"
 
 # ---- Static service env ----
+# Wayland / DBus / wlroots / XDG plumbing is declared as Dockerfile ENV
+# in both docker/base/Dockerfile and .devcontainer/Dockerfile, so every
+# process in the container (PID 1, supervisord, VS Code task shells,
+# `docker exec`) inherits it directly from Docker — no re-export here.
+# Only GHOSTDESK_DIR stays because it's an operator-overridable knob
+# with a PATH that depends on it.
 export GHOSTDESK_DIR="${GHOSTDESK_DIR:-/opt/ghostdesk}"
 export PATH="${GHOSTDESK_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-# No pam_systemd in the container — /run/user/1000 is fabricated below.
-export XDG_RUNTIME_DIR=/run/user/1000
-export XDG_SESSION_TYPE=wayland
-export WAYLAND_DISPLAY=wayland-1
-export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
-
-export WLR_BACKENDS=headless
-export WLR_HEADLESS_OUTPUTS=1
-export WLR_LIBINPUT_NO_DEVICES=1
-export WLR_RENDERER=pixman
 
 # ---- TLS detection + conditional secrets ----
 # Auth ≡ TLS. Two postures keyed off a mounted cert+key at
@@ -102,10 +97,20 @@ else
 fi
 
 # ---- Sway config ----
+# The virtual output resolution is the single source of truth for both
+# the compositor (this file) and the coordinate layer the agent sees
+# (`ghostdesk._coords` reads the same env vars at import). Substituting
+# them at install time — instead of hardcoding in the shipped config —
+# means the user picks the resolution once in docker-compose.yml and
+# the whole stack stays coherent.
 SWAY_CFG_DIR="${HOME}/.config/sway"
 install -d -m 0755 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" "${SWAY_CFG_DIR}"
-install -m 0644 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" \
-    /etc/ghostdesk/sway.config "${SWAY_CFG_DIR}/config"
+export GHOSTDESK_SCREEN_WIDTH="${GHOSTDESK_SCREEN_WIDTH:-1280}"
+export GHOSTDESK_SCREEN_HEIGHT="${GHOSTDESK_SCREEN_HEIGHT:-1024}"
+envsubst '${GHOSTDESK_SCREEN_WIDTH} ${GHOSTDESK_SCREEN_HEIGHT}' \
+    < /etc/ghostdesk/sway.config > "${SWAY_CFG_DIR}/config"
+chown "${GHOSTDESK_USER}:${GHOSTDESK_USER}" "${SWAY_CFG_DIR}/config"
+chmod 0644 "${SWAY_CFG_DIR}/config"
 
 # ---- Wayvnc config ----
 # Pinned to 127.0.0.1. Under TLS, enable_auth + allow_broken_crypto +

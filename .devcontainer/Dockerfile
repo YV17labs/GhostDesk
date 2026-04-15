@@ -65,7 +65,15 @@ ARG TARGETARCH
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/Montreal \
     LANG=fr_CA.UTF-8 \
-    GHOSTDESK_DIR=/workspaces/ghostdesk
+    GHOSTDESK_DIR=/workspaces/ghostdesk \
+    XDG_RUNTIME_DIR=/run/user/1000 \
+    XDG_SESSION_TYPE=wayland \
+    WAYLAND_DISPLAY=wayland-1 \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+    WLR_BACKENDS=headless \
+    WLR_HEADLESS_OUTPUTS=1 \
+    WLR_LIBINPUT_NO_DEVICES=1 \
+    WLR_RENDERER=pixman
 
 # Dev extras on top of the prod stack: compilers + *-dev for pywayland
 # wheels, curl for the Mozilla APT key, foot, GUI probes, fonts.

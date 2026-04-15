@@ -1,47 +1,30 @@
 # Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
 """Coordinate conversion between the LLM's normalised space and real pixels.
 
-Some vision-language models (Qwen3-VL family) work in a fixed virtual
-space (typically 1000x1000) regardless of the actual screen resolution.
-Others (Claude, GPT-4o) use native pixel coordinates directly. This
-module provides a configurable conversion layer controlled by the
-``GHOSTDESK_MODEL_SPACE`` environment variable.
-
-Values:
-    - ``1000`` (default): Qwen-VL style 0-1000 normalised space
-    - ``0`` or ``none``: disabled, pass-through (for Claude/GPT-4o)
-    - any positive integer: custom normalised space (e.g. 256, 512)
+The active model space is per-request: the HTTP layer reads the
+``GhostDesk-Model-Space`` header on each MCP call and stores it in
+``model_space_var``. ``0`` (default) means pass-through native pixels;
+``1000`` selects Qwen-VL's 0-1000 normalised space; any positive integer
+is a custom normalised space.
 """
 
 from __future__ import annotations
 
 import os
-
-
-def _parse_model_space() -> int:
-    raw = os.environ.get("GHOSTDESK_MODEL_SPACE", "1000").strip().lower()
-    if raw in ("0", "none", "off", "disabled", "false", ""):
-        return 0
-    try:
-        return max(0, int(raw))
-    except ValueError:
-        return 1000
-
+from contextvars import ContextVar
 
 # Screen size — single source of truth for the project.
 SCREEN_WIDTH = int(os.environ.get("GHOSTDESK_SCREEN_WIDTH", "1280"))
 SCREEN_HEIGHT = int(os.environ.get("GHOSTDESK_SCREEN_HEIGHT", "1024"))
 
-# Normalised coordinate space the LLM operates in. 0 means pass-through.
-MODEL_SPACE = _parse_model_space()
+# Per-request model space set by the HTTP middleware from the
+# ``GhostDesk-Model-Space`` header. ``0`` is pass-through.
+model_space_var: ContextVar[int] = ContextVar("ghostdesk_model_space", default=0)
 
 
 def get_model_space() -> int:
-    """Return the live ``MODEL_SPACE`` value.
-
-    Reads the module attribute each call so tests can monkeypatch it.
-    """
-    return MODEL_SPACE
+    """Return the active per-request model space."""
+    return model_space_var.get()
 
 
 def is_enabled() -> bool:

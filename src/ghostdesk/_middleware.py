@@ -1,9 +1,9 @@
 # Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
 """MCP call-tool middleware: coordinate normalisation, argument coercion, and call logging.
 
-Every coordinate the LLM sends is in the normalised space of the
-configured vision-language model (0–1000 for Qwen-VL by default).  This
-middleware converts them to real screen pixels before any tool sees them.
+When the client sends ``GhostDesk-Model-Space: <N>`` on the request,
+rescales the LLM's normalised coordinates to screen pixels before any
+tool sees them. Otherwise pass-through.
 """
 
 from __future__ import annotations
@@ -54,8 +54,8 @@ def _coerce_xy_args(arguments: dict) -> dict:
 def _normalise_input_coords(arguments: dict) -> dict:
     """Convert model coordinates to screen pixels for all known xy pairs.
 
-    No-op when coordinate normalisation is disabled via
-    ``GHOSTDESK_MODEL_SPACE=0`` (Claude, GPT-4o, etc.).
+    No-op when no ``GhostDesk-Model-Space`` header was sent (frontier
+    models like Claude, GPT-4o, Gemini emit native pixels).
     """
     if not _coords_enabled():
         return arguments

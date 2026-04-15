@@ -26,6 +26,7 @@ from pathlib import Path
 import uvicorn
 from mcp.server.fastmcp import FastMCP
 
+from ghostdesk._coords import model_space_var
 from ghostdesk._logging import configure_logging
 from ghostdesk._middleware import install_middleware
 from ghostdesk.instructions import INSTRUCTIONS
@@ -71,6 +72,37 @@ def _resolve_tls_paths() -> tuple[str, str] | None:
     if cert.is_file() and cert.stat().st_size > 0 and key.is_file() and key.stat().st_size > 0:
         return (str(cert), str(key))
     return None
+
+
+def _model_space_middleware(app):
+    """ASGI middleware: bind ``GhostDesk-Model-Space`` to ``model_space_var``.
+
+    ``ContextVar`` is per-task, so concurrent requests with different
+    headers stay isolated. Missing or malformed header → ``0``
+    (pass-through, frontier-model default).
+    """
+    async def _wrapped(scope, receive, send):
+        if scope["type"] != "http":
+            return await app(scope, receive, send)
+
+        value = 0
+        for name, raw in scope.get("headers", ()):
+            if name == b"ghostdesk-model-space":
+                try:
+                    parsed = int(raw.decode("ascii", "ignore").strip())
+                    if parsed > 0:
+                        value = parsed
+                except ValueError:
+                    pass
+                break
+
+        token = model_space_var.set(value)
+        try:
+            return await app(scope, receive, send)
+        finally:
+            model_space_var.reset(token)
+
+    return _wrapped
 
 
 def _bearer_auth_middleware(app, expected_token: str):
@@ -122,6 +154,7 @@ def main() -> None:
 
     tls = _resolve_tls_paths()
     asgi_app = app.streamable_http_app()
+    asgi_app = _model_space_middleware(asgi_app)
 
     ssl_certfile: str | None = None
     ssl_keyfile: str | None = None

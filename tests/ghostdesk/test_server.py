@@ -107,3 +107,66 @@ def test_main_with_port_env_var():
         # affects the port used internally in create_app
         mock_create.assert_called_once_with()
         mock_app.run.assert_called_once_with(transport="streamable-http")
+
+
+# ---------------------------------------------------------------------------
+# _model_space_middleware — per-request GhostDesk-Model-Space header
+# ---------------------------------------------------------------------------
+
+
+async def _capture_model_space_during_request(headers):
+    """Drive the middleware once and return the model space seen inside."""
+    import asyncio
+
+    from ghostdesk._coords import get_model_space
+    from ghostdesk.server import _model_space_middleware
+
+    seen: dict = {}
+
+    async def inner_app(scope, receive, send):
+        # Yield so concurrent requests can interleave inside the middleware.
+        await asyncio.sleep(0)
+        seen["value"] = get_model_space()
+
+    wrapped = _model_space_middleware(inner_app)
+    scope = {"type": "http", "headers": headers}
+    await wrapped(scope, None, None)
+    return seen["value"]
+
+
+async def test_model_space_header_sets_per_request_value():
+    value = await _capture_model_space_during_request(
+        [(b"ghostdesk-model-space", b"1000")]
+    )
+    assert value == 1000
+
+
+async def test_model_space_header_absent_defaults_to_zero():
+    value = await _capture_model_space_during_request([])
+    assert value == 0
+
+
+async def test_model_space_header_concurrent_requests_isolated():
+    """Two concurrent requests with different headers must not see each other."""
+    import asyncio
+
+    a, b = await asyncio.gather(
+        _capture_model_space_during_request([(b"ghostdesk-model-space", b"1000")]),
+        _capture_model_space_during_request([(b"ghostdesk-model-space", b"512")]),
+    )
+    assert (a, b) == (1000, 512)
+
+
+async def test_model_space_header_resets_after_request():
+    """The ContextVar override must not leak past the request boundary."""
+    from ghostdesk._coords import get_model_space
+
+    await _capture_model_space_during_request([(b"ghostdesk-model-space", b"1000")])
+    assert get_model_space() == 0
+
+
+async def test_model_space_header_invalid_value_defaults_to_zero():
+    value = await _capture_model_space_during_request(
+        [(b"ghostdesk-model-space", b"not-a-number")]
+    )
+    assert value == 0

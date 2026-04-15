@@ -14,11 +14,22 @@ from ghostdesk._middleware import (
 
 MODULE = "ghostdesk._middleware"
 
-# With SCREEN_WIDTH=1280, SCREEN_HEIGHT=1024 and MODEL_SPACE=1000:
+# With SCREEN_WIDTH=1280, SCREEN_HEIGHT=1024 and model_space_var=1000:
 #   model x=500 → pixels 640
 #   model y=500 → pixels 512
 #   pixels 640   → model 500
 #   pixels 512   → model 500
+
+
+@pytest.fixture(autouse=True)
+def _enable_qwen_space():
+    from ghostdesk._coords import model_space_var
+
+    token = model_space_var.set(1000)
+    try:
+        yield
+    finally:
+        model_space_var.reset(token)
 
 
 # ---------------------------------------------------------------------------
@@ -89,10 +100,15 @@ def test_normalise_input_preserves_other_args():
     assert args["text"] == "hi"
 
 
-def test_normalise_input_disabled(monkeypatch):
+def test_normalise_input_disabled():
     """When coord normalisation is disabled, args pass through unchanged."""
-    monkeypatch.setattr("ghostdesk._coords.MODEL_SPACE", 0)
-    args = _normalise_input_coords({"x": 500, "y": 500})
+    from ghostdesk._coords import model_space_var
+
+    token = model_space_var.set(0)
+    try:
+        args = _normalise_input_coords({"x": 500, "y": 500})
+    finally:
+        model_space_var.reset(token)
     assert args["x"] == 500
     assert args["y"] == 500
 
