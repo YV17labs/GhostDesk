@@ -88,9 +88,7 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
 }
 ```
 
-**ChatGPT, Gemini, or any LLM with MCP support** — same URL, no extra headers. Once you switch to the [secure local run](#secure-local-run-tls--auth) the URL becomes `https://` and you add an `Authorization: Bearer <token>` header.
-
-> **Recommended system prompt.** Drop [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) into your agent's system prompt for a battle-tested baseline — a handful of principles (keyboard first, see/act/confirm, clear popups, scroll-to-read) that measurably improve reliability across both frontier and self-hosted models.
+**ChatGPT, Gemini, or any LLM with MCP support** — point it at the same `http://localhost:3000/mcp`, no headers, no auth. That's the whole demo posture.
 
 ### 3. Watch your agent work
 
@@ -142,7 +140,26 @@ echo "VNC password: $GHOSTDESK_VNC_PASSWORD"
 
 Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
 
-Once the container is up, point your MCP client at `https://localhost:3000/mcp` with an `Authorization: Bearer $GHOSTDESK_AUTH_TOKEN` header, and open `https://localhost:6080/` in your browser — the `mkcert` CA installed by `mkcert -install` is already in your trust store, so the browser accepts the cert with no warning. noVNC will prompt for `$GHOSTDESK_VNC_PASSWORD`.
+Once the container is up, update your MCP client config — same shape as the demo, now over `https://` with a bearer token:
+
+**Claude Desktop / Claude Code** (Streamable HTTP)
+```json
+{
+  "mcpServers": {
+    "ghostdesk": {
+      "type": "http",
+      "url": "https://localhost:3000/mcp",
+      "headers": {
+        "Authorization": "Bearer <paste $GHOSTDESK_AUTH_TOKEN here>"
+      }
+    }
+  }
+}
+```
+
+**ChatGPT, Gemini, or any LLM with MCP support** — same URL and `Authorization: Bearer <token>` header in whatever form your client accepts.
+
+Then open `https://localhost:6080/` in your browser — the `mkcert` CA installed by `mkcert -install` is already in your trust store, so the browser accepts the cert with no warning. noVNC will prompt for `$GHOSTDESK_VNC_PASSWORD`.
 
 > **In production, swap the `mkcert` leaf for a real cert** (Let's Encrypt, your internal PKI, cert-manager…) mounted at the same path, and inject both secrets from your secret manager. On Kubernetes, use `valueFrom.secretKeyRef`; with Docker / compose, use a `.env` file backed by Docker secrets, Vault, AWS Secrets Manager, etc. See [Security](#security) for the full contract.
 
@@ -151,6 +168,8 @@ Once the container is up, point your MCP client at `https://localhost:3000/mcp` 
 > **noVNC front-door authentication is still the operator's job.** The in-container VNC password is defense in depth — production deployments should also sit behind a reverse proxy / identity-aware proxy that terminates TLS and gates access to port 6080. See [Security](#security).
 
 The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
+
+> **Recommended system prompt (applies to both postures above).** Drop [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) into your agent's system prompt for a battle-tested baseline — a handful of principles (keyboard first, see/act/confirm, clear popups, scroll-to-read) that measurably improve reliability across both frontier and self-hosted models.
 
 ---
 
