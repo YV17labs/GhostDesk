@@ -1,0 +1,150 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#23213F"/>
+      <stop offset="50%" stop-color="#1A1B2E"/>
+      <stop offset="100%" stop-color="#0D0E1A"/>
+    </linearGradient>
+
+    <radialGradient id="haloLeft" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#7B6FDE" stop-opacity="0.32"/>
+      <stop offset="60%" stop-color="#7B6FDE" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#7B6FDE" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="haloRight" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#5DCAA5" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#5DCAA5" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="horizonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#7B6FDE" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#7B6FDE" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#7B6FDE" stop-opacity="0"/>
+    </linearGradient>
+
+    <pattern id="grid" x="0" y="0" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M 48 0 L 0 0 0 48" fill="none" stroke="#7B6FDE" stroke-opacity="0.05" stroke-width="1"/>
+    </pattern>
+
+    <pattern id="dots" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="12" cy="12" r="0.8" fill="#E8E6FF" fill-opacity="0.06"/>
+    </pattern>
+
+    <filter id="bigBlur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bgGrad)"/>
+  <rect width="1280" height="640" fill="url(#grid)"/>
+  <rect width="1280" height="640" fill="url(#dots)"/>
+
+  <!-- Ambient washes -->
+  <ellipse cx="380"  cy="320" rx="520" ry="380" fill="url(#haloLeft)"/>
+  <ellipse cx="1000" cy="480" rx="380" ry="240" fill="url(#haloRight)"/>
+  <ellipse cx="950"  cy="140" rx="320" ry="180" fill="url(#haloLeft)" opacity="0.55"/>
+
+  <!-- Horizon -->
+  <rect x="0" y="319" width="1280" height="1.5" fill="url(#horizonGrad)"/>
+
+  <!-- Scan rings -->
+  <g fill="none" stroke="#7B6FDE" stroke-opacity="0.09">
+    <circle cx="380" cy="320" r="160"/>
+    <circle cx="380" cy="320" r="240"/>
+    <circle cx="380" cy="320" r="340"/>
+  </g>
+
+  <!-- Starfield -->
+  <g fill="#E8E6FF">
+    <circle cx="90"   cy="80"  r="1.0" opacity="0.5"/>
+    <circle cx="240"  cy="50"  r="0.8" opacity="0.35"/>
+    <circle cx="620"  cy="70"  r="1.0" opacity="0.5"/>
+    <circle cx="820"  cy="110" r="1.2" opacity="0.6"/>
+    <circle cx="1060" cy="60"  r="0.9" opacity="0.4"/>
+    <circle cx="1200" cy="130" r="1.1" opacity="0.55"/>
+    <circle cx="140"  cy="570" r="1.0" opacity="0.45"/>
+    <circle cx="600"  cy="590" r="0.9" opacity="0.4"/>
+    <circle cx="780"  cy="550" r="1.1" opacity="0.55"/>
+    <circle cx="1120" cy="580" r="0.8" opacity="0.35"/>
+  </g>
+
+  <!-- ============ Ghost logo ============ -->
+  <g transform="translate(380 300) scale(1.7)">
+    <ellipse cx="0" cy="0" rx="200" ry="200" fill="#7B6FDE" opacity="0.18" filter="url(#bigBlur)"/>
+
+    <path d="
+      M -80 110
+      L -80 -10
+      C -80 -55, -60 -90, 0 -90
+      C 60 -90, 80 -55, 80 -10
+      L 80 110
+      L 60 80
+      L 40 110
+      L 20 80
+      L 0 110
+      L -20 80
+      L -40 110
+      L -60 80
+      Z
+    " fill="#7B6FDE" opacity="0.92"/>
+
+    <rect x="-55" y="-45" width="110" height="80" rx="7" fill="#0D0E1A"/>
+
+    <rect x="-45" y="-30" width="45" height="4" rx="2" fill="#5DCAA5" opacity="0.9"/>
+    <rect x="-45" y="-18" width="70" height="4" rx="2" fill="#5DCAA5" opacity="0.6"/>
+    <rect x="-45" y="-6"  width="35" height="4" rx="2" fill="#5DCAA5" opacity="0.4"/>
+    <rect x="-5"  y="-6"  width="8"  height="4" rx="1" fill="#5DCAA5" opacity="0.9"/>
+    <rect x="-45" y="6"   width="55" height="4" rx="2" fill="#5DCAA5" opacity="0.3"/>
+
+    <circle cx="-30" cy="-60" r="10" fill="#E8E6FF"/>
+    <circle cx="30"  cy="-60" r="10" fill="#E8E6FF"/>
+    <circle cx="-27" cy="-59" r="5"  fill="#1A1B2E"/>
+    <circle cx="33"  cy="-59" r="5"  fill="#1A1B2E"/>
+
+    <path d="M 45 25 L 45 45 L 52 38 L 60 50 L 64 48 L 56 36 L 65 33 Z" fill="#FFFFFF" opacity="0.95"/>
+  </g>
+
+  <!-- Divider -->
+  <line x1="620" y1="180" x2="620" y2="460" stroke="#7B6FDE" stroke-opacity="0.25" stroke-width="1"/>
+
+  <!-- ============ Wordmark ============ -->
+  <g font-family="'Helvetica Neue', 'Segoe UI', Roboto, sans-serif">
+    <text x="660" y="280" font-size="78" font-weight="500" fill="#E8E6FF" letter-spacing="4">GhostDesk</text>
+    <text x="662" y="312" font-size="14" font-weight="400" fill="#7B6FDE" opacity="0.9" letter-spacing="6">VIRTUAL  DESKTOP  CONTROL</text>
+
+    <text x="662" y="370" font-size="18" font-weight="400" fill="#E8E6FF" opacity="0.75">Give your AI agent eyes, hands,</text>
+    <text x="662" y="394" font-size="18" font-weight="400" fill="#E8E6FF" opacity="0.75">and a full Linux desktop.</text>
+
+    <g font-size="11" font-weight="500" letter-spacing="2" fill="#E8E6FF">
+      <g transform="translate(662 430)">
+        <rect x="0"   y="0" width="70"  height="24" rx="12" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="35"  y="16" text-anchor="middle" opacity="0.9">MCP</text>
+
+        <rect x="82"  y="0" width="86"  height="24" rx="12" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="125" y="16" text-anchor="middle" opacity="0.9">DOCKER</text>
+
+        <rect x="180" y="0" width="104" height="24" rx="12" fill="none" stroke="#5DCAA5" stroke-opacity="0.55"/>
+        <text x="232" y="16" text-anchor="middle" opacity="0.9" fill="#5DCAA5">VNC  READY</text>
+
+        <rect x="296" y="0" width="110" height="24" rx="12" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="351" y="16" text-anchor="middle" opacity="0.9">PYTHON 3.12+</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Corner brackets -->
+  <g stroke="#7B6FDE" stroke-opacity="0.35" stroke-width="1.5" fill="none">
+    <path d="M 28 28 L 28 68 M 28 28 L 68 28"/>
+    <path d="M 1252 28 L 1252 68 M 1252 28 L 1212 28"/>
+    <path d="M 28 612 L 28 572 M 28 612 L 68 612"/>
+    <path d="M 1252 612 L 1252 572 M 1252 612 L 1212 612"/>
+  </g>
+
+  <g font-family="'Helvetica Neue', monospace" font-size="10" fill="#E8E6FF" opacity="0.35" letter-spacing="2">
+    <text x="84" y="46">SESSION  /  ACTIVE</text>
+    <text x="1196" y="46" text-anchor="end">YV17  ·  GHOSTDESK</text>
+    <text x="84" y="600">VNC  ·  READY</text>
+    <text x="1196" y="600" text-anchor="end">v7.0</text>
+  </g>
+</svg>
