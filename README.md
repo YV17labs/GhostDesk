@@ -252,29 +252,33 @@ Your inference stack must cover four capabilities — all four are mandatory:
 3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
 4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
 
-### Coordinate space — pick the right `GHOSTDESK_MODEL_SPACE` for your model
+### Coordinate space — `GhostDesk-Model-Space` header
 
-Vision models disagree on how they emit click coordinates, and this is the single setting that matters most for click accuracy. GhostDesk supports both conventions through `GHOSTDESK_MODEL_SPACE`:
+By default no header is needed: Claude and the other major frontier LLMs work out of the box. **Qwen3.5** and **Qwen3-VL** need the client to send `GhostDesk-Model-Space: 1000` on every MCP request.
 
-| Value | Use for | Why |
-|-------|---------|-----|
-| `0` | **Frontier models** — Claude (all tiers including Haiku), GPT-4o, Gemini. | These models emit coordinates in native screen pixels directly. No remapping needed — they are sharp enough to target small icons without any normalisation layer in between. |
-| `1000` | **Qwen vision family** — Qwen3.5, Qwen3-VL, and other Qwen vision models. | These models were trained to emit coordinates in a normalised 0-1000 space regardless of the input image size. GhostDesk rescales their output to screen pixels at the MCP boundary. Using `0` with these models produces clicks that are wildly off. |
+Example MCP client config:
 
-Match the setting to the model and clicks land exactly where the model intended. Mismatch it and your agent will miss targets by half a screen — this is the most common source of "it kind of works but keeps missing" reports.
+```json
+{
+  "mcpServers": {
+    "ghostdesk": {
+      "url": "https://localhost:3000/mcp",
+      "headers": {
+        "GhostDesk-Model-Space": "1000"
+      }
+    }
+  }
+}
+```
 
 ### Running locally
 
 For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding on top of upstream: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP lands upstream we will archive the fork and point there directly.
 
-**Recommended models.** Desktop control needs *speed* more than raw intelligence — fast keyboard and mouse turns compound over a hundred-step workflow. Low-activation MoE vision models shine here: they stay responsive on modest hardware while reading icons sharply. Two solid picks from the Qwen vision family, both run with `GHOSTDESK_MODEL_SPACE=1000`:
+Run whatever local model you like. Two from the Qwen vision family that I've used and that work well for desktop control:
 
-- **[Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B)** — 35B parameters, only 3B active per token. The current sweet spot for single-GPU workstations.
-- **Qwen3-VL** — the Qwen3 vision-language branch, available in several sizes on the [Qwen Hugging Face org](https://huggingface.co/Qwen). Pick the size that fits your GPU budget.
-
-Both are distinct models in the same family — not aliases of each other. Either one works reliably once `GHOSTDESK_MODEL_SPACE=1000` is set.
-
-If you prefer a hosted frontier model instead (Claude, GPT-4o, Gemini), set `GHOSTDESK_MODEL_SPACE=0` — they emit native screen pixels.
+- **[Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B)** — 35B parameters, only 3B active per token.
+- **Qwen3-VL** — the Qwen3 vision-language branch, available in several sizes on the [Qwen Hugging Face org](https://huggingface.co/Qwen).
 
 ---
 
@@ -398,7 +402,6 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
 | `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
 | `GHOSTDESK_SCREEN_HEIGHT` | `1024` | Virtual screen height in pixels |
-| `GHOSTDESK_MODEL_SPACE` | `1000` | LLM coordinate convention — `0` for frontier models, `1000` for the Qwen vision family. Full rationale in [Model requirements](#model-requirements) → *Coordinate space*. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 
@@ -424,7 +427,7 @@ Reporting a vulnerability? Use GitHub's [private security advisory](../../securi
 
 ### My agent's clicks land off-target by a huge margin
 
-Almost always a `GHOSTDESK_MODEL_SPACE` mismatch. Frontier models (Claude, GPT-4o, Gemini) need `0`; the Qwen vision family needs `1000`. Full rationale in [Model requirements](#model-requirements) → *Coordinate space*.
+Almost always a coordinate-space mismatch. Frontier models (Claude, GPT-4o, Gemini) need no header (default pass-through); the Qwen vision family needs the client to send `GhostDesk-Model-Space: 1000` on every MCP request. Full rationale in [Model requirements](#model-requirements) → *Coordinate space*.
 
 ### The container refuses to start with a secrets error
 

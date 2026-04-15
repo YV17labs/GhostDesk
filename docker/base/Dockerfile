@@ -107,7 +107,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     GHOSTDESK_USER=agent \
     GHOSTDESK_DIR=/opt/ghostdesk \
-    PATH=/opt/ghostdesk/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    PATH=/opt/ghostdesk/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    XDG_RUNTIME_DIR=/run/user/1000 \
+    XDG_SESSION_TYPE=wayland \
+    WAYLAND_DISPLAY=wayland-1 \
+    DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus \
+    WLR_BACKENDS=headless \
+    WLR_HEADLESS_OUTPUTS=1 \
+    WLR_LIBINPUT_NO_DEVICES=1 \
+    WLR_RENDERER=pixman
 
 # Runtime-only python3 (no -dev, no compilers). TZ/LANG are re-applied at
 # boot by entrypoint.sh, so only en_US/C fallbacks are pre-generated.

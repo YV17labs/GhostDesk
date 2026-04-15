@@ -9,17 +9,7 @@ services:
       - "3000:3000"
       - "6080:6080"
     environment:
-      - GHOSTDESK_USER=vscode
       - GHOSTDESK_DIR=/workspaces/ghostdesk
+      - GHOSTDESK_USER=vscode
       - TZ=America/Montreal
       - LANG=fr_CA.UTF-8
-      - XDG_RUNTIME_DIR=/run/user/1000
-      - XDG_SESSION_TYPE=wayland
-      - WAYLAND_DISPLAY=wayland-1
-      - DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
-      - WLR_BACKENDS=headless
-      - WLR_HEADLESS_OUTPUTS=1
-      - WLR_LIBINPUT_NO_DEVICES=1
-      - WLR_RENDERER=pixman
-      - GHOSTDESK_MODEL_SPACE=1000
-    stop_grace_period: 10s

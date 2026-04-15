@@ -17,9 +17,9 @@ Major platform overhaul: migration from X11 / Openbox to a native Wayland / Sway
 
 ### Changed
 - **License:** AGPL-3.0 with Commons Clause → **[Functional Source License 1.1, ALv2 Future License](https://fsl.software/) (FSL-1.1-ALv2)**. The new license is cleaner and less ambiguous than the previous pairing: permitted purposes explicitly cover internal commercial use, non-commercial research/education, and professional services, while prohibiting Competing Use (reselling GhostDesk or offering it as a managed service). Each released version transitions automatically to Apache 2.0 on its second anniversary. File headers, PyPI classifier, OCI image labels, README, and CONTRIBUTING updated accordingly. Licensor: Yoann Vanitou.
-- **Environment variables namespaced under `GHOSTDESK_*`.** All Python runtime vars now live under a single namespace (`GHOSTDESK_PORT`, `GHOSTDESK_SCREEN_WIDTH`, `GHOSTDESK_MODEL_SPACE`, …). Standard POSIX vars (`TZ`, `LANG`) are kept as-is.
+- **Environment variables namespaced under `GHOSTDESK_*`.** All Python runtime vars now live under a single namespace (`GHOSTDESK_PORT`, `GHOSTDESK_SCREEN_WIDTH`, …). Standard POSIX vars (`TZ`, `LANG`) are kept as-is.
 - **Input stack.** Replaced `dotool` with direct Wayland virtual-pointer / virtual-keyboard protocols.
-- **Coordinate normalisation.** Middleware now normalises coordinates between model space and pixels (`GHOSTDESK_MODEL_SPACE=0` for frontier models, `1000` for Qwen-family models).
+- **Coordinate normalisation.** Middleware rescales LLM coordinates to screen pixels per request, driven by the `GhostDesk-Model-Space` HTTP header (e.g. `1000` for Qwen-family models). No header → pass-through (frontier models like Claude, GPT-4o, Gemini).
 - **Tool naming.** Adopted a `verb_noun` convention throughout the tool surface.
 - **Docker layout.** Restructured into per-service subdirectories (`docker/base`, `docker/init`, `docker/services/...`).
 - **README** restructured around an agents-first pitch with an mkcert quickstart.
