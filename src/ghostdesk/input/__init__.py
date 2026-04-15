@@ -1,9 +1,9 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
 """Input domain — mouse and keyboard control."""
 
 from mcp.server.fastmcp import FastMCP
 
-from ghostdesk.input.keyboard import press_key, type_text
+from ghostdesk.input.keyboard import key_press, key_type
 from ghostdesk.input.mouse import (
     mouse_click,
     mouse_double_click,
@@ -18,5 +18,5 @@ def register(mcp: FastMCP) -> None:
     mcp.tool()(mouse_double_click)
     mcp.tool()(mouse_drag)
     mcp.tool()(mouse_scroll)
-    mcp.tool()(type_text)
-    mcp.tool()(press_key)
+    mcp.tool()(key_type)
+    mcp.tool()(key_press)

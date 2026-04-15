@@ -1,4 +1,4 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
 """Post-action visual feedback — poll a screen zone until it changes."""
 
 import asyncio

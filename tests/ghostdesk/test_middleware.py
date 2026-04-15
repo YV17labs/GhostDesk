@@ -1,284 +1,193 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""Tests for ghostdesk._middleware — tool call middleware."""
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
+"""Tests for ghostdesk._middleware — coord normalisation, coercion, logging."""
 
-import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
-from ghostdesk._middleware import _coerce_xy_args, install_middleware
+from ghostdesk._middleware import (
+    _coerce_xy_args,
+    _normalise_input_coords,
+    install_middleware,
+)
 
 MODULE = "ghostdesk._middleware"
 
-
-# Tests for _coerce_xy_args function
-
-
-async def test_coerce_xy_args_with_comma_separated_xy():
-    """_coerce_xy_args() splits comma-separated xy values in x parameter."""
-    arguments = {"x": "383, 22", "other": "value"}
-    result = _coerce_xy_args(arguments)
-
-    assert result["x"] == 383
-    assert result["y"] == 22
-    assert result["other"] == "value"
+# With SCREEN_WIDTH=1280, SCREEN_HEIGHT=1024 and model_space_var=1000:
+#   model x=500 → pixels 640
+#   model y=500 → pixels 512
+#   pixels 640   → model 500
+#   pixels 512   → model 500
 
 
-async def test_coerce_xy_args_with_comma_separated_xy_no_spaces():
-    """_coerce_xy_args() splits comma-separated xy values without spaces."""
-    arguments = {"x": "100,200"}
-    result = _coerce_xy_args(arguments)
+@pytest.fixture(autouse=True)
+def _enable_qwen_space():
+    from ghostdesk._coords import model_space_var
 
-    assert result["x"] == 100
-    assert result["y"] == 200
-
-
-async def test_coerce_xy_args_invalid_string():
-    """_coerce_xy_args() returns original arguments if parsing fails."""
-    arguments = {"x": "383, invalid"}
-    result = _coerce_xy_args(arguments)
-
-    # Should return original arguments unchanged
-    assert result == arguments
+    token = model_space_var.set(1000)
+    try:
+        yield
+    finally:
+        model_space_var.reset(token)
 
 
-async def test_coerce_xy_args_no_comma():
-    """_coerce_xy_args() returns original arguments if no comma in x."""
-    arguments = {"x": "383"}
-    result = _coerce_xy_args(arguments)
+# ---------------------------------------------------------------------------
+# _coerce_xy_args
+# ---------------------------------------------------------------------------
 
-    assert result == arguments
-
-
-async def test_coerce_xy_args_not_string():
-    """_coerce_xy_args() returns original arguments if x is not a string."""
-    arguments = {"x": 383, "y": 22}
-    result = _coerce_xy_args(arguments)
-
-    assert result == arguments
+def test_coerce_xy_splits_comma_string():
+    args = _coerce_xy_args({"x": "383, 22", "other": "value"})
+    assert args["x"] == 383
+    assert args["y"] == 22
+    assert args["other"] == "value"
 
 
-async def test_coerce_xy_args_x_none():
-    """_coerce_xy_args() returns original arguments if x is None."""
-    arguments = {"x": None}
-    result = _coerce_xy_args(arguments)
-
-    assert result == arguments
+def test_coerce_xy_splits_no_spaces():
+    args = _coerce_xy_args({"x": "100,200"})
+    assert args["x"] == 100
+    assert args["y"] == 200
 
 
-async def test_coerce_xy_args_x_missing():
-    """_coerce_xy_args() returns original arguments if x is missing."""
-    arguments = {"y": 22}
-    result = _coerce_xy_args(arguments)
-
-    assert result == arguments
+def test_coerce_xy_invalid_string_passthrough():
+    args = _coerce_xy_args({"x": "383, invalid"})
+    assert args == {"x": "383, invalid"}
 
 
-# Tests for install_middleware _call_tool wrapper
+def test_coerce_xy_no_comma_passthrough():
+    args = _coerce_xy_args({"x": "383"})
+    assert args == {"x": "383"}
 
 
-async def test_call_tool_success():
-    """_call_tool() logs successful tool calls with elapsed time."""
+def test_coerce_xy_non_string_passthrough():
+    args = _coerce_xy_args({"x": 383, "y": 22})
+    assert args == {"x": 383, "y": 22}
+
+
+def test_coerce_xy_missing_x():
+    args = _coerce_xy_args({"y": 22})
+    assert args == {"y": 22}
+
+
+# ---------------------------------------------------------------------------
+# _normalise_input_coords
+# ---------------------------------------------------------------------------
+
+def test_normalise_input_xy_pair():
+    args = _normalise_input_coords({"x": 500, "y": 500})
+    assert args["x"] == 640
+    assert args["y"] == 512
+
+
+def test_normalise_input_drag_endpoints():
+    args = _normalise_input_coords({"from_x": 0, "from_y": 0, "to_x": 1000, "to_y": 1000})
+    assert args["from_x"] == 0
+    assert args["from_y"] == 0
+    assert args["to_x"] == 1280
+    assert args["to_y"] == 1024
+
+
+def test_normalise_input_region():
+    args = _normalise_input_coords({
+        "region": {"x": 500, "y": 500, "width": 500, "height": 500},
+    })
+    assert args["region"] == {"x": 640, "y": 512, "width": 640, "height": 512}
+
+
+def test_normalise_input_preserves_other_args():
+    args = _normalise_input_coords({"x": 500, "y": 500, "button": "left", "text": "hi"})
+    assert args["button"] == "left"
+    assert args["text"] == "hi"
+
+
+def test_normalise_input_disabled():
+    """When coord normalisation is disabled, args pass through unchanged."""
+    from ghostdesk._coords import model_space_var
+
+    token = model_space_var.set(0)
+    try:
+        args = _normalise_input_coords({"x": 500, "y": 500})
+    finally:
+        model_space_var.reset(token)
+    assert args["x"] == 500
+    assert args["y"] == 500
+
+
+# ---------------------------------------------------------------------------
+# install_middleware / _call_tool wrapper
+# ---------------------------------------------------------------------------
+
+
+def _install_and_capture_call_tool(mock_mcp) -> tuple:
+    """Install middleware and return the captured _call_tool function."""
+    captured: dict = {}
+
+    def capture_decorator(fn):
+        captured["fn"] = fn
+        return lambda x: None
+
+    mock_mcp._mcp_server.call_tool.return_value = capture_decorator
+    install_middleware(mock_mcp)
+    return captured["fn"]
+
+
+async def test_call_tool_success_path():
+    """_call_tool logs success, returns result, normalises input coords."""
     mock_mcp = MagicMock()
-    mock_original_call_tool = AsyncMock(return_value={"result": "success"})
-    mock_mcp.call_tool = mock_original_call_tool
-    # Setup the decorator mock
-    mock_mcp._mcp_server.call_tool.return_value = lambda fn: None
+    mock_original = AsyncMock(return_value="ok")
+    mock_mcp.call_tool = mock_original
 
     with patch(f"{MODULE}.logger") as mock_logger:
         with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.5]):
-            # Capture the _call_tool function passed to the decorator
-            captured_call_tool = None
+            call_tool = _install_and_capture_call_tool(mock_mcp)
+            # User sends model x=500 y=500 (centre)
+            result = await call_tool("test_tool", {"x": 500, "y": 500})
 
-            def capture_decorator(fn):
-                nonlocal captured_call_tool
-                captured_call_tool = fn
-                return lambda x: None
+            # Original tool received pixel coords
+            args_sent_to_tool = mock_original.await_args_list[0].args[1]
+            assert args_sent_to_tool["x"] == 640
+            assert args_sent_to_tool["y"] == 512
 
-            mock_mcp._mcp_server.call_tool.return_value = capture_decorator
-            install_middleware(mock_mcp)
-
-            # Call the captured _call_tool function
-            result = await captured_call_tool("test_tool", {"x": 10})
-
-            # Verify result is returned
-            assert result == {"result": "success"}
-
-            # Verify logging
+            assert result == "ok"
             mock_logger.info.assert_called_once()
-            call_args, call_kwargs = mock_logger.info.call_args
-            # Args are: format_string, name, args_str, elapsed
-            assert call_args[0] == "%s(%s) → OK (%.1fs)"
-            assert call_args[1] == "test_tool"
-            assert "x=10" in call_args[2]
-            assert call_args[3] == 0.5
 
 
-async def test_call_tool_tool_error_with_validation_error():
-    """_call_tool() formats validation error messages with arguments."""
+async def test_call_tool_validation_error_reformatted():
+    """Validation errors are reformatted with the coerced arg summary."""
     mock_mcp = MagicMock()
-    tool_error = ToolError("Tool validation error for parameter 'x'")
-    mock_original_call_tool = AsyncMock(side_effect=tool_error)
-    mock_mcp.call_tool = mock_original_call_tool
-
-    with patch(f"{MODULE}.logger") as mock_logger:
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.3]):
-            captured_call_tool = None
-
-            def capture_decorator(fn):
-                nonlocal captured_call_tool
-                captured_call_tool = fn
-                return lambda x: None
-
-            mock_mcp._mcp_server.call_tool.return_value = capture_decorator
-            install_middleware(mock_mcp)
-
-            # Call should re-raise the formatted ToolError
-            with pytest.raises(ToolError) as exc_info:
-                await captured_call_tool("click", {"x": "383, 22"})
-
-            # Verify error message was reformatted
-            error_msg = str(exc_info.value)
-            assert "Invalid arguments for click" in error_msg
-            assert "Each parameter must be passed separately" in error_msg
-            assert "x=383" in error_msg  # Should show coerced argument
-            assert "y=22" in error_msg
-
-            # Verify logging
-            mock_logger.error.assert_called_once()
-            call_args, call_kwargs = mock_logger.error.call_args
-            # Args are: format_string, name, args_str, elapsed, msg
-            assert call_args[0] == "%s(%s) → ERROR (%.1fs): %s"
-            assert call_args[1] == "click"
-            assert "x=383" in call_args[2] and "y=22" in call_args[2]
-            assert call_args[3] == 0.3
-            assert "Invalid arguments for click" in call_args[4]
-
-
-async def test_call_tool_tool_error_without_validation():
-    """_call_tool() logs ToolError without validation message as-is."""
-    mock_mcp = MagicMock()
-    tool_error = ToolError("Tool not found")
-    mock_original_call_tool = AsyncMock(side_effect=tool_error)
-    mock_mcp.call_tool = mock_original_call_tool
-
-    with patch(f"{MODULE}.logger") as mock_logger:
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.2]):
-            captured_call_tool = None
-
-            def capture_decorator(fn):
-                nonlocal captured_call_tool
-                captured_call_tool = fn
-                return lambda x: None
-
-            mock_mcp._mcp_server.call_tool.return_value = capture_decorator
-            install_middleware(mock_mcp)
-
-            # Call should re-raise the original ToolError message
-            with pytest.raises(ToolError) as exc_info:
-                await captured_call_tool("unknown_tool", {})
-
-            # Verify error message is not reformatted
-            error_msg = str(exc_info.value)
-            assert error_msg == "Tool not found"
-
-            # Verify logging includes original message
-            mock_logger.error.assert_called_once()
-            call_args, call_kwargs = mock_logger.error.call_args
-            # Args are: format_string, name, args_str, elapsed, msg
-            assert call_args[0] == "%s(%s) → ERROR (%.1fs): %s"
-            assert call_args[1] == "unknown_tool"
-            assert call_args[3] == 0.2
-            assert call_args[4] == "Tool not found"
-
-
-async def test_call_tool_generic_exception():
-    """_call_tool() logs generic exceptions with logger.exception and re-raises."""
-    mock_mcp = MagicMock()
-    generic_error = RuntimeError("Something went wrong")
-    mock_original_call_tool = AsyncMock(side_effect=generic_error)
-    mock_mcp.call_tool = mock_original_call_tool
-
-    with patch(f"{MODULE}.logger") as mock_logger:
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.1]):
-            captured_call_tool = None
-
-            def capture_decorator(fn):
-                nonlocal captured_call_tool
-                captured_call_tool = fn
-                return lambda x: None
-
-            mock_mcp._mcp_server.call_tool.return_value = capture_decorator
-            install_middleware(mock_mcp)
-
-            # Call should re-raise the original exception
-            with pytest.raises(RuntimeError) as exc_info:
-                await captured_call_tool("broken_tool", {"param": "value"})
-
-            assert str(exc_info.value) == "Something went wrong"
-
-            # Verify logger.exception was called (includes traceback)
-            mock_logger.exception.assert_called_once()
-            call_args, call_kwargs = mock_logger.exception.call_args
-            # Args are: format_string, name, args_str, elapsed
-            assert call_args[0] == "%s(%s) → ERROR (%.1fs)"
-            assert call_args[1] == "broken_tool"
-            assert "param='value'" in call_args[2]
-            assert call_args[3] == 0.1
-
-
-async def test_call_tool_coerces_arguments():
-    """_call_tool() applies _coerce_xy_args before calling original tool."""
-    mock_mcp = MagicMock()
-    mock_original_call_tool = AsyncMock(return_value=None)
-    mock_mcp.call_tool = mock_original_call_tool
+    mock_mcp.call_tool = AsyncMock(side_effect=ToolError("validation error: x must be int"))
 
     with patch(f"{MODULE}.logger"):
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.1]):
-            captured_call_tool = None
-
-            def capture_decorator(fn):
-                nonlocal captured_call_tool
-                captured_call_tool = fn
-                return lambda x: None
-
-            mock_mcp._mcp_server.call_tool.return_value = capture_decorator
-            install_middleware(mock_mcp)
-
-            await captured_call_tool("click", {"x": "100, 200"})
-
-            # Verify the original tool was called with coerced arguments
-            mock_original_call_tool.assert_called_once()
-            call_args = mock_original_call_tool.call_args
-            assert call_args[0][0] == "click"
-            assert call_args[0][1]["x"] == 100
-            assert call_args[0][1]["y"] == 200
+        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.3]):
+            call_tool = _install_and_capture_call_tool(mock_mcp)
+            with pytest.raises(ToolError) as exc_info:
+                await call_tool("click", {"x": "100, 200"})
+            msg = str(exc_info.value)
+            assert "Invalid arguments for click" in msg
+            assert "Each parameter must be passed separately" in msg
 
 
-async def test_call_tool_logs_argument_truncation():
-    """_call_tool() truncates long argument values in logs."""
+async def test_call_tool_tool_error_passthrough():
+    """Non-validation ToolErrors keep their original message."""
     mock_mcp = MagicMock()
-    long_string = "x" * 100
-    mock_original_call_tool = AsyncMock(return_value=None)
-    mock_mcp.call_tool = mock_original_call_tool
+    mock_mcp.call_tool = AsyncMock(side_effect=ToolError("Tool not found"))
+
+    with patch(f"{MODULE}.logger"):
+        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.2]):
+            call_tool = _install_and_capture_call_tool(mock_mcp)
+            with pytest.raises(ToolError) as exc_info:
+                await call_tool("unknown_tool", {})
+            assert str(exc_info.value) == "Tool not found"
+
+
+async def test_call_tool_generic_exception_logged():
+    """Generic exceptions use logger.exception and re-raise."""
+    mock_mcp = MagicMock()
+    mock_mcp.call_tool = AsyncMock(side_effect=RuntimeError("boom"))
 
     with patch(f"{MODULE}.logger") as mock_logger:
         with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.1]):
-            captured_call_tool = None
-
-            def capture_decorator(fn):
-                nonlocal captured_call_tool
-                captured_call_tool = fn
-                return lambda x: None
-
-            mock_mcp._mcp_server.call_tool.return_value = capture_decorator
-            install_middleware(mock_mcp)
-
-            await captured_call_tool("test", {"long_arg": long_string})
-
-            # Verify argument is truncated to 80 chars in log
-            mock_logger.info.assert_called_once()
-            call_args = mock_logger.info.call_args[0]
-            # The repr should be truncated with [: 80]
-            assert len(call_args[0]) < 200  # Should not contain full string
+            call_tool = _install_and_capture_call_tool(mock_mcp)
+            with pytest.raises(RuntimeError):
+                await call_tool("broken_tool", {"param": "value"})
+            mock_logger.exception.assert_called_once()

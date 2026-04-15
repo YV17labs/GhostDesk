@@ -1,5 +1,12 @@
-# Copyright (c) 2026 YV17 — AGPL-3.0 with Commons Clause
-"""MCP call-tool middleware: argument coercion and call logging."""
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
+"""MCP call-tool middleware: coordinate normalisation, argument coercion, and call logging.
+
+When the client sends ``GhostDesk-Model-Space: <N>`` on the request,
+rescales the LLM's normalised coordinates to screen pixels before any
+tool sees them. Otherwise pass-through.
+"""
+
+from __future__ import annotations
 
 import logging
 import time
@@ -7,7 +14,20 @@ import time
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 
+from ghostdesk._coords import (
+    is_enabled as _coords_enabled,
+    region_to_pixels,
+    to_pixels,
+)
+
 logger = logging.getLogger("ghostdesk")
+
+# (input_key, output_key) pairs that carry xy coordinates in tool arguments.
+_XY_PAIRS: tuple[tuple[str, str], ...] = (
+    ("x", "y"),
+    ("from_x", "from_y"),
+    ("to_x", "to_y"),
+)
 
 
 def _coerce_xy_args(arguments: dict) -> dict:
@@ -31,6 +51,31 @@ def _coerce_xy_args(arguments: dict) -> dict:
     return fixed
 
 
+def _normalise_input_coords(arguments: dict) -> dict:
+    """Convert model coordinates to screen pixels for all known xy pairs.
+
+    No-op when no ``GhostDesk-Model-Space`` header was sent (frontier
+    models like Claude, GPT-4o, Gemini emit native pixels).
+    """
+    if not _coords_enabled():
+        return arguments
+    args = dict(arguments)
+
+    for kx, ky in _XY_PAIRS:
+        if kx in args and ky in args:
+            args[kx], args[ky] = to_pixels(int(args[kx]), int(args[ky]))
+
+    region = args.get("region")
+    if isinstance(region, dict) and all(k in region for k in ("x", "y", "width", "height")):
+        px, py, pw, ph = region_to_pixels(
+            int(region["x"]), int(region["y"]),
+            int(region["width"]), int(region["height"]),
+        )
+        args["region"] = {"x": px, "y": py, "width": pw, "height": ph}
+
+    return args
+
+
 def install_middleware(mcp: FastMCP) -> None:
     """Wrap call_tool with argument coercion and call logging.
 
@@ -45,24 +90,25 @@ def install_middleware(mcp: FastMCP) -> None:
 
     async def _call_tool(name: str, arguments: dict) -> object:
         arguments = _coerce_xy_args(arguments)
+        arguments = _normalise_input_coords(arguments)
         args_str = ", ".join(f"{k}={repr(v)[:80]}" for k, v in arguments.items())
 
         t0 = time.monotonic()
         try:
             result = await original_call_tool(name, arguments)
-            elapsed = time.monotonic() - t0
-            logger.info("%s(%s) → OK (%.1fs)", name, args_str, elapsed)
+            logger.info("%s(%s) → OK (%.1fs)", name, args_str, time.monotonic() - t0)
             return result
         except ToolError as e:
-            elapsed = time.monotonic() - t0
             msg = str(e)
             if "validation error" in msg.lower():
-                msg = f"Invalid arguments for {name}. You sent: {args_str}. Each parameter must be passed separately with the correct type."
-            logger.error("%s(%s) → ERROR (%.1fs): %s", name, args_str, elapsed, msg)
+                msg = (
+                    f"Invalid arguments for {name}. You sent: {args_str}. "
+                    "Each parameter must be passed separately with the correct type."
+                )
+            logger.error("%s(%s) → ERROR (%.1fs): %s", name, args_str, time.monotonic() - t0, msg)
             raise ToolError(msg) from e
         except Exception:
-            elapsed = time.monotonic() - t0
-            logger.exception("%s(%s) → ERROR (%.1fs)", name, args_str, elapsed)
+            logger.exception("%s(%s) → ERROR (%.1fs)", name, args_str, time.monotonic() - t0)
             raise
 
     mcp._mcp_server.call_tool(validate_input=False)(_call_tool)

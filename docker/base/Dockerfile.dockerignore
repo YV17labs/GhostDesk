@@ -1,0 +1,10 @@
+**
+
+!pyproject.toml
+!uv.lock
+!src/
+!src/**
+!docker/
+!docker/**
+!assets/wallpaper.png
+!assets/logo-mark.svg
