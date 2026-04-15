@@ -26,7 +26,9 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /opt/ghostdesk
 # hatchling reads README.md at wheel-build time but its content is
 # irrelevant. Stubbing keeps the `uv sync` layer cache-stable across doc edits.
-COPY pyproject.toml uv.lock ./
+# LICENSE is required by pyproject.toml `license = { file = "LICENSE" }`
+# and hatchling validates it exists at wheel-build time.
+COPY pyproject.toml uv.lock LICENSE ./
 COPY src/ ./src/
 RUN echo 'See https://github.com/yv17labs/ghostdesk' > README.md \
     && uv sync --frozen --no-dev --compile-bytecode --no-editable
