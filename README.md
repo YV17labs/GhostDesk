@@ -24,6 +24,23 @@
 
 ---
 
+## Table of contents
+
+- [Why GhostDesk?](#why-ghostdesk)
+- [How it works](#how-it-works)
+- [Quick start](#quick-start)
+- [Secure local run (TLS + auth)](#secure-local-run-tls--auth)
+- [Tools](#tools)
+- [Model requirements](#model-requirements)
+- [From one agent to a workforce](#from-one-agent-to-a-workforce)
+- [Configuration](#configuration)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
+- [Custom image](#custom-image)
+- [License](#license)
+
+---
+
 ## Why GhostDesk?
 
 Browser automation tools (Playwright, Puppeteer, Selenium…) were built for human test engineers driving a browser with selectors. They do one thing, and they do it well — inside the browser.
@@ -40,9 +57,9 @@ That is what *agents using a desktop* looks like.
 
 ### Runs on models you can actually host
 
-Desktop control needs to be **fast** — an agent that takes twelve seconds to decide where to click is unusable. GhostDesk's perception design (screenshots with region cropping, compact 12-tool surface, configurable coordinate space) is built so that vision-language models from the Qwen3-VL family running on a single workstation GPU are a first-class target, not an afterthought. No API bill, no screenshots of your desktop leaving your network.
+Desktop control needs to be **fast** — an agent that takes twelve seconds to decide where to click is unusable. GhostDesk is tuned so that vision-language models from the Qwen family running on a single workstation GPU are a first-class target, not an afterthought. No API bill, no screenshots of your desktop leaving your network.
 
-Frontier models (Claude, GPT-4, Gemini) work too and remain the smoothest path — but they are not the bar. The project is explicitly designed so the medium, self-hosted tier delivers reliable results on real workflows.
+Frontier models (Claude, GPT-4o, Gemini) work too and remain the smoothest path — but they are not the bar. See [Model requirements](#model-requirements) for the supported stacks and the one coordinate-space setting that matters.
 
 ---
 
@@ -52,7 +69,7 @@ GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP se
 
 The agent perceives the screen by calling `screen_shot()`, which captures the full desktop at native resolution and returns it as WebP (or PNG). An optional `region=` argument can crop to a sub-rectangle when the agent explicitly wants to narrow its focus.
 
-This works with **any application** — web apps, native apps, legacy software, Canvas, WebGL. If it renders pixels, the agent can use it.
+This works with **any application** — web apps, native apps, legacy software, Canvas, WebGL.
 
 ---
 
@@ -70,13 +87,15 @@ docker run -d --name ghostdesk-demo \
   ghcr.io/yv17labs/ghostdesk:latest
 ```
 
+The `latest` image ships with **Firefox**, the **foot** terminal, **mousepad** (text editor), **galculator**, and passwordless `sudo` for the `agent` user — enough to demo a browsing + note-taking workflow out of the box. Need a different app set? Build your own on top of `base` — see [Custom image](#custom-image).
+
 The container boots in the dev posture: plain HTTP on both ports, every auth gate disarmed on purpose. You'll see warnings in the logs reminding you of that — they go away once you follow the secured path below.
 
 ### 2. Connect your AI
 
-GhostDesk works with any MCP-compatible client. Add it to your config:
+GhostDesk speaks [MCP](https://modelcontextprotocol.io/) over the Streamable HTTP transport — any MCP-compatible client can drive it. Point your client at `http://localhost:3000/mcp`:
 
-**Claude Desktop / Claude Code** (Streamable HTTP)
+**Claude Desktop / Claude Code**
 ```json
 {
   "mcpServers": {
@@ -88,7 +107,9 @@ GhostDesk works with any MCP-compatible client. Add it to your config:
 }
 ```
 
-**ChatGPT, Gemini, or any LLM with MCP support** — point it at the same `http://localhost:3000/mcp`, no headers, no auth. That's the whole demo posture.
+**Any other MCP-compatible client** — same URL, no headers, no auth. That's the whole demo posture.
+
+> **Drop in the recommended system prompt.** [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) gives your agent a battle-tested baseline — keyboard first, see/act/confirm, clear popups, scroll-to-read. It measurably improves reliability across both frontier and self-hosted models. Copy it into your agent's system prompt before the first run.
 
 ### 3. Watch your agent work
 
@@ -98,7 +119,20 @@ Open `http://localhost:6080/` in your browser to see the virtual desktop in real
 |---------|-----|
 | MCP server | `http://localhost:3000/mcp` |
 | noVNC (browser) | `http://localhost:6080/` |
-| VNC (loopback only — bound to `127.0.0.1` inside the container) | — |
+
+Give your agent a first prompt to confirm the wiring is right:
+
+> *"Take a screenshot of the desktop, list the installed applications, then open Firefox and go to wikipedia.org."*
+
+You should see Firefox launch in the noVNC tab, the URL bar fill in, and the page load — all under your agent's control.
+
+### 4. When you're done
+
+```bash
+docker stop ghostdesk-demo && docker rm ghostdesk-demo
+```
+
+The demo run creates no named volume, so this leaves nothing behind.
 
 ---
 
@@ -117,7 +151,11 @@ mkcert -cert-file tls/server.crt -key-file tls/server.key localhost 127.0.0.1 ::
 # Generate the MCP and VNC secrets
 export GHOSTDESK_AUTH_TOKEN=$(openssl rand -hex 32)
 export GHOSTDESK_VNC_PASSWORD=$(openssl rand -hex 16)
+```
 
+Pick a container name that matches the agent's role — `sales-agent`, `research-agent`, `accounting-agent`… Below we use `my-agent` as a placeholder; replace it everywhere in the command.
+
+```bash
 # Run the container — cert mounted, TLS + auth enabled everywhere
 docker run -d --name ghostdesk-my-agent \
   --restart unless-stopped \
@@ -138,11 +176,9 @@ echo "MCP token:    $GHOSTDESK_AUTH_TOKEN"
 echo "VNC password: $GHOSTDESK_VNC_PASSWORD"
 ```
 
-Replace `my-agent` with whatever name fits your use case — `sales-agent`, `research-agent`, `accounting-agent`…
-
 Once the container is up, update your MCP client config — same shape as the demo, now over `https://` with a bearer token:
 
-**Claude Desktop / Claude Code** (Streamable HTTP)
+**Claude Desktop / Claude Code**
 ```json
 {
   "mcpServers": {
@@ -157,7 +193,7 @@ Once the container is up, update your MCP client config — same shape as the de
 }
 ```
 
-**ChatGPT, Gemini, or any LLM with MCP support** — same URL and `Authorization: Bearer <token>` header in whatever form your client accepts.
+**Any other MCP-compatible client** — same URL, plus an `Authorization: Bearer <token>` header in whatever form your client accepts.
 
 Then open `https://localhost:6080/` in your browser — the `mkcert` CA installed by `mkcert -install` is already in your trust store, so the browser accepts the cert with no warning. noVNC will prompt for `$GHOSTDESK_VNC_PASSWORD`.
 
@@ -166,8 +202,6 @@ Then open `https://localhost:6080/` in your browser — the `mkcert` CA installe
 > **`--cap-add SYS_ADMIN`** — Required by Electron apps (VS Code, Slack, etc.) and other applications that need Linux user namespaces to run their sandbox. Safe to remove if you don't need them.
 
 The named volume persists the agent's home directory across restarts — browser passwords, bookmarks, cookies, downloads, and desktop preferences are all preserved. On the first run, Docker automatically seeds the volume with the default configuration from the image.
-
-> **Recommended system prompt (applies to both postures above).** Drop [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) into your agent's system prompt for a battle-tested baseline — a handful of principles (keyboard first, see/act/confirm, clear popups, scroll-to-read) that measurably improve reliability across both frontier and self-hosted models.
 
 ---
 
@@ -209,6 +243,41 @@ The named volume persists the agent's home directory across restarts — browser
 
 ---
 
+## Model requirements
+
+Your inference stack must cover four capabilities — all four are mandatory:
+
+1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
+2. **Tool use** — GhostDesk exposes 12 tools as function calls; the model must be able to invoke them.
+3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
+4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
+
+### Coordinate space — pick the right `GHOSTDESK_MODEL_SPACE` for your model
+
+Vision models disagree on how they emit click coordinates, and this is the single setting that matters most for click accuracy. GhostDesk supports both conventions through `GHOSTDESK_MODEL_SPACE`:
+
+| Value | Use for | Why |
+|-------|---------|-----|
+| `0` | **Frontier models** — Claude (all tiers including Haiku), GPT-4o, Gemini. | These models emit coordinates in native screen pixels directly. No remapping needed — they are sharp enough to target small icons without any normalisation layer in between. |
+| `1000` | **Qwen vision family** — Qwen3.5, Qwen3-VL, and other Qwen vision models. | These models were trained to emit coordinates in a normalised 0-1000 space regardless of the input image size. GhostDesk rescales their output to screen pixels at the MCP boundary. Using `0` with these models produces clicks that are wildly off. |
+
+Match the setting to the model and clicks land exactly where the model intended. Mismatch it and your agent will miss targets by half a screen — this is the most common source of "it kind of works but keeps missing" reports.
+
+### Running locally
+
+For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding on top of upstream: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP lands upstream we will archive the fork and point there directly.
+
+**Recommended models.** Desktop control needs *speed* more than raw intelligence — fast keyboard and mouse turns compound over a hundred-step workflow. Low-activation MoE vision models shine here: they stay responsive on modest hardware while reading icons sharply. Two solid picks from the Qwen vision family, both run with `GHOSTDESK_MODEL_SPACE=1000`:
+
+- **[Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B)** — 35B parameters, only 3B active per token. The current sweet spot for single-GPU workstations.
+- **Qwen3-VL** — the Qwen3 vision-language branch, available in several sizes on the [Qwen Hugging Face org](https://huggingface.co/Qwen). Pick the size that fits your GPU budget.
+
+Both are distinct models in the same family — not aliases of each other. Either one works reliably once `GHOSTDESK_MODEL_SPACE=1000` is set.
+
+If you prefer a hosted frontier model instead (Claude, GPT-4o, Gemini), set `GHOSTDESK_MODEL_SPACE=0` — they emit native screen pixels.
+
+---
+
 ## From one agent to a workforce
 
 Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each agent gets its own isolated desktop, its own apps, its own role. Think of it as hiring a team of digital employees, each with their own workstation.
@@ -218,22 +287,11 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 ```yaml
 # docker-compose.yml — 3 specialized agents, one command
 #
-# Secrets (GHOSTDESK_AUTH_TOKEN, GHOSTDESK_VNC_PASSWORD) come from a .env
-# file (git-ignored) or your secret manager. On Kubernetes, wire them from
-# a Secret via `valueFrom.secretKeyRef`. See SECURITY.md for the full
-# secret-handling contract.
-#
-# TLS cert + key are mounted from ./tls on every service — generate once
-# with `mkcert` for local runs, swap for a real cert in production:
-#
-#   mkcert -install
-#   mkdir -p tls
-#   mkcert -cert-file tls/server.crt -key-file tls/server.key \
-#     localhost 127.0.0.1 ::1
-#
-# Mounting the cert flips GhostDesk into its prod posture: wss:// on both
-# ports, bearer-token on MCP, single-password prompt on noVNC. See the
-# Security section of this README for the Auth ≡ TLS rationale.
+# Prerequisites: the TLS cert + key at ./tls and the two secrets
+# (GHOSTDESK_AUTH_TOKEN, GHOSTDESK_VNC_PASSWORD) in your environment or a
+# .env file. Generate both exactly as shown in the Secure local run
+# section above. See SECURITY.md for the production secret-handling
+# contract.
 
 x-ghostdesk-defaults: &ghostdesk-defaults
   image: ghcr.io/yv17labs/ghostdesk:latest
@@ -318,41 +376,6 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 ---
 
-## Model requirements
-
-Your inference stack must cover four capabilities — all four are mandatory:
-
-1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
-2. **Tool use** — GhostDesk exposes 12 tools as function calls; the model must be able to invoke them.
-3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
-4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
-
-### Coordinate space — pick the right `GHOSTDESK_MODEL_SPACE` for your model
-
-Vision models disagree on how they emit click coordinates, and this is the single setting that matters most for click accuracy. GhostDesk supports both conventions through `GHOSTDESK_MODEL_SPACE`:
-
-| Value | Use for | Why |
-|-------|---------|-----|
-| `0` | **Frontier models** — Claude (all tiers including Haiku), GPT-4o, Gemini. | These models emit coordinates in native screen pixels directly. No remapping needed — they are sharp enough to target small icons without any normalisation layer in between. |
-| `1000` | **Qwen vision family** — Qwen3.5, Qwen3-VL, and other Qwen vision models. | These models were trained to emit coordinates in a normalised 0-1000 space regardless of the input image size. GhostDesk rescales their output to screen pixels at the MCP boundary. Using `0` with these models produces clicks that are wildly off. |
-
-Match the setting to the model and clicks land exactly where the model intended. Mismatch it and your agent will miss targets by half a screen — this is the most common source of "it kind of works but keeps missing" reports.
-
-### Running locally
-
-For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding on top of upstream: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP lands upstream we will archive the fork and point there directly.
-
-**Recommended models.** Desktop control needs *speed* more than raw intelligence — fast keyboard and mouse turns compound over a hundred-step workflow. Low-activation MoE vision models shine here: they stay responsive on modest hardware while reading icons sharply. Two solid picks from the Qwen vision family, both run with `GHOSTDESK_MODEL_SPACE=1000`:
-
-- **[Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B)** — 35B parameters, only 3B active per token. The current sweet spot for single-GPU workstations.
-- **Qwen3-VL** — the Qwen3 vision-language branch, available in several sizes on the [Qwen Hugging Face org](https://huggingface.co/Qwen). Pick the size that fits your GPU budget.
-
-Both are distinct models in the same family — not aliases of each other. Either one works reliably once `GHOSTDESK_MODEL_SPACE=1000` is set.
-
-If you prefer a hosted frontier model instead (Claude, GPT-4o, Gemini), set `GHOSTDESK_MODEL_SPACE=0` — they emit native screen pixels.
-
----
-
 ## Configuration
 
 Every variable GhostDesk reads is namespaced under `GHOSTDESK_*`. Standard POSIX variables (`TZ`, `LANG`) are kept as-is so the existing Unix ecosystem keeps working.
@@ -371,14 +394,19 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GHOSTDESK_PORT` | `3000` | MCP server listening port |
-| `GHOSTDESK_VNC_ADDRESS` | `127.0.0.1` | *(Read-only — hard-pinned.)* wayvnc is locked to loopback inside the container's netns; the VNC port is only reachable via the noVNC bridge on 6080. Override attempts are logged and ignored — see [SECURITY.md](SECURITY.md#transport-security). |
 | `GHOSTDESK_TLS_CERT` | `/etc/ghostdesk/tls/server.crt` | Path to the TLS certificate. When the file exists, `websockify` and the MCP server auto-switch to `wss://` / `https://`. See [Security](#security). |
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
 | `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
 | `GHOSTDESK_SCREEN_HEIGHT` | `1024` | Virtual screen height in pixels |
-| `GHOSTDESK_MODEL_SPACE` | `1000` | LLM coordinate convention. `0` for frontier models that emit native screen pixels (Claude, GPT-4o, Gemini); `1000` for the Qwen vision family (Qwen3.5, Qwen3-VL, …) which emits a normalised 0-1000 space. See [Model requirements](#model-requirements) → *Coordinate space* for the full rationale. |
+| `GHOSTDESK_MODEL_SPACE` | `1000` | LLM coordinate convention — `0` for frontier models, `1000` for the Qwen vision family. Full rationale in [Model requirements](#model-requirements) → *Coordinate space*. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
+
+### Pinned values (not configurable)
+
+| Variable | Value | Rationale |
+|----------|-------|-----------|
+| `GHOSTDESK_VNC_ADDRESS` | `127.0.0.1` | wayvnc is locked to loopback inside the container's netns; the VNC port is only reachable via the noVNC bridge on 6080. Override attempts are logged and ignored — see [SECURITY.md](SECURITY.md#transport-security). |
 
 ---
 
@@ -389,6 +417,26 @@ GhostDesk owns two things: **transport encryption** and **authentication**. Ever
 The full threat model, the *Auth ≡ TLS* posture switch, the wayvnc RFB-type-2-inside-`wss://` rationale, the secrets handling contract, and the exhaustive in-scope / out-of-scope table all live in **[SECURITY.md](SECURITY.md)** — single source of truth. Start there before deploying to anything you don't fully trust.
 
 Reporting a vulnerability? Use GitHub's [private security advisory](../../security/advisories) — see [SECURITY.md § Reporting](SECURITY.md#reporting-security-vulnerabilities).
+
+---
+
+## Troubleshooting
+
+### My agent's clicks land off-target by a huge margin
+
+Almost always a `GHOSTDESK_MODEL_SPACE` mismatch. Frontier models (Claude, GPT-4o, Gemini) need `0`; the Qwen vision family needs `1000`. Full rationale in [Model requirements](#model-requirements) → *Coordinate space*.
+
+### The container refuses to start with a secrets error
+
+The prod posture (cert mounted) **requires** both `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` to be set — GhostDesk refuses to boot without them on purpose, to prevent an unauthenticated prod container. Generate them as shown in [Secure local run](#secure-local-run-tls--auth) and pass them with `-e`. The demo posture (no cert) has no such requirement.
+
+### noVNC shows a black screen or the desktop renders with graphical glitches
+
+You're probably short on shared memory. Browsers and other GPU-accelerated apps inside the container need a reasonable `/dev/shm` — `--shm-size 2g` is the baseline in every example and should not be trimmed. If you already have `--shm-size 2g`, check the container logs for wayvnc or compositor errors.
+
+### Firefox / Electron apps fail to launch or crash immediately
+
+Electron-based apps (VS Code, Slack, Discord…) need Linux user namespaces for their sandbox. Add `--cap-add SYS_ADMIN` to your `docker run` (already present in the Secure local run example). Firefox itself works without it.
 
 ---
 
@@ -414,21 +462,18 @@ See the project's [Dockerfile](Dockerfile) for a complete example.
 
 | Tag | Description |
 |-----|-------------|
-| `latest`, `X.Y.Z`, `X.Y` | Full image — includes Firefox, terminal, sudo |
+| `latest`, `X.Y.Z`, `X.Y` | Full image — Firefox, foot terminal, mousepad, galculator, passwordless sudo |
 | `base`, `base-X.Y.Z`, `base-X.Y` | Minimal image — no GUI app, meant to be extended |
-
----
-
-## Tests
-
-```bash
-uv run pytest --cov
-```
 
 ---
 
 ## License
 
-AGPL-3.0 with Commons Clause — see [LICENSE](LICENSE).
+**AGPL-3.0 with Commons Clause** — see [LICENSE](LICENSE) for the authoritative terms.
 
-Commercial use (resale, paid SaaS, etc.) requires written permission from the project owner.
+**What this means in practice** *(informal summary — not legal advice; the LICENSE file governs)*:
+
+- The **AGPL-3.0** side means any modifications you make and run as a network service must be shared under the same license. Self-hosting and modifying GhostDesk for your own use is fine; making those modifications available over a network to users generally triggers the source-disclosure obligation.
+- The **Commons Clause** side restricts commercial resale: you cannot sell GhostDesk itself, or sell a product whose value derives substantially from GhostDesk, without a separate agreement.
+
+**Commercial use** (resale, paid SaaS built on GhostDesk, rebranded hosting, etc.) requires written permission from the project owner. If you're unsure whether your use case fits, open an issue or contact the maintainers before deploying.
