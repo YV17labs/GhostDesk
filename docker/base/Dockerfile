@@ -140,7 +140,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         supervisor \
         python3 \
         fonts-dejavu \
-        tzdata locales xdg-user-dirs \
+        tzdata locales xdg-user-dirs gettext-base \
         ca-certificates \
         libdrm2 libjansson4 libpam0g libgnutls30 \
         libavfilter9 libavcodec60 libavutil58 libturbojpeg \
