@@ -2,6 +2,19 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [Unreleased]
+
+### Fixed
+- **Wheel scroll direction inverted.** `mouse_scroll(direction="up")` (and `"left"`) silently scrolled the other way: the virtual-pointer `axis_discrete` request was sent with `discrete=+1` regardless of `value`'s sign, violating the `wl_pointer` protocol invariant that the two must match within a frame. Firefox — like any wheel-aware client — trusts `delta_discrete`, so every "up" scroll collapsed into "down" and pinned at the page bottom. Sign is now carried in `_SCROLL_VECTORS` alongside `value`, and a static test locks the invariant.
+
+### Changed
+- **Single-source system prompt.** The agent doctrine previously published as the `system_prompt` MCP prompt is now merged into the server `instructions` field — the spec-canonical payload delivered in the `initialize` response and auto-injected by every MCP client. Per the MCP spec, `prompts` are **user-controlled** templates (slash commands, picker entries), so a prompt named `system_prompt` was misleading: it was never auto-injected and most clients never fetched it, leaving the best guidance invisible to the model. One document, guaranteed delivery, canonical name.
+
+### Removed
+- **`system_prompt` MCP prompt.** Its content (SEE → ACT → SEE, prefer-keyboard, interruption handling, scroll-to-end, final self-check) now lives in the server `instructions`. Clients that were listing `system_prompt` in a picker will simply stop seeing it — the same guidance now arrives through the standard init handshake.
+
+---
+
 ## [v7.1.0] — 2026-04-19
 
 Native MCP surfaces the server wasn't exposing yet (prompts, resources, lifespan warm-up, icons, tool annotations), stricter HTTP-transport security, and finer-grained tool feedback through MCP `notifications/message`.
