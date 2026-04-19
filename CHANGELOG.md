@@ -2,40 +2,30 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
-## [Unreleased]
-
-### Fixed
-- **Wheel scroll direction inverted.** `mouse_scroll(direction="up")` (and `"left"`) silently scrolled the other way: the virtual-pointer `axis_discrete` request was sent with `discrete=+1` regardless of `value`'s sign, violating the `wl_pointer` protocol invariant that the two must match within a frame. Firefox — like any wheel-aware client — trusts `delta_discrete`, so every "up" scroll collapsed into "down" and pinned at the page bottom. Sign is now carried in `_SCROLL_VECTORS` alongside `value`, and a static test locks the invariant.
-
-### Changed
-- **Single-source system prompt.** The agent doctrine previously published as the `system_prompt` MCP prompt is now merged into the server `instructions` field — the spec-canonical payload delivered in the `initialize` response and auto-injected by every MCP client. Per the MCP spec, `prompts` are **user-controlled** templates (slash commands, picker entries), so a prompt named `system_prompt` was misleading: it was never auto-injected and most clients never fetched it, leaving the best guidance invisible to the model. One document, guaranteed delivery, canonical name.
-
-### Removed
-- **`system_prompt` MCP prompt.** Its content (SEE → ACT → SEE, prefer-keyboard, interruption handling, scroll-to-end, final self-check) now lives in the server `instructions`. Clients that were listing `system_prompt` in a picker will simply stop seeing it — the same guidance now arrives through the standard init handshake.
-
----
-
 ## [v7.1.0] — 2026-04-19
 
-Native MCP surfaces the server wasn't exposing yet (prompts, resources, lifespan warm-up, icons, tool annotations), stricter HTTP-transport security, and finer-grained tool feedback through MCP `notifications/message`.
+Native MCP surfaces the server wasn't exposing yet (resources, lifespan warm-up, icons, tool annotations), stricter HTTP-transport security, finer-grained tool feedback through MCP `notifications/message`, and a consolidated system-level brief delivered through the spec-canonical `instructions` field.
 
 ### Added
-- **`system_prompt` MCP prompt.** The recommended baseline for desktop-control agents is now served through `prompts/get`, so any MCP client can fetch it from its prompt picker instead of users copy-pasting a markdown file into their configuration.
 - **MCP resources.** `ghostdesk://apps` (JSON catalogue of installed GUI apps) and `ghostdesk://clipboard` (current clipboard text) mirror the `app_list` / `clipboard_get` tools so clients that surface resources in a dedicated picker can reach read-only state without spending an agent turn on a tool call.
 - **FastMCP lifespan.** The server pre-binds `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` during ASGI startup. Missing compositor protocols now fail at boot instead of surfacing mid-request on the first `mouse_click`.
 - **MCP context notifications on tools.** `mouse_*` and `key_*` push a `warning` when the 200×200 zone around the action does not change within 2 s — the miss is visible in the client's transcript, not only in the tool result dict. `app_launch` and `clipboard_set` mirror their outcomes through `ctx.info` / `ctx.error`.
-- **GhostDesk icon on every MCP surface.** The branded mark is advertised on the server itself, every tool, the system prompt, and both resources through MCP's `icons` field. Inlined as a base64 SVG data URI — no packaging asset to ship alongside the wheel.
+- **GhostDesk icon on every MCP surface.** The branded mark is advertised on the server itself, every tool, and both resources through MCP's `icons` field. Inlined as a base64 SVG data URI — no packaging asset to ship alongside the wheel.
 - **`ToolAnnotations` on every tool.** `readOnlyHint`, `destructiveHint`, and `idempotentHint` let MCP clients differentiate approval flows for read-only vs destructive actions: `screen_shot` / `clipboard_get` / `app_list` are tagged read-only + idempotent, `mouse_click` / `mouse_drag` / `key_press` are tagged destructive, etc.
 - **Origin header validation** (MCP Streamable HTTP spec § DNS-rebinding). Browser requests must match `GHOSTDESK_ALLOWED_ORIGINS` (comma-separated) or get a `403`. Non-browser clients (no `Origin` header) pass through unchanged.
 - **Loopback bind by default.** `GHOSTDESK_HOST` defaults to `127.0.0.1`; the container entrypoint exports `0.0.0.0` so Docker port-publishing still reaches the server, but standalone `uv run ghostdesk` no longer silently exposes the port to the LAN.
 
 ### Changed
-- **Package layout for MCP surfaces.** `prompts` and `resources` are now packages (matching `apps`, `clipboard`, `input`, `screen`) — every domain with a `register(mcp)` function follows the same `__init__.py` convention.
+- **Consolidated system-level brief.** The full agent doctrine (SEE → ACT → SEE, prefer-keyboard, interruption handling, scroll-to-end, final self-check) is now carried by the server `instructions` field — the MCP spec-canonical payload delivered in the `initialize` response and auto-injected by every compliant client. Per the MCP spec, `prompts` are user-controlled templates (slash commands, picker entries), which makes them the wrong mechanism for a system-level brief that must always reach the model. One document, guaranteed delivery.
+- **Package layout for MCP surfaces.** `resources` is now a package (matching `apps`, `clipboard`, `input`, `screen`) — every domain with a `register(mcp)` function follows the same `__init__.py` convention.
 - **`warn_on_miss` helper.** Lives in `input/feedback.py` alongside `build_feedback` and `poll_for_change`, so mouse and keyboard tools share the miss-warning path without crossing underscore-prefixed module boundaries.
 - **`mcp[cli]` pinned to `>=1.27`.** Unlocks the `ToolAnnotations`, `Icon`, and lifespan APIs used throughout this release.
 
+### Fixed
+- **Wheel scroll direction inverted.** `mouse_scroll(direction="up")` (and `"left"`) silently scrolled the other way: the virtual-pointer `axis_discrete` request was sent with `discrete=+1` regardless of `value`'s sign, violating the `wl_pointer` protocol invariant that the two must match within a frame. Firefox — like any wheel-aware client — trusts `delta_discrete`, so every "up" scroll collapsed into "down" and pinned at the page bottom. Sign is now carried in `_SCROLL_VECTORS` alongside `value`, and a static test locks the invariant.
+
 ### Removed
-- **Standalone `SYSTEM_PROMPT.md`.** Replaced by the `system_prompt` MCP prompt — single source of truth now lives in `src/ghostdesk/prompts/system_prompt.py`. Users who referenced the markdown file directly should switch to fetching the prompt through their MCP client.
+- **Standalone `SYSTEM_PROMPT.md`.** Its content is now folded into the server `instructions` field, delivered automatically at session init. Users who referenced the markdown file directly no longer need to — the guidance now reaches the model through the MCP handshake.
 
 ---
 
