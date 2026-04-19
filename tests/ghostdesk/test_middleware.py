@@ -191,3 +191,51 @@ async def test_call_tool_generic_exception_logged():
             with pytest.raises(RuntimeError):
                 await call_tool("broken_tool", {"param": "value"})
             mock_logger.exception.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Integration: real FastMCP + real low-level dispatch
+# ---------------------------------------------------------------------------
+# These tests use a real FastMCP instance to prove the middleware actually
+# binds to the low-level Server's CallToolRequest handler. They guard against
+# silent breakage if the SDK ever renames _mcp_server or changes the
+# call_tool(validate_input=False) decorator signature.
+
+
+async def test_integration_coercion_reaches_real_tool():
+    """String 'x="383, 22"' from a client is coerced before the tool runs.
+
+    Disables coord rescaling to isolate the coercion path; we want to prove
+    the middleware actually binds to the SDK's CallToolRequest handler and
+    that ``validate_input=False`` lets non-int arguments through to our
+    coercion logic.
+    """
+    from mcp.server.fastmcp import FastMCP
+    from mcp.types import CallToolRequest, CallToolRequestParams
+
+    from ghostdesk._coords import model_space_var
+
+    token = model_space_var.set(0)  # bypass rescale for this test
+    try:
+        mcp = FastMCP("test-server")
+        received: dict = {}
+
+        async def click(x: int, y: int) -> dict:
+            """Test tool."""
+            received["x"] = x
+            received["y"] = y
+            return {"ok": True}
+
+        mcp.tool()(click)
+        install_middleware(mcp)
+
+        handler = mcp._mcp_server.request_handlers[CallToolRequest]
+        req = CallToolRequest(
+            method="tools/call",
+            params=CallToolRequestParams(name="click", arguments={"x": "383, 22"}),
+        )
+        await handler(req)
+    finally:
+        model_space_var.reset(token)
+
+    assert received == {"x": 383, "y": 22}
