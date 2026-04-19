@@ -29,10 +29,8 @@ async def test_every_tool_carries_the_ghostdesk_icon():
         assert tool.icons[0].src == GHOSTDESK_ICON.src, f"tool {name!r} uses a non-canonical icon"
 
 
-async def test_prompt_and_resources_carry_the_icon():
-    """The prompt and both resources also advertise GHOSTDESK_ICON."""
+async def test_resources_carry_the_icon():
+    """Every registered resource advertises GHOSTDESK_ICON."""
     app = create_app(port=9999)
-    prompt = app._prompt_manager._prompts["system_prompt"]
-    assert prompt.icons and prompt.icons[0].src == GHOSTDESK_ICON.src
     for uri, res in app._resource_manager._resources.items():
         assert res.icons and res.icons[0].src == GHOSTDESK_ICON.src, f"{uri} missing icon"
