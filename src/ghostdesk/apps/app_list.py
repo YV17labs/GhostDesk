@@ -5,14 +5,17 @@ from ghostdesk.apps._desktop import desktop_apps
 
 
 async def app_list() -> list[dict]:
-    """Return installed GUI apps.
+    """Return the catalogue of installed GUI applications.
 
-    Scans ``.desktop`` entries in ``/usr/share/applications/``. Call this
-    before choosing which app to use for a task, or after installing new
-    software during the session.
+    Read from ``.desktop`` entries under ``/usr/share/applications/``.
+    This catalogue is the strict whitelist — ``app_launch`` refuses any
+    executable not in it.
+
+    Call this the first time a task names an application, and again
+    after installing software during the session.
 
     Returns a list of dicts, each with:
     - name: human-readable application name.
-    - exec: the executable to pass to ``app_launch()``.
+    - exec: the string to pass to ``app_launch()``.
     """
     return desktop_apps()

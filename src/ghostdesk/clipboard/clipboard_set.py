@@ -7,7 +7,16 @@ from mcp.server.fastmcp import Context
 
 
 async def clipboard_set(text: str, ctx: Context | None = None) -> str:
-    """Write text to the clipboard. Use with key_press("ctrl+v") to paste."""
+    """Write text to the system clipboard.
+
+    The canonical pattern is ``clipboard_set(text)`` followed by
+    ``key_press("ctrl+v")`` in the target app — the fastest and most
+    reliable way to place more than a sentence or two into any editable
+    field. Bypasses autocomplete and autocorrect, and does not race
+    with the app's own key handlers the way ``key_type`` can.
+
+    Returns a short confirmation string.
+    """
     # wl-copy reads stdin, then forks a background daemon that keeps
     # serving the clipboard content for other apps.  We must wait for
     # the PARENT process to exit (which happens just after the fork)

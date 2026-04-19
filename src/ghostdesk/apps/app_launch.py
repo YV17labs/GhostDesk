@@ -17,12 +17,19 @@ _launched_pids: set[int] = set()
 
 
 async def app_launch(command: str, ctx: Context | None = None) -> dict:
-    """Launch a desktop GUI application and return its PID and log file path.
+    """Start a GUI application in the background.
 
-    Only applications listed by ``app_list()`` are accepted. The process
-    runs in the background; its stdout and stderr are captured in a log
-    file under ``/tmp/ghostdesk/proc-<pid>.log``. Use ``app_status(pid)``
-    to check whether it is still running and to read its output.
+    Only executables listed by ``app_list()`` are accepted. The process
+    runs detached; its stdout and stderr are captured to
+    ``/tmp/ghostdesk/proc-<pid>.log`` and can be tailed with
+    ``app_status(pid)``.
+
+    Before calling this, take a screenshot — the target may already be
+    running, in which case ``key_press("alt+tab")`` or clicking its
+    taskbar entry is faster than launching a second instance.
+
+    After a successful launch, the window usually needs a second or two
+    to paint. Take a fresh screenshot before interacting with it.
 
     Returns a dict with:
     - pid: the process ID of the launched application.
