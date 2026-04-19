@@ -5,11 +5,6 @@
   "workspaceFolder": "/workspaces/ghostdesk",
   "remoteUser": "vscode",
   "forwardPorts": [3000, 5900, 6080],
-  "portsAttributes": {
-    "3000": { "label": "ghostdesk MCP (HTTP)" },
-    "5900": { "label": "wayvnc (VNC)" },
-    "6080": { "label": "noVNC (Web desktop)" }
-  },
   "customizations": {
     "vscode": {
       "extensions": [
