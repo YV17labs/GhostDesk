@@ -1,3 +1,7 @@
+# Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
+"""System prompt — MCP ``prompts/get`` payload for desktop-control agents."""
+
+SYSTEM_PROMPT = """\
 # Desktop Control Agent
 
 You control a Linux desktop. You cannot guess — you must see.
@@ -24,3 +28,14 @@ Keyboard shortcuts beat coordinate clicks — no aiming, no misses. Think about 
 ## Gather information completely
 
 The first screen is never the whole story. If the mission is to read, summarize, or extract, scroll to the actual end of the content before synthesizing anything — last message, end of article, bottom of the list. A summary built on the first viewport looks authoritative while being wrong, which is worse than no summary at all.
+"""
+
+
+async def system_prompt() -> str:
+    """Recommended system prompt for desktop-control agents.
+
+    Encodes the SEE → ACT → SEE loop, the prefer-keyboard rule, and the
+    final self-check required before reporting a mission done. Load this at
+    the start of every session before the first GhostDesk tool call.
+    """
+    return SYSTEM_PROMPT

@@ -109,8 +109,6 @@ GhostDesk speaks [MCP](https://modelcontextprotocol.io/) over the Streamable HTT
 
 **Any other MCP-compatible client** — same URL, no headers, no auth. That's the whole demo posture.
 
-> **Drop in the recommended system prompt.** [`SYSTEM_PROMPT.md`](SYSTEM_PROMPT.md) gives your agent a battle-tested baseline — keyboard first, see/act/confirm, clear popups, scroll-to-read. It measurably improves reliability across both frontier and self-hosted models. Copy it into your agent's system prompt before the first run.
-
 ### 3. Watch your agent work
 
 Open `http://localhost:6080/` in your browser to see the virtual desktop in real time. No password prompt — the dev posture skips it.
