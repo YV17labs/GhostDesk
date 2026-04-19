@@ -3,6 +3,8 @@
 
 import asyncio
 
+from mcp.server.fastmcp import Context
+
 from ghostdesk.screen._shared import SCREEN_HEIGHT, SCREEN_WIDTH, Region, capture_png
 
 # Zone size (pixels) captured around the action point.
@@ -63,3 +65,10 @@ def build_feedback(action: str, poll_result: dict) -> dict:
         "screen_changed": poll_result["changed"],
         "reaction_time_ms": poll_result["reaction_time_ms"],
     }
+
+
+async def warn_on_miss(ctx: Context | None, feedback: dict) -> None:
+    """Push an MCP warning when ``screen_changed`` is false."""
+    if ctx is None or feedback.get("screen_changed", True):
+        return
+    await ctx.warning(f"{feedback['action']} — no visible screen change within 2s")

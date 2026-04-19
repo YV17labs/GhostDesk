@@ -131,3 +131,25 @@ async def test_app_launch_quoted_arguments(patch_subprocess):
     result = await app_launch('gedit "/tmp/my file.txt"')
     assert result["pid"] == 99999
     assert mock_exec.call_args[0] == ("gedit", "/tmp/my file.txt")
+
+
+# --- ctx-based MCP logging ---
+
+async def test_app_launch_pushes_info_through_ctx(patch_subprocess):
+    """Successful launch mirrors PID + log path as an info notification."""
+    ctx = AsyncMock()
+    await app_launch("firefox", ctx=ctx)
+    ctx.info.assert_awaited_once()
+    message = ctx.info.await_args.args[0]
+    assert "firefox" in message
+    assert "pid=99999" in message
+
+
+async def test_app_launch_pushes_error_through_ctx(patch_subprocess):
+    """FileNotFoundError surfaces as an MCP error notification."""
+    mock_exec, _, _ = patch_subprocess
+    mock_exec.side_effect = FileNotFoundError()
+    ctx = AsyncMock()
+    result = await app_launch("firefox", ctx=ctx)
+    assert "error" in result
+    ctx.error.assert_awaited_once()
