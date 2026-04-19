@@ -6,6 +6,8 @@ import shlex
 import tempfile
 from pathlib import Path
 
+from mcp.server.fastmcp import Context
+
 from ghostdesk.apps._desktop import known_executables
 
 LOG_DIR = Path("/tmp/ghostdesk")
@@ -14,7 +16,7 @@ LOG_DIR = Path("/tmp/ghostdesk")
 _launched_pids: set[int] = set()
 
 
-async def app_launch(command: str) -> dict:
+async def app_launch(command: str, ctx: Context | None = None) -> dict:
     """Launch a desktop GUI application and return its PID and log file path.
 
     Only applications listed by ``app_list()`` are accepted. The process
@@ -64,6 +66,8 @@ async def app_launch(command: str) -> dict:
     except FileNotFoundError:
         log_file.close()
         tmp_path.unlink(missing_ok=True)
+        if ctx is not None:
+            await ctx.error(f"app_launch: command not found: {parts[0]}")
         return {"error": f"Command not found: {parts[0]}"}
 
     # Rename to the canonical path now that we have the real PID.
@@ -71,6 +75,9 @@ async def app_launch(command: str) -> dict:
     tmp_path.rename(final_path)
 
     _launched_pids.add(proc.pid)
+
+    if ctx is not None:
+        await ctx.info(f"app_launch: {command} (pid={proc.pid}, log={final_path})")
 
     return {
         "pid": proc.pid,

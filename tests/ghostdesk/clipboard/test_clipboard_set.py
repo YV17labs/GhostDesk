@@ -76,3 +76,10 @@ async def test_clipboard_set_timeout(patch_subprocess):
 
     with pytest.raises(TimeoutError):
         await clipboard_set("some text")
+
+
+async def test_clipboard_set_pushes_info_through_ctx(patch_subprocess):
+    """ctx.info mirrors the confirmation message."""
+    ctx = AsyncMock()
+    await clipboard_set("hello", ctx=ctx)
+    ctx.info.assert_awaited_once_with("Clipboard set (5 characters)")

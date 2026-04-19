@@ -3,8 +3,10 @@
 
 import asyncio
 
+from mcp.server.fastmcp import Context
 
-async def clipboard_set(text: str) -> str:
+
+async def clipboard_set(text: str, ctx: Context | None = None) -> str:
     """Write text to the clipboard. Use with key_press("ctrl+v") to paste."""
     # wl-copy reads stdin, then forks a background daemon that keeps
     # serving the clipboard content for other apps.  We must wait for
@@ -23,4 +25,7 @@ async def clipboard_set(text: str) -> str:
     proc.stdin.close()
     await asyncio.wait_for(proc.wait(), timeout=5.0)
 
-    return f"Clipboard set ({len(text)} characters)"
+    message = f"Clipboard set ({len(text)} characters)"
+    if ctx is not None:
+        await ctx.info(message)
+    return message

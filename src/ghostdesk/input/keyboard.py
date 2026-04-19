@@ -10,9 +10,16 @@ because Ghostdesk never consults the system keymap.
 
 from __future__ import annotations
 
+from mcp.server.fastmcp import Context
+
 from ghostdesk._cursor import get_cursor_position
 from ghostdesk.input._wayland import get_wayland_input
-from ghostdesk.input.feedback import build_feedback, capture_before, poll_for_change
+from ghostdesk.input.feedback import (
+    build_feedback,
+    capture_before,
+    poll_for_change,
+    warn_on_miss,
+)
 
 # Map X11-style friendly names to our internal normalised key names
 # (all lowercase, no underscores, ``leftctrl`` style for modifiers).
@@ -51,7 +58,7 @@ def _normalize_chord(keys: str) -> list[str]:
     return [_normalize_token(t) for t in keys.split("+") if t.strip()]
 
 
-async def key_type(text: str) -> dict:
+async def key_type(text: str, ctx: Context | None = None) -> dict:
     """Type text. Handles Unicode, newlines, and tabs.
 
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
@@ -65,10 +72,12 @@ async def key_type(text: str) -> dict:
     await wl.type_text(text)
 
     result = await poll_for_change(region, before)
-    return build_feedback(f"Typed {len(text)} characters", result)
+    feedback = build_feedback(f"Typed {len(text)} characters", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
-async def key_press(keys: str) -> dict:
+async def key_press(keys: str, ctx: Context | None = None) -> dict:
     """Press a key or key combination.
 
     Friendly names accepted: ``Tab``, ``Return``, ``Escape``,
@@ -89,4 +98,6 @@ async def key_press(keys: str) -> dict:
     await wl.press_chord(tokens)
 
     result = await poll_for_change(region, before)
-    return build_feedback(f"Pressed {keys}", result)
+    feedback = build_feedback(f"Pressed {keys}", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback

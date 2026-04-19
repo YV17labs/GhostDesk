@@ -8,11 +8,20 @@ which keeps one persistent Wayland connection open and reuses a single
 
 from __future__ import annotations
 
+from mcp.server.fastmcp import Context
+
 from ghostdesk.input._wayland import Button, ScrollDirection, get_wayland_input
-from ghostdesk.input.feedback import build_feedback, capture_before, poll_for_change
+from ghostdesk.input.feedback import (
+    build_feedback,
+    capture_before,
+    poll_for_change,
+    warn_on_miss,
+)
 
 
-async def mouse_click(x: int, y: int, button: Button = "left") -> dict:
+async def mouse_click(
+    x: int, y: int, button: Button = "left", ctx: Context | None = None,
+) -> dict:
     """Click at screen coordinates. Use coordinates from screen_shot() or inspect().
 
     Returns a dict with:
@@ -27,10 +36,14 @@ async def mouse_click(x: int, y: int, button: Button = "left") -> dict:
     region, before = await capture_before(x, y)
     await wl.click(button)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Clicked {button} at ({x}, {y})", result)
+    feedback = build_feedback(f"Clicked {button} at ({x}, {y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
-async def mouse_double_click(x: int, y: int, button: Button = "left") -> dict:
+async def mouse_double_click(
+    x: int, y: int, button: Button = "left", ctx: Context | None = None,
+) -> dict:
     """Double-click at screen coordinates. Use for opening files or selecting words.
 
     Returns a dict with:
@@ -45,12 +58,15 @@ async def mouse_double_click(x: int, y: int, button: Button = "left") -> dict:
     await wl.click(button)
     await wl.click(button)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Double-clicked {button} at ({x}, {y})", result)
+    feedback = build_feedback(f"Double-clicked {button} at ({x}, {y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
 async def mouse_drag(
     from_x: int, from_y: int, to_x: int, to_y: int,
     button: Button = "left",
+    ctx: Context | None = None,
 ) -> dict:
     """Drag from one position to another. Use for selecting text, moving items, or resizing.
 
@@ -64,11 +80,14 @@ async def mouse_drag(
     region, before = await capture_before(to_x, to_y)
     await wl.drag(from_x, from_y, to_x, to_y, button)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})", result)
+    feedback = build_feedback(f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
 async def mouse_scroll(
     x: int, y: int, direction: ScrollDirection = "down", amount: int = 3,
+    ctx: Context | None = None,
 ) -> dict:
     """Scroll at a position. direction: up/down/left/right. amount: number of scroll steps (max 5).
 
@@ -86,4 +105,6 @@ async def mouse_scroll(
     region, before = await capture_before(x, y)
     await wl.scroll(direction, amount)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Scrolled {direction} {amount} clicks at ({x}, {y})", result)
+    feedback = build_feedback(f"Scrolled {direction} {amount} clicks at ({x}, {y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
