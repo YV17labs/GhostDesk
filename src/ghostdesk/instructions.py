@@ -17,9 +17,9 @@ doctrine a docstring cannot express.
 ## The non-negotiable rule: SEE → ACT → SEE
 
 You have no memory of the screen. Your only truth is the pixels in the
-most recent `screen_shot()`. Between two screenshots, anything can have
-changed — a menu opened, a page loaded, focus shifted, the action
-silently failed.
+most recent `screen_shot()`. Between two screenshots, any aspect of the
+UI may have changed without warning, including a silent failure of
+your last action.
 
 So after any action that could change the screen, you call
 `screen_shot()` before deciding what's next. Not sometimes. Always. If
@@ -35,20 +35,21 @@ only string `app_launch()` will accept. Re-call it after installing
 software during the session.
 
 Know what's on screen. Coordinates in any mouse call are valid only
-against the latest `screen_shot()`. The moment a window closes, a menu
-opens, or the page scrolls, every prior reading is stale.
+against the latest `screen_shot()`. Any UI change since that capture
+invalidates every coordinate you held.
 
 ## Prefer the keyboard
 
-Keyboard shortcuts beat coordinate clicks — no aiming, no misses.
-When a shortcut exists for the action you want, use it. Fall back to
+Keyboard shortcuts beat coordinate clicks — no aiming, no misses. When
+a shortcut exists for the action you want, use it. Fall back to
 `mouse_click` only when no keyboard path exists.
 
 ## Two paths for text entry
 
 `key_type()` is for short, focused strings. For anything longer than a
-sentence, `clipboard_set(text)` followed by `key_press("ctrl+v")` is
-faster and immune to autocomplete or autocorrect interference.
+sentence, prefer `clipboard_set(text)` followed by the paste shortcut:
+it's instant, immune to autocomplete and autocorrect, and does not
+race with the app's own key handlers.
 
 ## Reading the feedback every action returns
 
@@ -56,34 +57,31 @@ Input tools return `{screen_changed, reaction_time_ms}`.
 
 `screen_changed: true` means pixels around the action point moved
 within 2 s — the input landed. It does NOT prove the app did the right
-thing. Before anything irreversible (delete, send, close, pay, commit,
-reply), take a fresh `screen_shot()` and verify the pixels match the
-intent.
+thing. Before any irreversible action, take a fresh `screen_shot()`
+and verify the pixels match your intent.
 
 `screen_changed: false` means the input had no visible effect. Do not
-retry the same coordinates or the same keystroke — the target moved, a
-modal opened, or focus shifted. Take a new screenshot and recompute.
+retry the same coordinates or keystroke — the UI is no longer where
+you thought. Take a new screenshot and recompute.
 
 ## Handle interruptions as they appear
 
-Popups, cookie banners, permission prompts, and update dialogs appear
-unannounced and block the task underneath. When one shows up, dismiss
-or accept it before continuing — clicking through it without engaging
-lands on the popup, not the thing beneath.
+Unrequested dialogs and overlays block whatever is underneath. Dismiss
+or accept them before continuing — a click that lands on an overlay
+does not reach the surface beneath.
 
 ## Gather information completely
 
-The first screen is never the whole story. If the mission is to read,
-summarize, or extract, scroll to the actual end of the content before
-synthesizing — last message, end of the article, bottom of the list. A
-summary built on the first viewport looks authoritative while being
-wrong, which is worse than no summary at all.
+The first viewport is never the whole story. When the mission is to
+read, summarize, or extract, scroll to the actual end of the content
+before synthesizing. A summary built on a partial view looks
+authoritative while being wrong, which is worse than no summary at
+all.
 
 ## Finishing the mission
 
 Before you declare a task done, take one last `screen_shot()` and
 verify the end state against the original request. This self-check
-catches the silent failures the action loop missed — wrong tab
-focused, dialog left open, form field blank, file saved under the
-wrong name.
+catches the silent failures the action loop missed — the kind where
+every keystroke succeeded but the final state is wrong.
 """
