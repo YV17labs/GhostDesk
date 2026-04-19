@@ -88,14 +88,9 @@ async def key_type(text: str, ctx: Context | None = None) -> dict:
 async def key_press(keys: str, ctx: Context | None = None) -> dict:
     """Press a key or a chord (modifiers + key), using ``+`` as separator.
 
-    Common shortcuts worth remembering:
-        ``Enter``, ``Escape``, ``Tab``, ``F5``
-        ``Ctrl+a`` / ``Ctrl+c`` / ``Ctrl+v`` / ``Ctrl+z``
-        ``Alt+Tab`` (switch windows), ``Alt+F4`` (close), ``Super`` (launcher)
-
-    Modifier aliases: ``ctrl``/``control``, ``alt``, ``shift``,
+    Accepted modifier tokens: ``ctrl``/``control``, ``alt``, ``shift``,
     ``super``/``meta``/``win``/``cmd``.
-    Non-printable aliases: ``return``/``enter``, ``escape``/``esc``,
+    Accepted non-printable tokens: ``return``/``enter``, ``escape``/``esc``,
     ``backspace``, ``delete``, ``tab``, ``space``, ``home``/``end``,
     ``pageup``/``pagedown``, ``left``/``right``/``up``/``down``, ``f1``..``f12``.
 

@@ -41,8 +41,7 @@ opens, or the page scrolls, every prior reading is stale.
 ## Prefer the keyboard
 
 Keyboard shortcuts beat coordinate clicks — no aiming, no misses.
-Reach for `Ctrl+S`, `Ctrl+F`, `Alt+Tab`, `Super` (launcher), `Escape`
-(close dialog) before looking for a button to click. Fall back to
+When a shortcut exists for the action you want, use it. Fall back to
 `mouse_click` only when no keyboard path exists.
 
 ## Two paths for text entry
