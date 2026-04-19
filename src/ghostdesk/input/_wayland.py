@@ -67,11 +67,15 @@ _AXIS_SOURCE_WHEEL = 0  # wl_pointer.axis_source.wheel
 # value most wlroots clients send for a synthetic wheel tick.
 _WHEEL_STEP_FIXED = 10 * 256
 
-_SCROLL_VECTORS: dict[str, tuple[int, int]] = {
-    "up":    (_AXIS_VERTICAL,   -_WHEEL_STEP_FIXED),
-    "down":  (_AXIS_VERTICAL,    _WHEEL_STEP_FIXED),
-    "left":  (_AXIS_HORIZONTAL, -_WHEEL_STEP_FIXED),
-    "right": (_AXIS_HORIZONTAL,  _WHEEL_STEP_FIXED),
+# (axis, wl_fixed motion value, discrete notch count).
+# The wl_pointer protocol requires sign(value) == sign(discrete) within
+# a frame; wlroots exposes both and Firefox trusts `discrete` for wheel
+# sources, so a mismatch silently inverts the scroll direction.
+_SCROLL_VECTORS: dict[str, tuple[int, int, int]] = {
+    "up":    (_AXIS_VERTICAL,   -_WHEEL_STEP_FIXED, -1),
+    "down":  (_AXIS_VERTICAL,    _WHEEL_STEP_FIXED,  1),
+    "left":  (_AXIS_HORIZONTAL, -_WHEEL_STEP_FIXED, -1),
+    "right": (_AXIS_HORIZONTAL,  _WHEEL_STEP_FIXED,  1),
 }
 
 _KEYMAP_FORMAT_XKB_V1 = 1
@@ -382,15 +386,20 @@ class WaylandInput:
         set_cursor_position(to_x, to_y)
 
     async def scroll(self, direction: ScrollDirection, amount: int) -> None:
-        """One ``amount``-notch wheel scroll in ``direction``."""
-        axis, value = _SCROLL_VECTORS[direction]
+        """One ``amount``-notch wheel scroll in ``direction``.
+
+        The virtual-pointer ``axis_discrete`` request is self-contained:
+        wlroots unpacks it into both the continuous ``delta`` and the
+        ``delta_discrete`` step count, so no separate ``axis`` call is
+        needed (it would just overwrite ``delta`` with the same value).
+        """
+        axis, value, discrete = _SCROLL_VECTORS[direction]
 
         def send() -> None:
             for _ in range(amount):
                 t = self._now_ms()
                 self._pointer.axis_source(_AXIS_SOURCE_WHEEL)
-                self._pointer.axis_discrete(t, axis, value, 1)
-                self._pointer.axis(t, axis, value)
+                self._pointer.axis_discrete(t, axis, value, discrete)
                 self._pointer.frame()
             self._display.roundtrip()
         await self._run(send)
