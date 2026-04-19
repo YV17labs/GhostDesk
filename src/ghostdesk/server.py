@@ -27,6 +27,7 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 
 from ghostdesk._coords import model_space_var
+from ghostdesk._lifespan import lifespan
 from ghostdesk._logging import configure_logging
 from ghostdesk._middleware import install_middleware
 from ghostdesk.instructions import INSTRUCTIONS
@@ -55,7 +56,13 @@ def create_app(port: int | None = None, host: str | None = None) -> FastMCP:
     if host is None:
         host = os.environ.get("GHOSTDESK_HOST", "127.0.0.1")
 
-    mcp = FastMCP("ghostdesk", instructions=INSTRUCTIONS, host=host, port=port)
+    mcp = FastMCP(
+        "ghostdesk",
+        instructions=INSTRUCTIONS,
+        lifespan=lifespan,
+        host=host,
+        port=port,
+    )
 
     screen.register(mcp)
     input.register(mcp)
