@@ -2,9 +2,9 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
-## [Unreleased]
+## [v7.1.0] — 2026-04-19
 
-Native MCP surfaces the server wasn't exposing yet (prompts, resources, lifespan warm-up, icons) and finer-grained tool feedback through MCP `notifications/message`.
+Native MCP surfaces the server wasn't exposing yet (prompts, resources, lifespan warm-up, icons, tool annotations), stricter HTTP-transport security, and finer-grained tool feedback through MCP `notifications/message`.
 
 ### Added
 - **`system_prompt` MCP prompt.** The recommended baseline for desktop-control agents is now served through `prompts/get`, so any MCP client (Claude Desktop, Claude Code, Cursor, …) can fetch it from its prompt picker instead of users copy-pasting a markdown file into their configuration.
@@ -12,10 +12,14 @@ Native MCP surfaces the server wasn't exposing yet (prompts, resources, lifespan
 - **FastMCP lifespan.** The server pre-binds `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` during ASGI startup. Missing compositor protocols now fail at boot instead of surfacing mid-request on the first `mouse_click`.
 - **MCP context notifications on tools.** `mouse_*` and `key_*` push a `warning` when the 200×200 zone around the action does not change within 2 s — the miss is visible in the client's transcript, not only in the tool result dict. `app_launch` and `clipboard_set` mirror their outcomes through `ctx.info` / `ctx.error`.
 - **GhostDesk icon on every MCP surface.** The branded mark is advertised on the server itself, every tool, the system prompt, and both resources through MCP's `icons` field. Inlined as a base64 SVG data URI — no packaging asset to ship alongside the wheel.
+- **`ToolAnnotations` on every tool.** `readOnlyHint`, `destructiveHint`, and `idempotentHint` let MCP clients differentiate approval flows for read-only vs destructive actions: `screen_shot` / `clipboard_get` / `app_list` are tagged read-only + idempotent, `mouse_click` / `mouse_drag` / `key_press` are tagged destructive, etc.
+- **Origin header validation** (MCP Streamable HTTP spec § DNS-rebinding). Browser requests must match `GHOSTDESK_ALLOWED_ORIGINS` (comma-separated) or get a `403`. Non-browser clients (no `Origin` header) pass through unchanged.
+- **Loopback bind by default.** `GHOSTDESK_HOST` defaults to `127.0.0.1`; the container entrypoint exports `0.0.0.0` so Docker port-publishing still reaches the server, but standalone `uv run ghostdesk` no longer silently exposes the port to the LAN.
 
 ### Changed
 - **Package layout for MCP surfaces.** `prompts` and `resources` are now packages (matching `apps`, `clipboard`, `input`, `screen`) — every domain with a `register(mcp)` function follows the same `__init__.py` convention.
 - **`warn_on_miss` helper.** Lives in `input/feedback.py` alongside `build_feedback` and `poll_for_change`, so mouse and keyboard tools share the miss-warning path without crossing underscore-prefixed module boundaries.
+- **`mcp[cli]` pinned to `>=1.27`.** Unlocks the `ToolAnnotations`, `Icon`, and lifespan APIs used throughout this release.
 
 ### Removed
 - **Standalone `SYSTEM_PROMPT.md`.** Replaced by the `system_prompt` MCP prompt — single source of truth now lives in `src/ghostdesk/prompts/system_prompt.py`. Users who referenced the markdown file directly should switch to fetching the prompt through their MCP client.
