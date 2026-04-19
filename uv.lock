@@ -272,7 +272,7 @@ wheels = [
 
 [[package]]
 name = "ghostdesk"
-version = "7.0.0.dev0"
+version = "7.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp", extra = ["cli"] },
