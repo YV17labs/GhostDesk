@@ -5,9 +5,6 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - ..:/workspaces/ghostdesk:cached
-    ports:
-      - "3000:3000"
-      - "6080:6080"
     environment:
       - GHOSTDESK_DIR=/workspaces/ghostdesk
       - GHOSTDESK_USER=vscode
