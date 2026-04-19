@@ -67,6 +67,12 @@ else
     fi
 fi
 
+# Inside the container the MCP server must listen on every interface so
+# Docker's port-publishing layer can reach it. Standalone `uv run
+# ghostdesk` invocations stay on 127.0.0.1 by default per MCP transports
+# spec — the override here only affects containerized runs.
+export GHOSTDESK_HOST="${GHOSTDESK_HOST:-0.0.0.0}"
+
 # wayvnc is pinned to 127.0.0.1 (see Wayvnc config below). Warn loudly
 # rather than silently ignore operator overrides.
 if [ -n "${GHOSTDESK_VNC_ADDRESS:-}" ] && [ "${GHOSTDESK_VNC_ADDRESS}" != "127.0.0.1" ]; then
