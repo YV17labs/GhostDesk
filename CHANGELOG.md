@@ -7,7 +7,7 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
 Native MCP surfaces the server wasn't exposing yet (prompts, resources, lifespan warm-up, icons, tool annotations), stricter HTTP-transport security, and finer-grained tool feedback through MCP `notifications/message`.
 
 ### Added
-- **`system_prompt` MCP prompt.** The recommended baseline for desktop-control agents is now served through `prompts/get`, so any MCP client (Claude Desktop, Claude Code, Cursor, …) can fetch it from its prompt picker instead of users copy-pasting a markdown file into their configuration.
+- **`system_prompt` MCP prompt.** The recommended baseline for desktop-control agents is now served through `prompts/get`, so any MCP client can fetch it from its prompt picker instead of users copy-pasting a markdown file into their configuration.
 - **MCP resources.** `ghostdesk://apps` (JSON catalogue of installed GUI apps) and `ghostdesk://clipboard` (current clipboard text) mirror the `app_list` / `clipboard_get` tools so clients that surface resources in a dedicated picker can reach read-only state without spending an agent turn on a tool call.
 - **FastMCP lifespan.** The server pre-binds `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` during ASGI startup. Missing compositor protocols now fail at boot instead of surfacing mid-request on the first `mouse_click`.
 - **MCP context notifications on tools.** `mouse_*` and `key_*` push a `warning` when the 200×200 zone around the action does not change within 2 s — the miss is visible in the client's transcript, not only in the tool result dict. `app_launch` and `clipboard_set` mirror their outcomes through `ctx.info` / `ctx.error`.
