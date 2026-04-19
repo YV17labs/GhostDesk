@@ -147,3 +147,24 @@ async def test_mouse_scroll_amount_clamped(_mock_deps):
     mock_wl.scroll.reset_mock()
     await mouse_scroll(0, 0, direction="down", amount=0)
     mock_wl.scroll.assert_awaited_with("down", 1)
+
+
+# --- ctx-based MCP logging ---
+
+async def test_mouse_click_warns_client_on_miss(_mock_deps):
+    """A miss pushes a warning through ctx."""
+    _, _, mock_poll = _mock_deps
+    mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
+
+    ctx = AsyncMock()
+    await mouse_click(50, 60, ctx=ctx)
+
+    ctx.warning.assert_awaited_once()
+    assert "no visible screen change" in ctx.warning.await_args.args[0]
+
+
+async def test_mouse_click_does_not_warn_on_success(_mock_deps):
+    """A successful click pushes no warning."""
+    ctx = AsyncMock()
+    await mouse_click(50, 60, ctx=ctx)
+    ctx.warning.assert_not_awaited()

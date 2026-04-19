@@ -10,9 +10,16 @@ because Ghostdesk never consults the system keymap.
 
 from __future__ import annotations
 
+from mcp.server.fastmcp import Context
+
 from ghostdesk._cursor import get_cursor_position
 from ghostdesk.input._wayland import get_wayland_input
-from ghostdesk.input.feedback import build_feedback, capture_before, poll_for_change
+from ghostdesk.input.feedback import (
+    build_feedback,
+    capture_before,
+    poll_for_change,
+    warn_on_miss,
+)
 
 # Map X11-style friendly names to our internal normalised key names
 # (all lowercase, no underscores, ``leftctrl`` style for modifiers).
@@ -51,12 +58,20 @@ def _normalize_chord(keys: str) -> list[str]:
     return [_normalize_token(t) for t in keys.split("+") if t.strip()]
 
 
-async def key_type(text: str) -> dict:
-    """Type text. Handles Unicode, newlines, and tabs.
+async def key_type(text: str, ctx: Context | None = None) -> dict:
+    """Type text at the current keyboard focus. Handles Unicode, newlines,
+    and tabs. Layout-independent — a French AZERTY host produces the same
+    output as US QWERTY.
+
+    For more than a sentence or two, prefer ``clipboard_set(text)`` +
+    ``key_press("ctrl+v")``: it's instant, immune to autocomplete and
+    autocorrect, and does not race with the app's own key handlers.
+
+    A ``screen_changed: false`` result almost always means the field did
+    not have focus. Click into it first and retry.
 
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
-    feedback.  If ``screen_changed`` is false, the text field probably
-    didn't have focus — click on it first and retry.
+    feedback.
     """
     cx, cy = get_cursor_position()
     region, before = await capture_before(cx, cy)
@@ -65,18 +80,23 @@ async def key_type(text: str) -> dict:
     await wl.type_text(text)
 
     result = await poll_for_change(region, before)
-    return build_feedback(f"Typed {len(text)} characters", result)
+    feedback = build_feedback(f"Typed {len(text)} characters", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
-async def key_press(keys: str) -> dict:
-    """Press a key or key combination.
+async def key_press(keys: str, ctx: Context | None = None) -> dict:
+    """Press a key or a chord (modifiers + key), using ``+`` as separator.
 
-    Friendly names accepted: ``Tab``, ``Return``, ``Escape``,
-    ``BackSpace``, ``Left``, ``Page_Up``, ``F4``, ``Ctrl``, ``Alt``,
-    ``Shift``, ``Super``.  Single printable characters stay as-is
-    (``a``, ``c``, ``5``).
+    Accepted modifier tokens: ``ctrl``/``control``, ``alt``, ``shift``,
+    ``super``/``meta``/``win``/``cmd``.
+    Accepted non-printable tokens: ``return``/``enter``, ``escape``/``esc``,
+    ``backspace``, ``delete``, ``tab``, ``space``, ``home``/``end``,
+    ``pageup``/``pagedown``, ``left``/``right``/``up``/``down``, ``f1``..``f12``.
 
-    Examples: ``Tab``, ``Ctrl+c``, ``Alt+F4``, ``Ctrl+Shift+Tab``.
+    A ``screen_changed: false`` result usually means the keystroke went to
+    a window or field that didn't care about it — check focus with a
+    screenshot.
 
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
     feedback.
@@ -89,4 +109,6 @@ async def key_press(keys: str) -> dict:
     await wl.press_chord(tokens)
 
     result = await poll_for_change(region, before)
-    return build_feedback(f"Pressed {keys}", result)
+    feedback = build_feedback(f"Pressed {keys}", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
