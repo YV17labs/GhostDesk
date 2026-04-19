@@ -4,6 +4,7 @@
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from ghostdesk._icons import GHOSTDESK_ICONS
 from ghostdesk.input.keyboard import key_press, key_type
 from ghostdesk.input.mouse import (
     mouse_click,
@@ -18,9 +19,9 @@ _VIEWPORT = ToolAnnotations(destructiveHint=False)
 
 def register(mcp: FastMCP) -> None:
     """Register input tools."""
-    mcp.tool(annotations=_DESTRUCTIVE)(mouse_click)
-    mcp.tool(annotations=_DESTRUCTIVE)(mouse_double_click)
-    mcp.tool(annotations=_DESTRUCTIVE)(mouse_drag)
-    mcp.tool(annotations=_VIEWPORT)(mouse_scroll)
-    mcp.tool(annotations=_DESTRUCTIVE)(key_type)
-    mcp.tool(annotations=_DESTRUCTIVE)(key_press)
+    mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(mouse_click)
+    mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(mouse_double_click)
+    mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(mouse_drag)
+    mcp.tool(annotations=_VIEWPORT, icons=GHOSTDESK_ICONS)(mouse_scroll)
+    mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(key_type)
+    mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(key_press)

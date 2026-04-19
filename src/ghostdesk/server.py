@@ -27,11 +27,12 @@ import uvicorn
 from mcp.server.fastmcp import FastMCP
 
 from ghostdesk._coords import model_space_var
+from ghostdesk._icons import GHOSTDESK_ICONS
 from ghostdesk._lifespan import lifespan
 from ghostdesk._logging import configure_logging
 from ghostdesk._middleware import install_middleware
 from ghostdesk.instructions import INSTRUCTIONS
-from ghostdesk import apps, clipboard, input, screen
+from ghostdesk import apps, clipboard, input, prompts, resources, screen
 
 
 _DEFAULT_TLS_CERT = "/etc/ghostdesk/tls/server.crt"
@@ -59,6 +60,7 @@ def create_app(port: int | None = None, host: str | None = None) -> FastMCP:
     mcp = FastMCP(
         "ghostdesk",
         instructions=INSTRUCTIONS,
+        icons=GHOSTDESK_ICONS,
         lifespan=lifespan,
         host=host,
         port=port,
@@ -68,6 +70,8 @@ def create_app(port: int | None = None, host: str | None = None) -> FastMCP:
     input.register(mcp)
     apps.register(mcp)
     clipboard.register(mcp)
+    prompts.register(mcp)
+    resources.register(mcp)
 
     install_middleware(mcp)
 
