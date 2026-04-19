@@ -2,6 +2,7 @@
 """Input domain — mouse and keyboard control."""
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 from ghostdesk.input.keyboard import key_press, key_type
 from ghostdesk.input.mouse import (
@@ -11,12 +12,15 @@ from ghostdesk.input.mouse import (
     mouse_scroll,
 )
 
+_DESTRUCTIVE = ToolAnnotations(destructiveHint=True)
+_VIEWPORT = ToolAnnotations(destructiveHint=False)
+
 
 def register(mcp: FastMCP) -> None:
     """Register input tools."""
-    mcp.tool()(mouse_click)
-    mcp.tool()(mouse_double_click)
-    mcp.tool()(mouse_drag)
-    mcp.tool()(mouse_scroll)
-    mcp.tool()(key_type)
-    mcp.tool()(key_press)
+    mcp.tool(annotations=_DESTRUCTIVE)(mouse_click)
+    mcp.tool(annotations=_DESTRUCTIVE)(mouse_double_click)
+    mcp.tool(annotations=_DESTRUCTIVE)(mouse_drag)
+    mcp.tool(annotations=_VIEWPORT)(mouse_scroll)
+    mcp.tool(annotations=_DESTRUCTIVE)(key_type)
+    mcp.tool(annotations=_DESTRUCTIVE)(key_press)
