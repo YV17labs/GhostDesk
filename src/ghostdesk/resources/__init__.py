@@ -13,14 +13,21 @@ def register(mcp: FastMCP) -> None:
     mcp.resource(
         "ghostdesk://apps",
         name="apps",
-        description="Installed GUI applications (JSON array of {name, exec}).",
+        description=(
+            "Installed GUI applications as a JSON array of {name, exec}. "
+            "Same data as the app_list tool, fetchable without spending "
+            "an agent turn."
+        ),
         mime_type="application/json",
         icons=GHOSTDESK_ICONS,
     )(apps_resource)
     mcp.resource(
         "ghostdesk://clipboard",
         name="clipboard",
-        description="Current clipboard text.",
+        description=(
+            "Current system clipboard text. Same data as the "
+            "clipboard_get tool, fetchable without spending an agent turn."
+        ),
         mime_type="text/plain",
         icons=GHOSTDESK_ICONS,
     )(clipboard_resource)

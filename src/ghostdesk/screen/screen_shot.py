@@ -29,13 +29,27 @@ async def screen_shot(
     format: ImageFormat = "webp",
     stabilize: bool = True,
 ) -> Image:
-    """Capture the screen, optionally cropped to a region.
+    """Capture the current screen as an image.
+
+    This is the agent's only source of truth. Coordinates used in any
+    subsequent mouse call are pixel offsets in the image this function
+    returned — the moment anything changes on screen, those coordinates
+    become stale and must be recomputed from a fresh capture.
+
+    Cheap. Use liberally: before a click to locate the target, after an
+    action to verify the effect, and once more before reporting a
+    mission complete.
 
     Args:
-        region: Area to capture (full screen if omitted).
-        format: "webp" (default, smaller payload) or "png" (lossless).
-        stabilize: Wait for the page to stop moving before capturing
-            (max 2.5 s). Useful right after navigation.
+        region: Area to capture as ``(x, y, width, height)``. Omit to
+            capture the full screen — almost always the right choice.
+        format: ``"webp"`` (default, small payload, visually stable at
+            UI resolutions) or ``"png"`` (lossless, larger).
+        stabilize: When true (default), wait up to 2.5 s for two
+            consecutive frames to be identical before returning — catches
+            pages still animating after a click or navigation. Set to
+            false only when you need to observe a genuinely animating UI
+            in motion.
     """
     capture_region = _clamp_region(region)
 

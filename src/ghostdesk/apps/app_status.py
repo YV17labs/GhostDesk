@@ -32,9 +32,14 @@ def _read_tail(path: Path, lines: int) -> str:
 
 
 async def app_status(pid: int, lines: int = _DEFAULT_TAIL) -> dict:
-    """Check whether a launched app is still running and read its logs.
+    """Check on an app started by ``app_launch()`` in this session.
 
-    Only PIDs returned by ``app_launch()`` in this session are accepted.
+    Reports whether the process is still alive and returns the tail of
+    its captured stdout/stderr. Only PIDs returned by ``app_launch()``
+    are accepted; any other PID is rejected.
+
+    Use this to confirm an app crashed (tail the log for a traceback)
+    or to watch a long-running app write progress to its output.
 
     Args:
         pid: Process ID returned by ``app_launch()``.

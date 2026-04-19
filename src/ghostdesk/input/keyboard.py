@@ -59,11 +59,19 @@ def _normalize_chord(keys: str) -> list[str]:
 
 
 async def key_type(text: str, ctx: Context | None = None) -> dict:
-    """Type text. Handles Unicode, newlines, and tabs.
+    """Type text at the current keyboard focus. Handles Unicode, newlines,
+    and tabs. Layout-independent — a French AZERTY host produces the same
+    output as US QWERTY.
+
+    For more than a sentence or two, prefer ``clipboard_set(text)`` +
+    ``key_press("ctrl+v")``: it's instant, immune to autocomplete and
+    autocorrect, and does not race with the app's own key handlers.
+
+    A ``screen_changed: false`` result almost always means the field did
+    not have focus. Click into it first and retry.
 
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
-    feedback.  If ``screen_changed`` is false, the text field probably
-    didn't have focus — click on it first and retry.
+    feedback.
     """
     cx, cy = get_cursor_position()
     region, before = await capture_before(cx, cy)
@@ -78,14 +86,22 @@ async def key_type(text: str, ctx: Context | None = None) -> dict:
 
 
 async def key_press(keys: str, ctx: Context | None = None) -> dict:
-    """Press a key or key combination.
+    """Press a key or a chord (modifiers + key), using ``+`` as separator.
 
-    Friendly names accepted: ``Tab``, ``Return``, ``Escape``,
-    ``BackSpace``, ``Left``, ``Page_Up``, ``F4``, ``Ctrl``, ``Alt``,
-    ``Shift``, ``Super``.  Single printable characters stay as-is
-    (``a``, ``c``, ``5``).
+    Common shortcuts worth remembering:
+        ``Enter``, ``Escape``, ``Tab``, ``F5``
+        ``Ctrl+a`` / ``Ctrl+c`` / ``Ctrl+v`` / ``Ctrl+z``
+        ``Alt+Tab`` (switch windows), ``Alt+F4`` (close), ``Super`` (launcher)
 
-    Examples: ``Tab``, ``Ctrl+c``, ``Alt+F4``, ``Ctrl+Shift+Tab``.
+    Modifier aliases: ``ctrl``/``control``, ``alt``, ``shift``,
+    ``super``/``meta``/``win``/``cmd``.
+    Non-printable aliases: ``return``/``enter``, ``escape``/``esc``,
+    ``backspace``, ``delete``, ``tab``, ``space``, ``home``/``end``,
+    ``pageup``/``pagedown``, ``left``/``right``/``up``/``down``, ``f1``..``f12``.
+
+    A ``screen_changed: false`` result usually means the keystroke went to
+    a window or field that didn't care about it — check focus with a
+    screenshot.
 
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
     feedback.
