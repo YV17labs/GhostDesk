@@ -8,18 +8,31 @@ which keeps one persistent Wayland connection open and reuses a single
 
 from __future__ import annotations
 
+from mcp.server.fastmcp import Context
+
 from ghostdesk.input._wayland import Button, ScrollDirection, get_wayland_input
-from ghostdesk.input.feedback import build_feedback, capture_before, poll_for_change
+from ghostdesk.input.feedback import (
+    build_feedback,
+    capture_before,
+    poll_for_change,
+    warn_on_miss,
+)
 
 
-async def mouse_click(x: int, y: int, button: Button = "left") -> dict:
-    """Click at screen coordinates. Use coordinates from screen_shot() or inspect().
+async def mouse_click(
+    x: int, y: int, button: Button = "left", ctx: Context | None = None,
+) -> dict:
+    """Click once at screen coordinates (pixels from the last screen_shot()).
 
-    Returns a dict with:
+    A ``screen_changed: false`` result means the click had no visible
+    effect. Do not retry the same coordinates — the target probably
+    moved (page scrolled, dialog opened) or was never where you thought;
+    take a new screen_shot() and recompute.
+
+    Feedback dict:
     - action: description of what was performed.
-    - screen_changed: whether the 200x200 px zone around the click visibly
-      changed within 2 s. If false the click likely missed its target —
-      retry with adjusted coordinates or take a new screen_shot().
+    - screen_changed: whether the 200×200 px zone centred on the click
+      visibly changed within 2 s.
     - reaction_time_ms: how quickly the change was detected (ms).
     """
     wl = await get_wayland_input()
@@ -27,17 +40,18 @@ async def mouse_click(x: int, y: int, button: Button = "left") -> dict:
     region, before = await capture_before(x, y)
     await wl.click(button)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Clicked {button} at ({x}, {y})", result)
+    feedback = build_feedback(f"Clicked {button} at ({x}, {y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
-async def mouse_double_click(x: int, y: int, button: Button = "left") -> dict:
-    """Double-click at screen coordinates. Use for opening files or selecting words.
+async def mouse_double_click(
+    x: int, y: int, button: Button = "left", ctx: Context | None = None,
+) -> dict:
+    """Double-click at screen coordinates. Standard use cases: open a file or
+    folder in a file manager, select an entire word in editable text.
 
-    Returns a dict with:
-    - action: description of what was performed.
-    - screen_changed: whether the 200x200 px zone around the click visibly
-      changed within 2 s. If false the click likely missed its target.
-    - reaction_time_ms: how quickly the change was detected (ms).
+    Feedback dict matches ``mouse_click``.
     """
     wl = await get_wayland_input()
     await wl.move(x, y)
@@ -45,39 +59,48 @@ async def mouse_double_click(x: int, y: int, button: Button = "left") -> dict:
     await wl.click(button)
     await wl.click(button)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Double-clicked {button} at ({x}, {y})", result)
+    feedback = build_feedback(f"Double-clicked {button} at ({x}, {y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
 async def mouse_drag(
     from_x: int, from_y: int, to_x: int, to_y: int,
     button: Button = "left",
+    ctx: Context | None = None,
 ) -> dict:
-    """Drag from one position to another. Use for selecting text, moving items, or resizing.
+    """Drag from one point to another while holding ``button``. Standard use
+    cases: select a range of text, move a window or item, resize from a
+    corner, draw in a canvas.
 
-    Returns a dict with:
-    - action: description of what was performed.
-    - screen_changed: whether the 200x200 px zone around the drop point
-      visibly changed within 2 s.
-    - reaction_time_ms: how quickly the change was detected (ms).
+    For selecting text, ``mouse_click(start) + key_press("shift+end")`` (or
+    any shift+navigation) is often more reliable than a pixel-precise drag.
+
+    Feedback dict matches ``mouse_click`` (change zone centred on the drop
+    point).
     """
     wl = await get_wayland_input()
     region, before = await capture_before(to_x, to_y)
     await wl.drag(from_x, from_y, to_x, to_y, button)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})", result)
+    feedback = build_feedback(f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
 
 
 async def mouse_scroll(
     x: int, y: int, direction: ScrollDirection = "down", amount: int = 3,
+    ctx: Context | None = None,
 ) -> dict:
-    """Scroll at a position. direction: up/down/left/right. amount: number of scroll steps (max 5).
+    """Scroll the region under (x, y). ``direction`` is up/down/left/right,
+    ``amount`` is the number of wheel notches (clamped to [1, 5] per call —
+    chain multiple calls for long pages).
 
-    Returns a dict with:
-    - action: description of what was performed.
-    - screen_changed: whether the 200x200 px zone around the scroll point
-      visibly changed within 2 s. If false the page may already be at
-      the scroll boundary.
-    - reaction_time_ms: how quickly the change was detected (ms).
+    A ``screen_changed: false`` result typically means the page is already
+    at the scroll boundary — there is nothing more to reveal in that
+    direction.
+
+    Feedback dict matches ``mouse_click``.
     """
     amount = max(1, min(5, int(amount)))
     wl = await get_wayland_input()
@@ -86,4 +109,6 @@ async def mouse_scroll(
     region, before = await capture_before(x, y)
     await wl.scroll(direction, amount)
     result = await poll_for_change(region, before)
-    return build_feedback(f"Scrolled {direction} {amount} clicks at ({x}, {y})", result)
+    feedback = build_feedback(f"Scrolled {direction} {amount} clicks at ({x}, {y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback

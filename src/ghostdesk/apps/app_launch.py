@@ -6,6 +6,8 @@ import shlex
 import tempfile
 from pathlib import Path
 
+from mcp.server.fastmcp import Context
+
 from ghostdesk.apps._desktop import known_executables
 
 LOG_DIR = Path("/tmp/ghostdesk")
@@ -14,13 +16,20 @@ LOG_DIR = Path("/tmp/ghostdesk")
 _launched_pids: set[int] = set()
 
 
-async def app_launch(command: str) -> dict:
-    """Launch a desktop GUI application and return its PID and log file path.
+async def app_launch(command: str, ctx: Context | None = None) -> dict:
+    """Start a GUI application in the background.
 
-    Only applications listed by ``app_list()`` are accepted. The process
-    runs in the background; its stdout and stderr are captured in a log
-    file under ``/tmp/ghostdesk/proc-<pid>.log``. Use ``app_status(pid)``
-    to check whether it is still running and to read its output.
+    Only executables listed by ``app_list()`` are accepted. The process
+    runs detached; its stdout and stderr are captured to
+    ``/tmp/ghostdesk/proc-<pid>.log`` and can be tailed with
+    ``app_status(pid)``.
+
+    Before calling this, take a screenshot — the target may already be
+    running, in which case ``key_press("alt+tab")`` or clicking its
+    taskbar entry is faster than launching a second instance.
+
+    After a successful launch, the window usually needs a second or two
+    to paint. Take a fresh screenshot before interacting with it.
 
     Returns a dict with:
     - pid: the process ID of the launched application.
@@ -64,6 +73,8 @@ async def app_launch(command: str) -> dict:
     except FileNotFoundError:
         log_file.close()
         tmp_path.unlink(missing_ok=True)
+        if ctx is not None:
+            await ctx.error(f"app_launch: command not found: {parts[0]}")
         return {"error": f"Command not found: {parts[0]}"}
 
     # Rename to the canonical path now that we have the real PID.
@@ -71,6 +82,9 @@ async def app_launch(command: str) -> dict:
     tmp_path.rename(final_path)
 
     _launched_pids.add(proc.pid)
+
+    if ctx is not None:
+        await ctx.info(f"app_launch: {command} (pid={proc.pid}, log={final_path})")
 
     return {
         "pid": proc.pid,

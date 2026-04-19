@@ -1,6 +1,6 @@
 [project]
 name = "ghostdesk"
-version = "7.0.0.dev0"
+version = "7.1.0"
 description = "MCP server to control a virtual Linux desktop from an LLM agent"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "mcp[cli]>=1.0",
+    "mcp[cli]>=1.27",
     "Pillow>=10.0",
     # Thin CFFI binding over libwayland-client; Ghostdesk talks directly
     # to the Wayland compositor for every mouse/keyboard action via the
