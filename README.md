@@ -19,7 +19,13 @@
 </p>
 
 <p align="center">
-  <img src="demos/gifs/ghostdesk-amazon-sheets-automation.gif" alt="GhostDesk demo — Automated Amazon scraping to Google Sheets with real-time visualization" width="960">
+  <video src="demos/ghostdesk-google-news.mp4" controls muted playsinline width="960">
+    Your browser does not support the video tag. <a href="demos/ghostdesk-google-news.mp4">Download the demo video</a>.
+  </video>
+</p>
+
+<p align="center">
+  <em>GhostDesk demo — from a single prompt (<strong>"open the browser, go to Google News, and tell me the latest headlines in the Technology section"</strong>), the agent launches Firefox, navigates to Google News, switches to the Technology section, and reports the latest stories back.</em>
 </p>
 
 ---
