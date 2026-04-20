@@ -19,8 +19,8 @@
 </p>
 
 <p align="center">
-  <video src="demos/ghostdesk-google-news.mp4" controls muted playsinline width="960">
-    Your browser does not support the video tag. <a href="demos/ghostdesk-google-news.mp4">Download the demo video</a>.
+  <video src="https://github.com/user-attachments/assets/304ba0b6-4ba8-49df-9825-a3bb78c2727e" controls muted playsinline width="960">
+    Your browser does not support the video tag.
   </video>
 </p>
 
