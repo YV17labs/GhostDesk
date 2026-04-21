@@ -32,15 +32,15 @@ async def mouse_move(x: int, y: int, ctx: Context | None = None) -> dict:
 
     Feedback dict:
     - action: description of what was performed.
-    - screen_changed: whether the 200×200 px zone centred on the target
-      visibly changed within 2 s. ``false`` is expected for elements that
-      have no hover effect — it is not an error.
+    - screen_changed: whether the screen visibly changed within 2s.
+      ``false`` is expected for elements that have no hover effect — it
+      is not an error.
     - reaction_time_ms: how quickly the change was detected (ms).
     """
-    region, before = await capture_before(x, y)
+    before = await capture_before()
     wl = await get_wayland_input()
     await wl.move(x, y)
-    result = await poll_for_change(region, before)
+    result = await poll_for_change(before)
     feedback = build_feedback(f"Moved cursor to ({x}, {y})", result)
     await warn_on_miss(ctx, feedback)
     return feedback
@@ -52,21 +52,20 @@ async def mouse_click(
     """Click once at screen coordinates (pixels from the last screen_shot()).
 
     A ``screen_changed: false`` result means the click had no visible
-    effect. Do not retry the same coordinates — the target probably
-    moved (page scrolled, dialog opened) or was never where you thought;
-    take a new screen_shot() and recompute.
+    effect anywhere on screen. Do not retry the same coordinates — the
+    target probably moved (page scrolled, dialog opened) or was never
+    where you thought; take a new screen_shot() and recompute.
 
     Feedback dict:
     - action: description of what was performed.
-    - screen_changed: whether the 200×200 px zone centred on the click
-      visibly changed within 2 s.
+    - screen_changed: whether the screen visibly changed within 2s.
     - reaction_time_ms: how quickly the change was detected (ms).
     """
     wl = await get_wayland_input()
     await wl.move(x, y)
-    region, before = await capture_before(x, y)
+    before = await capture_before()
     await wl.click(button)
-    result = await poll_for_change(region, before)
+    result = await poll_for_change(before)
     feedback = build_feedback(f"Clicked {button} at ({x}, {y})", result)
     await warn_on_miss(ctx, feedback)
     return feedback
@@ -82,10 +81,10 @@ async def mouse_double_click(
     """
     wl = await get_wayland_input()
     await wl.move(x, y)
-    region, before = await capture_before(x, y)
+    before = await capture_before()
     await wl.click(button)
     await wl.click(button)
-    result = await poll_for_change(region, before)
+    result = await poll_for_change(before)
     feedback = build_feedback(f"Double-clicked {button} at ({x}, {y})", result)
     await warn_on_miss(ctx, feedback)
     return feedback
@@ -103,13 +102,12 @@ async def mouse_drag(
     For selecting text, ``mouse_click(start) + key_press("shift+end")`` (or
     any shift+navigation) is often more reliable than a pixel-precise drag.
 
-    Feedback dict matches ``mouse_click`` (change zone centred on the drop
-    point).
+    Feedback dict matches ``mouse_click``.
     """
     wl = await get_wayland_input()
-    region, before = await capture_before(to_x, to_y)
+    before = await capture_before()
     await wl.drag(from_x, from_y, to_x, to_y, button)
-    result = await poll_for_change(region, before)
+    result = await poll_for_change(before)
     feedback = build_feedback(f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})", result)
     await warn_on_miss(ctx, feedback)
     return feedback
@@ -133,9 +131,9 @@ async def mouse_scroll(
     wl = await get_wayland_input()
 
     await wl.move(x, y)
-    region, before = await capture_before(x, y)
+    before = await capture_before()
     await wl.scroll(direction, amount)
-    result = await poll_for_change(region, before)
+    result = await poll_for_change(before)
     feedback = build_feedback(f"Scrolled {direction} {amount} clicks at ({x}, {y})", result)
     await warn_on_miss(ctx, feedback)
     return feedback

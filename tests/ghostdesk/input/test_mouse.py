@@ -27,7 +27,7 @@ def _mock_deps():
 
     with (
         patch("ghostdesk.input.mouse.get_wayland_input", new=AsyncMock(return_value=mock_wl)),
-        patch("ghostdesk.input.mouse.capture_before", new_callable=AsyncMock, return_value=(None, b"h")) as mock_cap,
+        patch("ghostdesk.input.mouse.capture_before", new_callable=AsyncMock, return_value=b"h") as mock_cap,
         patch("ghostdesk.input.mouse.poll_for_change", new_callable=AsyncMock, return_value=_FEEDBACK_RESULT) as mock_poll,
     ):
         yield mock_wl, mock_cap, mock_poll
@@ -42,7 +42,7 @@ async def test_mouse_click_left(_mock_deps):
 
     mock_wl.move.assert_awaited_once_with(640, 512)
     mock_wl.click.assert_awaited_once_with("left")
-    mock_cap.assert_awaited_once_with(640, 512)
+    mock_cap.assert_awaited_once_with()
     assert result["action"] == "Clicked left at (640, 512)"
     assert result["screen_changed"] is True
 
@@ -100,7 +100,7 @@ async def test_mouse_drag(_mock_deps):
     result = await mouse_drag(10, 20, 100, 200, button="left")
 
     mock_wl.drag.assert_awaited_once_with(10, 20, 100, 200, "left")
-    mock_cap.assert_awaited_once_with(100, 200)
+    mock_cap.assert_awaited_once_with()
     assert result["action"] == "Dragged from (10, 20) to (100, 200)"
 
 

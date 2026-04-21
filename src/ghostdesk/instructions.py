@@ -54,12 +54,21 @@ sentence, prefer `clipboard_set(text)` followed by the paste shortcut:
 it's instant, immune to autocomplete and autocorrect, and does not
 race with the app's own key handlers.
 
+## Filling tabular UIs
+
+Spreadsheets, grid forms and similar widgets follow a universal
+convention: Tab moves to the next cell, Enter to the next row's first
+column. A whole table fits in a single `key_type` (with `\\t` and
+`\\n`) or a single `clipboard_set` + paste — there is no need to click
+each cell. Reach for the cell-by-cell loop only when an individual
+field traps Tab or rejects pasted content.
+
 ## Reading the feedback every action returns
 
 Input tools return `{screen_changed, reaction_time_ms}`.
 
-`screen_changed: true` means pixels around the action point moved
-within 2 s — the input landed. It does NOT prove the app did the right
+`screen_changed: true` means the screen visibly changed within 2 s —
+the input landed somewhere. It does NOT prove the app did the right
 thing. Before any irreversible action, take a fresh `screen_shot()`
 and verify the pixels match your intent.
 
