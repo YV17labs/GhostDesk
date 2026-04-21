@@ -277,7 +277,7 @@ Example MCP client config:
 
 ### Running locally
 
-For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding on top of upstream: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp). The day WebP lands upstream we will archive the fork and point there directly.
+For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding and turbo quant on top of upstream: [YV17labs/llama.cpp](https://github.com/YV17labs/llama.cpp), branch `integration/webp-turbo`. The day WebP lands upstream we will archive the fork and point there directly.
 
 > **macOS users: use llama.cpp, not mlx-vlm (as of 2026-04-01).** The mlx-vlm stack currently produces inaccurate coordinate outputs for the same models that work correctly under llama.cpp. This is caused by an upstream bug in an Apple dependency, not the model itself. Until the fix lands, llama.cpp is the recommended backend on every platform — including Apple Silicon Macs.
 
