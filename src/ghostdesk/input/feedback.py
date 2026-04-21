@@ -1,56 +1,48 @@
 # Copyright (c) 2026 Yoann Vanitou — FSL-1.1-ALv2
-"""Post-action visual feedback — poll a screen zone until it changes."""
+"""Post-action visual feedback — poll the full screen until it changes."""
 
 import asyncio
+import io
 
 from mcp.server.fastmcp import Context
+from PIL import Image
 
-from ghostdesk.screen._shared import SCREEN_HEIGHT, SCREEN_WIDTH, Region, capture_png
+from ghostdesk.screen._shared import capture_png, diff_against_rgb
 
-# Zone size (pixels) captured around the action point.
-ZONE_SIZE = 200
+# Capture scale used during feedback polling. Smaller = faster grim
+# encode AND a natural downsample that filters out single-character
+# clock ticks and blinking carets.
+FEEDBACK_SCALE = 0.25
 
-# Polling interval and maximum wait time (seconds).
 POLL_INTERVAL = 0.10
 POLL_TIMEOUT = 2.0
 
 
-def _zone_region(x: int, y: int) -> Region:
-    """Build a capture region centred on (x, y), clamped to screen bounds."""
-    half = ZONE_SIZE // 2
-    rx = max(0, min(x - half, SCREEN_WIDTH - ZONE_SIZE))
-    ry = max(0, min(y - half, SCREEN_HEIGHT - ZONE_SIZE))
-    rw = min(ZONE_SIZE, SCREEN_WIDTH - rx)
-    rh = min(ZONE_SIZE, SCREEN_HEIGHT - ry)
-    return Region(rx, ry, rw, rh)
-
-
-async def capture_before(x: int, y: int) -> tuple[Region, bytes]:
-    """Capture the zone around (x, y) before an action.
-
-    Returns the region used and the raw PNG bytes of the capture, ready
-    to be compared bytewise by ``poll_for_change``.
-    """
-    region = _zone_region(x, y)
-    return region, await capture_png(region)
+async def capture_before() -> bytes:
+    """Capture the full screen at reduced resolution before an action."""
+    return await capture_png(scale=FEEDBACK_SCALE)
 
 
 async def poll_for_change(
-    region: Region,
     before: bytes,
     timeout: float = POLL_TIMEOUT,
     interval: float = POLL_INTERVAL,
 ) -> dict:
-    """Poll the region until the image changes or timeout is reached.
+    """Poll the full screen until it differs from ``before`` or timeout.
 
     Returns a dict with ``changed`` (bool) and ``reaction_time_ms`` (int).
     """
+    before_rgb = Image.open(io.BytesIO(before))
+    if before_rgb.mode != "RGB":
+        before_rgb = before_rgb.convert("RGB")
+
     loop = asyncio.get_running_loop()
     start = loop.time()
     deadline = start + timeout
     while loop.time() < deadline:
         await asyncio.sleep(interval)
-        if await capture_png(region) != before:
+        now = await capture_png(scale=FEEDBACK_SCALE)
+        if diff_against_rgb(before_rgb, now):
             elapsed_ms = int((loop.time() - start) * 1000)
             return {"changed": True, "reaction_time_ms": elapsed_ms}
 
@@ -71,4 +63,6 @@ async def warn_on_miss(ctx: Context | None, feedback: dict) -> None:
     """Push an MCP warning when ``screen_changed`` is false."""
     if ctx is None or feedback.get("screen_changed", True):
         return
-    await ctx.warning(f"{feedback['action']} — no visible screen change within 2s")
+    await ctx.warning(
+        f"{feedback['action']} — no visible screen change within {POLL_TIMEOUT:.0f}s"
+    )

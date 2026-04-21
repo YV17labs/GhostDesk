@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import Context
 
-from ghostdesk._cursor import get_cursor_position
 from ghostdesk.input._wayland import get_wayland_input
 from ghostdesk.input.feedback import (
     build_feedback,
@@ -73,13 +72,12 @@ async def key_type(text: str, ctx: Context | None = None) -> dict:
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
     feedback.
     """
-    cx, cy = get_cursor_position()
-    region, before = await capture_before(cx, cy)
+    before = await capture_before()
 
     wl = await get_wayland_input()
     await wl.type_text(text)
 
-    result = await poll_for_change(region, before)
+    result = await poll_for_change(before)
     feedback = build_feedback(f"Typed {len(text)} characters", result)
     await warn_on_miss(ctx, feedback)
     return feedback
@@ -101,14 +99,13 @@ async def key_press(keys: str, ctx: Context | None = None) -> dict:
     Returns the standard ``{action, screen_changed, reaction_time_ms}``
     feedback.
     """
-    cx, cy = get_cursor_position()
-    region, before = await capture_before(cx, cy)
+    before = await capture_before()
 
     tokens = _normalize_chord(keys)
     wl = await get_wayland_input()
     await wl.press_chord(tokens)
 
-    result = await poll_for_change(region, before)
+    result = await poll_for_change(before)
     feedback = build_feedback(f"Pressed {keys}", result)
     await warn_on_miss(ctx, feedback)
     return feedback

@@ -21,19 +21,18 @@ def _mock_deps():
 
     with (
         patch("ghostdesk.input.keyboard.get_wayland_input", new=AsyncMock(return_value=mock_wl)),
-        patch("ghostdesk.input.keyboard.get_cursor_position", return_value=(100, 200)) as mock_pos,
-        patch("ghostdesk.input.keyboard.capture_before", new_callable=AsyncMock, return_value=(None, b"h")) as mock_cap,
+        patch("ghostdesk.input.keyboard.capture_before", new_callable=AsyncMock, return_value=b"h") as mock_cap,
         patch("ghostdesk.input.keyboard.poll_for_change", new_callable=AsyncMock, return_value=_FEEDBACK_RESULT) as mock_poll,
     ):
-        yield mock_wl, mock_pos, mock_cap, mock_poll
+        yield mock_wl, mock_cap, mock_poll
 
 
 # --- key_type ---
 
 async def test_key_type_plain_ascii(_mock_deps):
-    mock_wl, mock_pos, _, _ = _mock_deps
+    mock_wl, mock_cap, _ = _mock_deps
     result = await key_type("abc")
-    mock_pos.assert_called_once()
+    mock_cap.assert_awaited_once_with()
     mock_wl.type_text.assert_awaited_once_with("abc")
     assert result["action"] == "Typed 3 characters"
     assert result["screen_changed"] is True
@@ -69,7 +68,7 @@ async def test_key_type_unicode(_mock_deps):
 
 
 async def test_key_type_no_change(_mock_deps):
-    _, _, _, mock_poll = _mock_deps
+    _, _, mock_poll = _mock_deps
     mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
     result = await key_type("hello")
     assert result["screen_changed"] is False
@@ -78,9 +77,9 @@ async def test_key_type_no_change(_mock_deps):
 # --- key_press ---
 
 async def test_key_press_ctrl_c(_mock_deps):
-    mock_wl, mock_pos, _, _ = _mock_deps
+    mock_wl, mock_cap, _ = _mock_deps
     result = await key_press("Ctrl+c")
-    mock_pos.assert_called_once()
+    mock_cap.assert_awaited_once_with()
     mock_wl.press_chord.assert_awaited_once_with(["leftctrl", "c"])
     assert result["action"] == "Pressed Ctrl+c"
     assert result["screen_changed"] is True
@@ -112,7 +111,7 @@ async def test_key_press_alt_f4(_mock_deps):
 
 
 async def test_key_press_no_change(_mock_deps):
-    _, _, _, mock_poll = _mock_deps
+    _, _, mock_poll = _mock_deps
     mock_poll.return_value = {"changed": False, "reaction_time_ms": 2000}
     result = await key_press("Ctrl+c")
     assert result["screen_changed"] is False
