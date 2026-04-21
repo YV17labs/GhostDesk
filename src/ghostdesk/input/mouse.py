@@ -19,6 +19,33 @@ from ghostdesk.input.feedback import (
 )
 
 
+async def mouse_move(x: int, y: int, ctx: Context | None = None) -> dict:
+    """Move the cursor to (x, y) without pressing any button.
+
+    Use this to trigger hover-only UI reactions: dropdown menus that appear
+    on mouse-over (e.g. Gmail action bar), tooltips, CSS ``:hover`` states,
+    or any element that reveals itself when the pointer enters its bounds.
+
+    Take a screen_shot() first to get the coordinates, then call this tool.
+    If the target menu or tooltip does not appear, the element may require a
+    click instead — fall back to ``mouse_click``.
+
+    Feedback dict:
+    - action: description of what was performed.
+    - screen_changed: whether the 200×200 px zone centred on the target
+      visibly changed within 2 s. ``false`` is expected for elements that
+      have no hover effect — it is not an error.
+    - reaction_time_ms: how quickly the change was detected (ms).
+    """
+    region, before = await capture_before(x, y)
+    wl = await get_wayland_input()
+    await wl.move(x, y)
+    result = await poll_for_change(region, before)
+    feedback = build_feedback(f"Moved cursor to ({x}, {y})", result)
+    await warn_on_miss(ctx, feedback)
+    return feedback
+
+
 async def mouse_click(
     x: int, y: int, button: Button = "left", ctx: Context | None = None,
 ) -> dict:

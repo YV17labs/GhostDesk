@@ -211,7 +211,7 @@ The named volume persists the agent's home directory across restarts — browser
 
 ## Tools
 
-12 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
+13 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
 
 ### Screen
 | Tool | Description |
@@ -221,6 +221,7 @@ The named volume persists the agent's home directory across restarts — browser
 ### Mouse
 | Tool | Description |
 |------|-------------|
+| `mouse_move` | Move the cursor to coordinates without clicking — reveals hover-only menus, tooltips, and CSS `:hover` states (e.g. Gmail action bar) |
 | `mouse_click` | Click at coordinates |
 | `mouse_double_click` | Double-click at coordinates |
 | `mouse_drag` | Drag from one position to another |
