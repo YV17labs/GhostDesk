@@ -10,6 +10,7 @@ from ghostdesk.input.mouse import (
     mouse_click,
     mouse_double_click,
     mouse_drag,
+    mouse_move,
     mouse_scroll,
 )
 
@@ -19,6 +20,7 @@ _VIEWPORT = ToolAnnotations(destructiveHint=False)
 
 def register(mcp: FastMCP) -> None:
     """Register input tools."""
+    mcp.tool(annotations=_VIEWPORT, icons=GHOSTDESK_ICONS)(mouse_move)
     mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(mouse_click)
     mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(mouse_double_click)
     mcp.tool(annotations=_DESTRUCTIVE, icons=GHOSTDESK_ICONS)(mouse_drag)
