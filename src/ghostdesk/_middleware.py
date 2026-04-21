@@ -94,9 +94,10 @@ def install_middleware(mcp: FastMCP) -> None:
         args_str = ", ".join(f"{k}={repr(v)[:80]}" for k, v in arguments.items())
 
         t0 = time.monotonic()
+        elapsed_ms = lambda: int((time.monotonic() - t0) * 1000)
         try:
             result = await original_call_tool(name, arguments)
-            logger.info("%s(%s) → OK (%.1fs)", name, args_str, time.monotonic() - t0)
+            logger.info("%s(%s) → OK (%d ms)", name, args_str, elapsed_ms())
             return result
         except ToolError as e:
             msg = str(e)
@@ -105,10 +106,10 @@ def install_middleware(mcp: FastMCP) -> None:
                     f"Invalid arguments for {name}. You sent: {args_str}. "
                     "Each parameter must be passed separately with the correct type."
                 )
-            logger.error("%s(%s) → ERROR (%.1fs): %s", name, args_str, time.monotonic() - t0, msg)
+            logger.error("%s(%s) → ERROR (%d ms): %s", name, args_str, elapsed_ms(), msg)
             raise ToolError(msg) from e
         except Exception:
-            logger.exception("%s(%s) → ERROR (%.1fs)", name, args_str, time.monotonic() - t0)
+            logger.exception("%s(%s) → ERROR (%d ms)", name, args_str, elapsed_ms())
             raise
 
     mcp._mcp_server.call_tool(validate_input=False)(_call_tool)
