@@ -34,7 +34,6 @@ Button = Literal["left", "middle", "right"]
 ScrollDirection = Literal["up", "down", "left", "right"]
 
 from ghostdesk._coords import SCREEN_HEIGHT, SCREEN_WIDTH
-from ghostdesk._cursor import set_cursor_position
 from ghostdesk.input._wl_bindings.virtual_keyboard_unstable_v1 import (
     ZwpVirtualKeyboardManagerV1,
 )
@@ -342,7 +341,6 @@ class WaylandInput:
             self._motion(x, y)
             self._display.roundtrip()
         await self._run(send)
-        set_cursor_position(x, y)
 
     async def button_down(self, button: Button = "left") -> None:
         code = _BUTTON_CODES[button]
@@ -383,7 +381,6 @@ class WaylandInput:
             self._button(code, _STATE_RELEASED)
             self._display.roundtrip()
         await self._run(send)
-        set_cursor_position(to_x, to_y)
 
     async def scroll(self, direction: ScrollDirection, amount: int) -> None:
         """One ``amount``-notch wheel scroll in ``direction``.
