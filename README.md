@@ -282,10 +282,10 @@ For self-hosted inference we use and recommend our fork of llama.cpp, which adds
 
 > **macOS users: use llama.cpp, not mlx-vlm (as of 2026-04-01).** The mlx-vlm stack currently produces inaccurate coordinate outputs for the same models that work correctly under llama.cpp. This is caused by an upstream bug in an Apple dependency, not the model itself. Until the fix lands, llama.cpp is the recommended backend on every platform — including Apple Silicon Macs.
 
-Run whatever local model you like. Three from the Qwen vision family that I've used and that work well for desktop control:
+Run whatever local model you like. Four from the Qwen vision family that I've used and that work well for desktop control:
 
+- **[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)** — dense 27B; as of today the strongest of the four on complex, multi-step tasks, at the cost of slower inference.
 - **[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)** — 35B parameters, only 3B active per token.
-- **[Qwen3.5-35B-A3B](https://huggingface.co/Qwen/Qwen3.5-35B-A3B)** — 35B parameters, only 3B active per token.
 - **Qwen3-VL** — the Qwen3 vision-language branch, available in several sizes on the [Qwen Hugging Face org](https://huggingface.co/Qwen).
 
 ---
