@@ -2,6 +2,7 @@
 """Apps app_launch tool — GUI application launcher with process tracking."""
 
 import asyncio
+import os
 import shlex
 import tempfile
 from pathlib import Path
@@ -11,6 +12,11 @@ from mcp.server.fastmcp import Context
 from ghostdesk.apps._desktop import known_executables
 
 LOG_DIR = Path("/tmp/ghostdesk")
+
+# Debian policy §9.1.1 installs games under /usr/games, which is not in the
+# default PATH of non-interactive shells. Extend PATH so `.desktop` Exec=
+# basenames like `gnome-chess` resolve.
+_LAUNCH_PATH = os.environ.get("PATH", "") + ":/usr/games:/usr/local/games"
 
 # Registry of PIDs launched by this session — checked by app_status.
 _launched_pids: set[int] = set()
@@ -69,6 +75,7 @@ async def app_launch(command: str, ctx: Context | None = None) -> dict:
             stdout=log_file,
             stderr=log_file,
             process_group=0,
+            env={**os.environ, "PATH": _LAUNCH_PATH},
         )
     except FileNotFoundError:
         log_file.close()

@@ -125,6 +125,16 @@ async def test_app_launch_file_not_found(patch_subprocess):
     assert 99999 not in _launched_pids
 
 
+async def test_app_launch_path_includes_usr_games(patch_subprocess):
+    """Spawned env PATH includes /usr/games (Debian policy §9.1.1 for games)."""
+    mock_exec, _, _ = patch_subprocess
+    await app_launch("firefox")
+    env = mock_exec.call_args.kwargs["env"]
+    path_entries = env["PATH"].split(":")
+    assert "/usr/games" in path_entries
+    assert "/usr/local/games" in path_entries
+
+
 async def test_app_launch_quoted_arguments(patch_subprocess):
     """app_launch() correctly splits quoted arguments."""
     mock_exec, _, _ = patch_subprocess
