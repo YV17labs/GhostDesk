@@ -259,7 +259,7 @@ Your inference stack must cover four capabilities — all four are mandatory:
 
 ### Coordinate space — `GhostDesk-Model-Space` header
 
-By default no header is needed: Claude and the other major frontier LLMs work out of the box. **Qwen3.5** and **Qwen3-VL** need the client to send `GhostDesk-Model-Space: 1000` on every MCP request.
+By default no header is needed: Claude and the other major frontier LLMs work out of the box. **Qwen3.x** need the client to send `GhostDesk-Model-Space: 1000` on every MCP request.
 
 Example MCP client config:
 
@@ -286,7 +286,6 @@ Run whatever local model you like. Four from the Qwen vision family that I've us
 
 - **[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)** — dense 27B; as of today the strongest of the four on complex, multi-step tasks, at the cost of slower inference.
 - **[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)** — 35B parameters, only 3B active per token.
-- **Qwen3-VL** — the Qwen3 vision-language branch, available in several sizes on the [Qwen Hugging Face org](https://huggingface.co/Qwen).
 
 ---
 
