@@ -370,17 +370,27 @@ class WaylandInput:
     ) -> None:
         """Press ``button`` at (from_x, from_y), drag to (to_x, to_y), release.
 
-        Bundled into one thread hop + one roundtrip so the compositor sees
-        a contiguous motion stream instead of four separate RPC waits.
+        Emits press, N intermediate motions, and release as separate
+        roundtrips with real time between them. GtkGestureDrag arms only
+        when it sees a press that *persists* while motion events arrive;
+        a bundled press→warp→release atomic burst is treated as a plain
+        click, which breaks true drag-and-drop (moving a selection, a
+        file, a tab) even though it happens to work for text-selection
+        gestures that only track raw button+position.
         """
-        code = _BUTTON_CODES[button]
-        def send() -> None:
-            self._motion(from_x, from_y)
-            self._button(code, _STATE_PRESSED)
-            self._motion(to_x, to_y)
-            self._button(code, _STATE_RELEASED)
-            self._display.roundtrip()
-        await self._run(send)
+        await self.move(from_x, from_y)
+        await asyncio.sleep(0.2)
+        await self.button_down(button)
+        await asyncio.sleep(0.3)
+        steps = 20
+        for i in range(1, steps + 1):
+            t = i / steps
+            x = round(from_x + (to_x - from_x) * t)
+            y = round(from_y + (to_y - from_y) * t)
+            await self.move(x, y)
+            await asyncio.sleep(0.03)
+        await asyncio.sleep(0.3)
+        await self.button_up(button)
 
     async def scroll(self, direction: ScrollDirection, amount: int) -> None:
         """One ``amount``-notch wheel scroll in ``direction``.
