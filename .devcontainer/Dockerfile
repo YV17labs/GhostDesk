@@ -3,18 +3,18 @@
 # and adds the dev extras (compilers, *-dev, foot, GUI probes, extra
 # fonts). Supervisord config and service wrappers are shared verbatim.
 
-# ---- Stage 1: vnc-builder — wayvnc + neatvnc + aml from pinned SHAs ----
+# ---- Stage 1: vnc-builder — wayvnc + neatvnc + aml from pinned refs ----
 # Same pins as docker/base/Dockerfile; keep them in lockstep.
 FROM ubuntu:26.04 AS vnc-builder
 
-ARG WAYVNC_SHA=854edbbde0673b22386086dc98d1c89bee86966e
-ARG NEATVNC_SHA=8a161c26a45706b950023df8bd8b29048e37c210
-ARG AML_SHA=ce4b82d5888a87110054b95414bd3068224d2b91
+ARG WAYVNC_REF=v0.10.0
+ARG NEATVNC_REF=v1.0.0
+ARG AML_REF=v1.0.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git patch \
+        ca-certificates git \
         meson ninja-build pkg-config gcc dpkg-dev \
         libdrm-dev libxkbcommon-dev libwayland-dev \
         libjansson-dev libpam0g-dev libgnutls28-dev \
@@ -23,18 +23,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         zlib1g-dev scdoc
 
 WORKDIR /src
-COPY docker/base/patches/ /patches/
 # See docker/base/Dockerfile vnc-builder for the rationale.
 RUN set -eux \
-    && git clone https://github.com/any1/aml.git \
-    && git -C aml checkout ${AML_SHA} \
-    && git clone https://github.com/any1/neatvnc.git \
-    && git -C neatvnc checkout ${NEATVNC_SHA} \
-    && git clone https://github.com/any1/wayvnc.git \
-    && git -C wayvnc checkout ${WAYVNC_SHA} \
+    && git clone --depth 1 --branch ${AML_REF} https://github.com/any1/aml.git \
+    && git clone --depth 1 --branch ${NEATVNC_REF} https://github.com/any1/neatvnc.git \
+    && git clone --depth 1 --branch ${WAYVNC_REF} https://github.com/any1/wayvnc.git \
     && sed -i '/ADD_SECURITY_TYPE(RFB_SECURITY_TYPE_APPLE_DH)/d' \
         neatvnc/src/server.c \
-    && patch -p1 -d wayvnc < /patches/wayvnc-async-auth.patch \
     && for proj in aml neatvnc wayvnc; do \
         meson setup "$proj/build" "$proj" \
             --prefix=/usr -Dbuildtype=release \

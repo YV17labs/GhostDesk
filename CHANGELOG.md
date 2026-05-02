@@ -15,6 +15,8 @@ Window-awareness for the agent (so it stops launching duplicates of apps that ar
 ### Changed
 - **Ubuntu base image bumped to 26.04 LTS** (was 24.04) in both `docker/base/Dockerfile` and `.devcontainer/Dockerfile`. The `wayvnc` / `neatvnc` / `aml` source pins are unchanged and still build cleanly against the new toolchain.
 - **noVNC pinned bump 1.6.0 → 1.7.0** (`NOVNC_VERSION` in `docker/base/Dockerfile` and `.devcontainer/Dockerfile`). Brings the upstream NPM bundle ES-module conversion, improved H.264 detection, more efficient memory usage (received image data dropped after rendering), and a tab-close warning when not in view-only mode. The wayvnc workaround for VeNCrypt remains in place — noVNC 1.7 still does not negotiate the X509Plain/262 sub-type.
+- **wayvnc / neatvnc / aml switched from master SHAs to upstream release tags** (`WAYVNC_REF=v0.10.0`, `NEATVNC_REF=v1.0.0`, `AML_REF=v1.0.0`). neatvnc 1.0.0 ships the async-auth API rework that wayvnc 0.10.0 has migrated to, so the local `wayvnc-async-auth.patch` (which bridged wayvnc's old sync `on_auth` to neatvnc's new async signature) is no longer needed and has been deleted along with the now-empty `docker/base/patches/` directory. `git clone --depth 1 --branch ${REF}` replaces the previous full-clone-then-checkout for faster builds. The `sed` that strips `RFB_SECURITY_TYPE_APPLE_DH` from neatvnc remains — with `relax_encryption=true` the `NVNC_AUTH_REQUIRE_ENCRYPTION` flag is unset, so neatvnc would still advertise Apple-DH and noVNC would pick it first and fail.
+- **Python deps refresh** via `uv lock --upgrade`: starlette `0.52.1 → 1.0.0`, cryptography `46.0.5 → 47.0.0`, rich `14.3.3 → 15.0.0`, pydantic `2.12.5 → 2.13.3`, uvicorn `0.42.0 → 0.46.0`, pillow `12.1.1 → 12.2.0`, plus minor bumps across anyio / certifi / click / idna / packaging / pydantic-core / pydantic-settings / pygments / pytest / pytest-cov / python-multipart / sse-starlette / typer. All transitive — GhostDesk does not import starlette / cryptography / rich directly, and 218 tests still pass. Direct pin `Pillow>=10.0` → `Pillow>=12.0`; dev pins tightened to match installed versions (`pytest>=9.0`, `pytest-asyncio>=1.3`, `pytest-cov>=7.0`).
 - **`app_list` filters out `Terminal=true` `.desktop` entries** (vim, htop, …). These are TUIs that need a tty — launching them headless gives a process that exits instantly with no window, so they don't belong in a GUI catalogue.
 - **`app_launch` docstring and server `instructions`** now direct the agent to consult `app_running()` first rather than relying solely on a screenshot, since the screenshot only shows the focused workspace.
 
@@ -294,7 +296,12 @@ Initial public release.
 - Google Sheets automation demo; Wikipedia agent demo GIF.
 - VS Code devcontainer with MCP server auto-start.
 
-[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v6.0.0...HEAD
+[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v7.3.0...HEAD
+[v7.3.0]: https://github.com/yv17labs/ghostdesk/compare/v7.2.0...v7.3.0
+[v7.2.0]: https://github.com/yv17labs/ghostdesk/compare/v7.1.0...v7.2.0
+[v7.1.0]: https://github.com/yv17labs/ghostdesk/compare/v7.0.1...v7.1.0
+[v7.0.1]: https://github.com/yv17labs/ghostdesk/compare/v7.0.0...v7.0.1
+[v7.0.0]: https://github.com/yv17labs/ghostdesk/compare/v6.0.0...v7.0.0
 [v6.0.0]: https://github.com/yv17labs/ghostdesk/compare/v5.0.0...v6.0.0
 [v5.0.0]: https://github.com/yv17labs/ghostdesk/compare/v4.1.0...v5.0.0
 [v4.1.0]: https://github.com/yv17labs/ghostdesk/compare/v4.0.1...v4.1.0

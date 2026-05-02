@@ -41,14 +41,14 @@ RUN echo 'See https://github.com/yv17labs/ghostdesk' > README.md \
 # Replace with a tag once wayvnc ships one that contains 1497397fc4.
 FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
 
-ARG WAYVNC_SHA=854edbbde0673b22386086dc98d1c89bee86966e
-ARG NEATVNC_SHA=8a161c26a45706b950023df8bd8b29048e37c210
-ARG AML_SHA=ce4b82d5888a87110054b95414bd3068224d2b91
+ARG WAYVNC_REF=v0.10.0
+ARG NEATVNC_REF=v1.0.0
+ARG AML_REF=v1.0.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates git patch \
+        ca-certificates git \
         meson ninja-build pkg-config gcc dpkg-dev \
         libdrm-dev libxkbcommon-dev libwayland-dev \
         libjansson-dev libpam0g-dev libgnutls28-dev \
@@ -57,7 +57,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         zlib1g-dev scdoc
 
 WORKDIR /src
-COPY docker/base/patches/ /patches/
 # Build aml, neatvnc and wayvnc as standalone projects (not as meson
 # subprojects) so every .so / .pc file meson produces lands in /out at
 # its real multiarch location — `lib/x86_64-linux-gnu` on amd64,
@@ -67,21 +66,17 @@ COPY docker/base/patches/ /patches/
 # pkg-config, then staged under `/out` for the runtime stage's single
 # `COPY --from=vnc-builder /out/ /`.
 RUN set -eux \
-    && git clone https://github.com/any1/aml.git \
-    && git -C aml checkout ${AML_SHA} \
-    && git clone https://github.com/any1/neatvnc.git \
-    && git -C neatvnc checkout ${NEATVNC_SHA} \
-    && git clone https://github.com/any1/wayvnc.git \
-    && git -C wayvnc checkout ${WAYVNC_SHA} \
+    && git clone --depth 1 --branch ${AML_REF} https://github.com/any1/aml.git \
+    && git clone --depth 1 --branch ${NEATVNC_REF} https://github.com/any1/neatvnc.git \
+    && git clone --depth 1 --branch ${WAYVNC_REF} https://github.com/any1/wayvnc.git \
     # Drop Apple Diffie-Hellman (RFB security type 30) from the list
-    # neatvnc advertises so noVNC falls through to classic VNC Auth
-    # (type 2). See neatvnc/src/server.c `init_security_types`.
+    # neatvnc advertises. With wayvnc's `relax_encryption=true` the
+    # NVNC_AUTH_REQUIRE_ENCRYPTION flag is unset, so neatvnc would
+    # otherwise advertise Apple-DH and noVNC would pick it first and
+    # fail (no Apple-DH client implementation). Removing it forces
+    # noVNC to fall through to classic VNC Auth (type 2).
     && sed -i '/ADD_SECURITY_TYPE(RFB_SECURITY_TYPE_APPLE_DH)/d' \
         neatvnc/src/server.c \
-    # Bridge wayvnc's on_auth to the async neatvnc API; wayvnc master is
-    # still on the sync signature and would hang the RFB handshake after
-    # auth. See the patch header for the full rationale.
-    && patch -p1 -d wayvnc < /patches/wayvnc-async-auth.patch \
     && for proj in aml neatvnc wayvnc; do \
         meson setup "$proj/build" "$proj" \
             --prefix=/usr -Dbuildtype=release \

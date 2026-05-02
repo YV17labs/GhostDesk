@@ -8,13 +8,8 @@ no MCP tool call has been observed for ``GHOSTDESK_IDLE_TIMEOUT``
 seconds, walks the Sway tree and asks every client window to close.
 
 Configuration is operator-side, **not** client-side. The agent cannot
-override this; it is a property of the deployment.
-
-The value is always expressed in **seconds** — no unit suffix.
-
-* Unset / invalid → 30 minute default (1800s)
-* ``0`` → watchdog disabled (no cleanup ever)
-* Positive integer → seconds before idle cleanup fires.
+override this; it is a property of the deployment. See
+``parse_timeout`` for the value semantics.
 
 The watchdog spares the desktop infrastructure (sway, mako, wayvnc,
 supervisord, the MCP server itself): those processes are not Sway
@@ -32,7 +27,7 @@ from ghostdesk._sway import collect_views, get_tree, kill_view
 
 logger = logging.getLogger("ghostdesk")
 
-DEFAULT_IDLE_TIMEOUT_S = 1800  # 30 minutes
+DEFAULT_IDLE_TIMEOUT_S = 1800
 
 # Initialise at import so the first poll never sees 0 (which would look
 # like "idle since the epoch" and trigger an instant kill).
@@ -151,7 +146,6 @@ async def idle_watcher(
     Cancelled by the lifespan on shutdown via ``task.cancel()``.
     """
     if timeout_s <= 0:
-        # Defensive: lifespan filters this out, but stay correct if called directly.
         return
 
     interval = poll_interval if poll_interval is not None else _poll_interval(timeout_s)
