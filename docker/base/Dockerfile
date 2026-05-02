@@ -138,7 +138,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         tzdata locales xdg-user-dirs gettext-base \
         ca-certificates \
         libdrm2 libjansson4 libpam0g libgnutls30 \
-        libavfilter9 libavcodec60 libavutil58 libturbojpeg \
+        libavfilter11 libavcodec62 libavutil60 libturbojpeg0 \
         libpixman-1-0 libnettle8 libgmp10 zlib1g \
     && locale-gen en_US.UTF-8 C.UTF-8
 
