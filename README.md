@@ -243,6 +243,7 @@ The named volume persists the agent's home directory across restarts — browser
 | Tool | Description |
 |------|-------------|
 | `app_list` | List the GUI applications installed on the desktop |
+| `app_running` | List the application windows currently open — call before `app_launch` to avoid relaunching an app that is already there |
 | `app_launch` | Start a GUI application by name |
 | `app_status` | Check if an application is running and read its logs |
 
@@ -253,7 +254,7 @@ The named volume persists the agent's home directory across restarts — browser
 Your inference stack must cover four capabilities — all four are mandatory:
 
 1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
-2. **Tool use** — GhostDesk exposes 12 tools as function calls; the model must be able to invoke them.
+2. **Tool use** — GhostDesk exposes 14 tools as function calls; the model must be able to invoke them.
 3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
 4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
 
@@ -411,6 +412,7 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
 | `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
 | `GHOSTDESK_SCREEN_HEIGHT` | `1024` | Virtual screen height in pixels |
+| `GHOSTDESK_IDLE_TIMEOUT` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 

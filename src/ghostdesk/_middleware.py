@@ -19,6 +19,7 @@ from ghostdesk._coords import (
     region_to_pixels,
     to_pixels,
 )
+from ghostdesk._idle import mark_activity
 
 logger = logging.getLogger("ghostdesk")
 
@@ -89,6 +90,7 @@ def install_middleware(mcp: FastMCP) -> None:
     original_call_tool = mcp.call_tool
 
     async def _call_tool(name: str, arguments: dict) -> object:
+        mark_activity()
         arguments = _coerce_xy_args(arguments)
         arguments = _normalise_input_coords(arguments)
         args_str = ", ".join(f"{k}={repr(v)[:80]}" for k, v in arguments.items())

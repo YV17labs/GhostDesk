@@ -30,9 +30,10 @@ async def app_launch(command: str, ctx: Context | None = None) -> dict:
     ``/tmp/ghostdesk/proc-<pid>.log`` and can be tailed with
     ``app_status(pid)``.
 
-    Before calling this, take a screenshot — the target may already be
-    running, in which case ``key_press("alt+tab")`` or clicking its
-    taskbar entry is faster than launching a second instance.
+    Before calling this, check ``app_running()`` (or take a screenshot)
+    — the target may already be open, in which case
+    ``key_press("alt+tab")`` or clicking its taskbar entry is faster
+    than launching a second instance and avoids doubling memory use.
 
     After a successful launch, the window usually needs a second or two
     to paint. Take a fresh screenshot before interacting with it.

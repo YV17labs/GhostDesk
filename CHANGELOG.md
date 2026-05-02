@@ -2,6 +2,40 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v7.3.0] — 2026-05-01
+
+Window-awareness for the agent (so it stops launching duplicates of apps that are already open) and a server-side idle watchdog (so long-running sessions don't slowly leak Firefox / foot / mousepad windows). Base image refreshed to Ubuntu 26.04 LTS.
+
+### Added
+- **`app_running` MCP tool.** Walks the Sway tree and returns one entry per open client window (`app`, `title`, `pid`, `focused`). Agents are now instructed to call it before `app_launch` so they switch to an existing window instead of starting a second instance — the doctrine in `instructions.py` and the `app_launch` docstring both point at it. Tool count goes from 13 to 14.
+- **Idle session watchdog.** When no MCP tool call has been observed for `GHOSTDESK_IDLE_TIMEOUT` seconds (default `1800`, i.e. 30 minutes), the server walks the Sway tree and asks every client window to close gracefully via `swaymsg [con_id=N] kill`. Sway, mako, wayvnc and the MCP server itself are spared — only client surfaces with a backing PID are touched. Set `GHOSTDESK_IDLE_TIMEOUT=0` to disable. The clock is reset on every tool invocation by middleware (`mark_activity()`).
+- **`GHOSTDESK_IDLE_TIMEOUT` environment variable.** Operator-side, not client-side: the agent cannot override the deployment's cleanup policy. Documented in the README env-var table.
+- **`ghostdesk._sway` IPC helpers.** Resilient socket discovery that probes `swaymsg -s <sock> -t get_version` against every `sway-ipc.*.sock` whose embedded PID resolves to a live `sway` process — `$XDG_RUNTIME_DIR` accumulates dead sockets across container restarts, and `$SWAYSOCK` captured at process start grows stale when Sway restarts. The cached socket is invalidated on any IPC failure and rediscovered once before giving up, so the server self-heals across compositor restarts.
+
+### Changed
+- **Ubuntu base image bumped to 26.04 LTS** (was 24.04) in both `docker/base/Dockerfile` and `.devcontainer/Dockerfile`. The `wayvnc` / `neatvnc` / `aml` source pins are unchanged and still build cleanly against the new toolchain.
+- **noVNC pinned bump 1.6.0 → 1.7.0** (`NOVNC_VERSION` in `docker/base/Dockerfile` and `.devcontainer/Dockerfile`). Brings the upstream NPM bundle ES-module conversion, improved H.264 detection, more efficient memory usage (received image data dropped after rendering), and a tab-close warning when not in view-only mode. The wayvnc workaround for VeNCrypt remains in place — noVNC 1.7 still does not negotiate the X509Plain/262 sub-type.
+- **`app_list` filters out `Terminal=true` `.desktop` entries** (vim, htop, …). These are TUIs that need a tty — launching them headless gives a process that exits instantly with no window, so they don't belong in a GUI catalogue.
+- **`app_launch` docstring and server `instructions`** now direct the agent to consult `app_running()` first rather than relying solely on a screenshot, since the screenshot only shows the focused workspace.
+
+---
+
+## [v7.2.0] — 2026-04-21
+
+Hover-only mouse interaction, screen-wide change feedback, and middleware-side timing instrumentation.
+
+### Added
+- **`mouse_move` tool.** Repositions the virtual pointer without clicking — needed for hover-only UI reactions (tooltips, dropdown previews, hover-revealed icons). Tool count goes from 12 to 13.
+
+### Changed
+- **`poll_for_change` polls the full screen** instead of a 200×200 zone around the cursor. The previous bounded zone missed UI updates that landed elsewhere on screen (modal openings, taskbar changes, status-bar text), producing false-negative miss warnings.
+- **Tool-call durations logged in milliseconds** (`name(args) → OK (123 ms)`), making slow tools easier to spot in logs.
+
+### Removed
+- **Unused `_cursor` module.** Dead code from an earlier capture pipeline iteration; nothing imported it.
+
+---
+
 ## [v7.1.0] — 2026-04-19
 
 Native MCP surfaces the server wasn't exposing yet (resources, lifespan warm-up, icons, tool annotations), stricter HTTP-transport security, finer-grained tool feedback through MCP `notifications/message`, and a consolidated system-level brief delivered through the spec-canonical `instructions` field.

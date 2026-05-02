@@ -37,6 +37,11 @@ the first time a task names an application — its `exec` field is the
 only string `app_launch()` will accept. Re-call it after installing
 software during the session.
 
+Know what's already open. Call `app_running()` before `app_launch()`:
+if the target app is already in the list, switch to its window
+(`key_press("alt+tab")` or click its tab in the bottom bar) instead
+of starting a second instance.
+
 Know what's on screen. Coordinates in any mouse call are valid only
 against the latest `screen_shot()`. Any UI change since that capture
 invalidates every coordinate you held.

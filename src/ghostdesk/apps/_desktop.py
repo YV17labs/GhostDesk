@@ -31,11 +31,17 @@ def _parse_exec(exec_field: str) -> str:
 
 
 def _is_launchable(entry: configparser.SectionProxy) -> bool:
-    """Return True if this .desktop entry represents a visible GUI app."""
+    """Return True if this .desktop entry represents a visible GUI app.
+
+    ``Terminal=true`` entries (vim, htop, …) are TUIs that need a tty —
+    launching them headless gives a process that exits instantly with
+    no window, so they don't belong in a GUI catalogue.
+    """
     return (
         entry.get("Type") == "Application"
         and not entry.getboolean("NoDisplay", fallback=False)
         and not entry.getboolean("Hidden", fallback=False)
+        and not entry.getboolean("Terminal", fallback=False)
     )
 
 

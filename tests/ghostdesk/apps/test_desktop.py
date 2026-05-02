@@ -74,6 +74,14 @@ Exec=gimp %U
 Hidden=false
 """
 
+TUI_DESKTOP = """\
+[Desktop Entry]
+Type=Application
+Name=Vim
+Exec=vim
+Terminal=true
+"""
+
 
 @pytest.fixture
 def apps_dir(tmp_path, monkeypatch):
@@ -96,6 +104,11 @@ def test_known_executables_excludes_nodisplay(apps_dir):
 def test_known_executables_excludes_non_application(apps_dir):
     _write_desktop(apps_dir, "link", NON_APP_DESKTOP)
     assert "somelink" not in known_executables()
+
+
+def test_known_executables_excludes_terminal_apps(apps_dir):
+    _write_desktop(apps_dir, "vim", TUI_DESKTOP)
+    assert "vim" not in known_executables()
 
 
 def test_known_executables_multiple(apps_dir):

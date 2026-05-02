@@ -121,7 +121,7 @@ chmod 0644 "${SWAY_CFG_DIR}/config"
 # ---- Wayvnc config ----
 # Pinned to 127.0.0.1. Under TLS, enable_auth + allow_broken_crypto +
 # relax_encryption + password (no username) makes wayvnc advertise
-# RFB security type 2 (classic VNC Auth) which noVNC 1.6 supports
+# RFB security type 2 (classic VNC Auth) which noVNC supports
 # directly — the browser prompts for a single password inside the
 # noVNC overlay. The DES challenge/response is weak on its own but
 # travels inside the wss:// envelope, so the effective posture is
@@ -136,7 +136,7 @@ install -d -m 0700 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" "${WAYVNC_CFG_D
     if [ "${TLS_ENABLED}" = "1" ]; then
         # No certificate_file/private_key_file here on purpose: setting
         # them makes wayvnc advertise RFB security type 19 (VeNCrypt),
-        # which noVNC 1.6 then picks first and fails on (the only
+        # which noVNC then picks first and fails on (the only
         # sub-type wayvnc offers is X509Plain/262 while noVNC only
         # supports Plain/256). Leaving them out keeps VNC Auth (type 2)
         # as the first type noVNC can actually negotiate. TLS for the

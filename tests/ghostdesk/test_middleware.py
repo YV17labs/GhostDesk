@@ -138,7 +138,7 @@ async def test_call_tool_success_path():
     mock_mcp.call_tool = mock_original
 
     with patch(f"{MODULE}.logger") as mock_logger:
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.5]):
+        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.0, 0.5]):
             call_tool = _install_and_capture_call_tool(mock_mcp)
             # User sends model x=500 y=500 (centre)
             result = await call_tool("test_tool", {"x": 500, "y": 500})
@@ -158,7 +158,7 @@ async def test_call_tool_validation_error_reformatted():
     mock_mcp.call_tool = AsyncMock(side_effect=ToolError("validation error: x must be int"))
 
     with patch(f"{MODULE}.logger"):
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.3]):
+        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.0, 0.3]):
             call_tool = _install_and_capture_call_tool(mock_mcp)
             with pytest.raises(ToolError) as exc_info:
                 await call_tool("click", {"x": "100, 200"})
@@ -173,7 +173,7 @@ async def test_call_tool_tool_error_passthrough():
     mock_mcp.call_tool = AsyncMock(side_effect=ToolError("Tool not found"))
 
     with patch(f"{MODULE}.logger"):
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.2]):
+        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.0, 0.2]):
             call_tool = _install_and_capture_call_tool(mock_mcp)
             with pytest.raises(ToolError) as exc_info:
                 await call_tool("unknown_tool", {})
@@ -186,11 +186,23 @@ async def test_call_tool_generic_exception_logged():
     mock_mcp.call_tool = AsyncMock(side_effect=RuntimeError("boom"))
 
     with patch(f"{MODULE}.logger") as mock_logger:
-        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.1]):
+        with patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.0, 0.1]):
             call_tool = _install_and_capture_call_tool(mock_mcp)
             with pytest.raises(RuntimeError):
                 await call_tool("broken_tool", {"param": "value"})
             mock_logger.exception.assert_called_once()
+
+
+async def test_call_tool_marks_idle_activity():
+    """Every tool invocation must reset the idle watchdog clock."""
+    mock_mcp = MagicMock()
+    mock_mcp.call_tool = AsyncMock(return_value="ok")
+
+    with patch(f"{MODULE}.mark_activity") as mock_mark, \
+         patch(f"{MODULE}.time.monotonic", side_effect=[0.0, 0.0, 0.0]):
+        call_tool = _install_and_capture_call_tool(mock_mcp)
+        await call_tool("noop", {})
+    mock_mark.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

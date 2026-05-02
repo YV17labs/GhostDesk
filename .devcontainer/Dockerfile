@@ -5,7 +5,7 @@
 
 # ---- Stage 1: vnc-builder — wayvnc + neatvnc + aml from pinned SHAs ----
 # Same pins as docker/base/Dockerfile; keep them in lockstep.
-FROM ubuntu:24.04 AS vnc-builder
+FROM ubuntu:26.04 AS vnc-builder
 
 ARG WAYVNC_SHA=854edbbde0673b22386086dc98d1c89bee86966e
 ARG NEATVNC_SHA=8a161c26a45706b950023df8bd8b29048e37c210
@@ -43,11 +43,11 @@ RUN set -eux \
         && DESTDIR=/out ninja -C "$proj/build" install; \
     done
 
-# ---- Stage 2: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
+# ---- Stage 2: novnc — upstream tag (Ubuntu repos lag the upstream release) ----
 # Mirrors docker/base/Dockerfile § novnc. Isolated so the dev image
 # stays free of curl+tarball clutter for the noVNC fetch itself.
-FROM ubuntu:24.04 AS novnc
-ARG NOVNC_VERSION=1.6.0
+FROM ubuntu:26.04 AS novnc
+ARG NOVNC_VERSION=1.7.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
     && curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \

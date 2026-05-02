@@ -2,7 +2,7 @@
 # ghostdesk:base — headless Wayland desktop for a single LLM agent.
 # See SECURITY.md for threat model, auth requirements, and rotation.
 
-ARG UBUNTU_VERSION=24.04
+ARG UBUNTU_VERSION=26.04
 ARG UV_VERSION=0.11
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
@@ -74,7 +74,7 @@ RUN set -eux \
     && git clone https://github.com/any1/wayvnc.git \
     && git -C wayvnc checkout ${WAYVNC_SHA} \
     # Drop Apple Diffie-Hellman (RFB security type 30) from the list
-    # neatvnc advertises so noVNC 1.6 falls through to classic VNC Auth
+    # neatvnc advertises so noVNC falls through to classic VNC Auth
     # (type 2). See neatvnc/src/server.c `init_security_types`.
     && sed -i '/ADD_SECURITY_TYPE(RFB_SECURITY_TYPE_APPLE_DH)/d' \
         neatvnc/src/server.c \
@@ -90,10 +90,10 @@ RUN set -eux \
         && DESTDIR=/out ninja -C "$proj/build" install; \
     done
 
-# ---- Stage 3: novnc — upstream 1.6 (Ubuntu 24.04 ships 1.3) ----
+# ---- Stage 3: novnc — upstream tag (Ubuntu repos lag the upstream release) ----
 # Isolated so the runtime image stays free of curl and build tooling.
 FROM ubuntu:${UBUNTU_VERSION} AS novnc
-ARG NOVNC_VERSION=1.6.0
+ARG NOVNC_VERSION=1.7.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
     && curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
