@@ -144,11 +144,4 @@
     <path d="M 2520 600 L 2520 550 M 2520 600 L 2470 600"/>
   </g>
 
-  <!-- Corner labels -->
-  <g font-family="'Helvetica Neue', monospace" font-size="13" fill="#E8E6FF" opacity="0.35" letter-spacing="2">
-    <text x="110" y="62">SESSION  /  ACTIVE</text>
-    <text x="2450" y="62" text-anchor="end">YV17  ·  GHOSTDESK</text>
-    <text x="110" y="588">VNC  ·  READY</text>
-    <text x="2450" y="588" text-anchor="end">v7.0</text>
-  </g>
 </svg>

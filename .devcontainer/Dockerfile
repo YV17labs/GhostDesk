@@ -3,9 +3,11 @@
 # and adds the dev extras (compilers, *-dev, foot, GUI probes, extra
 # fonts). Supervisord config and service wrappers are shared verbatim.
 
+ARG UBUNTU_VERSION=26.04
+
 # ---- Stage 1: vnc-builder — wayvnc + neatvnc + aml from pinned refs ----
 # Same pins as docker/base/Dockerfile; keep them in lockstep.
-FROM ubuntu:26.04 AS vnc-builder
+FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
 
 ARG WAYVNC_REF=v0.10.0
 ARG NEATVNC_REF=v1.0.0
@@ -41,7 +43,7 @@ RUN set -eux \
 # ---- Stage 2: novnc — upstream tag (Ubuntu repos lag the upstream release) ----
 # Mirrors docker/base/Dockerfile § novnc. Isolated so the dev image
 # stays free of curl+tarball clutter for the noVNC fetch itself.
-FROM ubuntu:26.04 AS novnc
+FROM ubuntu:${UBUNTU_VERSION} AS novnc
 ARG NOVNC_VERSION=1.7.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl \
@@ -53,7 +55,7 @@ COPY docker/services/novnc/index.html /opt/novnc/index.html
 COPY assets/logo-mark.svg              /opt/novnc/app/images/ghostdesk-logo.svg
 
 # ---- Stage 3: runtime — devcontainer base + prod runtime stack ----
-FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
+FROM mcr.microsoft.com/devcontainers/base:ubuntu26.04
 
 ARG TARGETARCH
 
@@ -87,7 +89,7 @@ RUN apt-get update \
         tzdata locales xdg-user-dirs gettext-base \
         ca-certificates \
         libdrm2 libjansson4 libpam0g libgnutls30 \
-        libavfilter9 libavcodec60 libavutil58 libturbojpeg \
+        libavfilter11 libavcodec62 libavutil60 libturbojpeg0 \
         libpixman-1-0 libnettle8 libgmp10 zlib1g \
         curl \
         python3-dev libwayland-dev pkg-config build-essential \
@@ -107,7 +109,7 @@ RUN ldconfig
 COPY --from=novnc /opt/novnc /usr/share/novnc
 
 RUN install -d -m 0755 /usr/share/ghostdesk
-COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
+COPY assets/wallpaper.svg /usr/share/ghostdesk/wallpaper.svg
 
 # Firefox must come from packages.mozilla.org — Ubuntu's `firefox` package
 # is a snap wrapper that does not work in containers.

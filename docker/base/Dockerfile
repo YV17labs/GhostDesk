@@ -34,7 +34,7 @@ RUN echo 'See https://github.com/yv17labs/ghostdesk' > README.md \
     && uv sync --frozen --no-dev --compile-bytecode --no-editable
 
 # ---- Stage 2: vnc-builder — wayvnc + neatvnc + aml from pinned SHAs ----
-# Ubuntu 24.04 ships wayvnc 0.7.2, which does not advertise RFB security
+# The wayvnc shipped by Ubuntu (0.7.2) does not advertise RFB security
 # type 2 (classic VNC Auth) to its clients. wayvnc added opt-in DES auth
 # in commit 1497397fc4 (2026-04-06); neatvnc in 6109e61b04 (2026-03-08).
 # Until these land in a tagged release, we build from pinned master SHAs.
@@ -152,8 +152,8 @@ RUN ldconfig
 
 COPY --from=novnc /opt/novnc /usr/share/novnc
 
-# ubuntu:24.04 ships a default `ubuntu` user at UID 1000 — remove it
-# before claiming the UID for `agent`.
+# The ubuntu base image ships a default `ubuntu` user at UID 1000 —
+# remove it before claiming the UID for `agent`.
 RUN userdel -r ubuntu 2>/dev/null || true \
     && groupadd -g 1000 agent \
     && useradd -m -u 1000 -g agent -s /bin/bash agent
@@ -169,7 +169,21 @@ COPY --chmod=0755 docker/services/websockify/run.sh /usr/local/bin/websockify-ru
 COPY --chmod=0644 docker/shell/sway-env.sh          /etc/profile.d/sway-env.sh
 
 RUN install -d -m 0755 /usr/share/ghostdesk
-COPY assets/wallpaper.png /usr/share/ghostdesk/wallpaper.png
+COPY assets/wallpaper.svg /usr/share/ghostdesk/wallpaper.svg
+
+# Ubuntu 26.04 swaybg loads images through libglycin, which sandboxes
+# its loaders in bubblewrap. Under Docker's default AppArmor profile
+# bwrap fails at `pivot_root` with "Operation not permitted" — a string
+# glycin's fallback heuristic doesn't recognize, so it keeps trying the
+# sandbox and the wallpaper never renders (only the #1a1b2e fallback
+# colour from the sway config shows). Shadow bwrap with a stub that
+# emits the message glycin DOES recognize as "namespaces unavailable",
+# forcing the no-sandbox path. The cost is one layer of defense-in-depth
+# on a static PNG we control — acceptable since the agent never feeds
+# untrusted images to glycin.
+RUN printf '#!/bin/sh\necho "bwrap: No permissions to create a new namespace" >&2\nexit 1\n' \
+        > /usr/local/bin/bwrap \
+    && chmod 0755 /usr/local/bin/bwrap
 
 RUN install -d -o agent -g agent /opt/ghostdesk
 COPY --from=builder /opt/ghostdesk/.venv /opt/ghostdesk/.venv
@@ -193,7 +207,7 @@ LABEL org.opencontainers.image.title="ghostdesk" \
       org.opencontainers.image.revision="${GHOSTDESK_GIT_SHA}" \
       org.opencontainers.image.vendor="YV17" \
       org.opencontainers.image.authors="Yoann Vanitou <yvanitou@gmail.com>" \
-      org.opencontainers.image.base.name="docker.io/library/ubuntu:24.04"
+      org.opencontainers.image.base.name="docker.io/library/ubuntu:26.04"
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD /usr/local/bin/health

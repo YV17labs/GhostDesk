@@ -141,10 +141,4 @@
     <path d="M 1252 612 L 1252 572 M 1252 612 L 1212 612"/>
   </g>
 
-  <g font-family="'Helvetica Neue', monospace" font-size="10" fill="#E8E6FF" opacity="0.35" letter-spacing="2">
-    <text x="84" y="46">SESSION  /  ACTIVE</text>
-    <text x="1196" y="46" text-anchor="end">YV17  ·  GHOSTDESK</text>
-    <text x="84" y="600">VNC  ·  READY</text>
-    <text x="1196" y="600" text-anchor="end">v7.0</text>
-  </g>
 </svg>

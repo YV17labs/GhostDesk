@@ -2,6 +2,23 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v7.3.1] — 2026-05-02
+
+Wallpaper renders correctly on Ubuntu 26.04 production images, and brand assets no longer need a re-edit at every release.
+
+### Fixed
+- **Wallpaper not rendering on Ubuntu 26.04 prod images.** `swaybg` in 26.04 routes image loading through `libglycin`, which sandboxes its loaders in `bubblewrap`. Under Docker's default AppArmor profile `bwrap` fails at `pivot_root` with "Operation not permitted" — a string glycin's no-sandbox fallback heuristic does not match, so it kept retrying the sandbox and only the `#1a1b2e` fallback colour from the sway config was visible. Shadowed `/usr/local/bin/bwrap` with a stub that emits the error glycin DOES recognize (`No permissions to create a new namespace`), forcing the no-sandbox loader path. The dev container fell back on its own because bwrap there fails earlier with a recognized message, so the stub lives only in `docker/base/Dockerfile`. Cost is one layer of defense-in-depth on a static asset we control; the agent never feeds untrusted images to glycin.
+
+### Changed
+- **Wallpaper migrated PNG → SVG.** `swaybg` rasterizes the SVG natively at output resolution via `glycin-svg`, eliminating the 8-bit PNG quantization step that produced visible gradient banding on the dark navy background. Asset shrinks from 327 KB raster to 4.5 KB vector source — and the build no longer needs any rasterization step. `docker/services/sway/config`, `docker/base/Dockerfile`, and `.devcontainer/Dockerfile` updated to reference `wallpaper.svg`.
+- **Wallpaper redesign — Aurora.** Removed the HUD-style frame: corner brackets, "SESSION / ACTIVE", "VNC · READY", `v7.0`, "YV17 · GHOSTDESK", scan rings, starfield, horizon line, grid and dot overlays. Replaced with a minimalist composition: deep radial-gradient base, three soft floutéd auroras (purple / mint / magenta), subtle vignette, refined typography (Inter weight 300, larger letter-spacing). Result is timeless and version-free — survives all releases without re-edits.
+- **Banner and social-card SVGs de-versioned.** Removed `v7.0` and the corner-label HUD (`SESSION / ACTIVE`, `YV17 · GHOSTDESK`, `VNC · READY`) from `assets/banner.svg` and `assets/social-card.svg`. Brand assets are now permanent — no edits needed each release.
+
+### Removed
+- **Orphan PNG assets.** Deleted `banner.png`, `logo-mark.png`, `logo.png`, `social-card.png`, and `wallpaper.png` from `assets/`. Every in-repo reference (Dockerfiles, noVNC index, README, `_icons.py`) already pointed at the `.svg` variants — the PNGs were leftover build artefacts taking ~1 MB on disk.
+
+---
+
 ## [v7.3.0] — 2026-05-01
 
 Window-awareness for the agent (so it stops launching duplicates of apps that are already open) and a server-side idle watchdog (so long-running sessions don't slowly leak Firefox / foot / mousepad windows). Base image refreshed to Ubuntu 26.04 LTS.

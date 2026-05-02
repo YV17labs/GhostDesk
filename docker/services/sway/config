@@ -4,7 +4,7 @@ xwayland disable
 
 # Single virtual output (WLR_HEADLESS_OUTPUTS=1).
 output HEADLESS-1 resolution ${GHOSTDESK_SCREEN_WIDTH}x${GHOSTDESK_SCREEN_HEIGHT} position 0,0
-output HEADLESS-1 bg /usr/share/ghostdesk/wallpaper.png fill #1a1b2e
+output HEADLESS-1 bg /usr/share/ghostdesk/wallpaper.svg fill #1a1b2e
 
 font pango:DejaVu Sans 10
 default_border none
