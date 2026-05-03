@@ -110,7 +110,6 @@ fi
 # means the user picks the resolution once in docker-compose.yml and
 # the whole stack stays coherent.
 SWAY_CFG_DIR="${HOME}/.config/sway"
-install -d -m 0755 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" "${SWAY_CFG_DIR}"
 export GHOSTDESK_SCREEN_WIDTH="${GHOSTDESK_SCREEN_WIDTH:-1280}"
 export GHOSTDESK_SCREEN_HEIGHT="${GHOSTDESK_SCREEN_HEIGHT:-1024}"
 envsubst '${GHOSTDESK_SCREEN_WIDTH} ${GHOSTDESK_SCREEN_HEIGHT}' \
@@ -129,7 +128,6 @@ chmod 0644 "${SWAY_CFG_DIR}/config"
 # pinned master SHA — see docker/base/Dockerfile vnc-builder stage.
 WAYVNC_CFG_DIR="${HOME}/.config/wayvnc"
 WAYVNC_CFG_FILE="${WAYVNC_CFG_DIR}/config"
-install -d -m 0700 -o "${GHOSTDESK_USER}" -g "${GHOSTDESK_USER}" "${WAYVNC_CFG_DIR}"
 
 (
     umask 077

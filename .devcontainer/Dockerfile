@@ -111,6 +111,15 @@ COPY --from=novnc /opt/novnc /usr/share/novnc
 RUN install -d -m 0755 /usr/share/ghostdesk
 COPY assets/wallpaper.svg /usr/share/ghostdesk/wallpaper.svg
 
+# Same bwrap stub as docker/base/Dockerfile — Docker's default AppArmor
+# profile blocks bwrap's pivot_root with a message glycin doesn't
+# recognize, so swaybg never falls back to the no-sandbox loader path
+# and the wallpaper fails to render. Emit the message glycin DOES
+# recognize as "namespaces unavailable" to force the no-sandbox path.
+RUN printf '#!/bin/sh\necho "bwrap: No permissions to create a new namespace" >&2\nexit 1\n' \
+        > /usr/local/bin/bwrap \
+    && chmod 0755 /usr/local/bin/bwrap
+
 # Firefox must come from packages.mozilla.org — Ubuntu's `firefox` package
 # is a snap wrapper that does not work in containers.
 RUN install -d -m 0755 /etc/apt/keyrings \
@@ -141,7 +150,10 @@ COPY --chmod=0644 docker/shell/sway-env.sh          /etc/profile.d/sway-env.sh
 
 COPY docker/services/foot/foot.ini /etc/xdg/foot/foot.ini
 COPY docker/shell/bashrc-prompt.sh /etc/ghostdesk/bashrc-prompt.sh
-RUN echo '. /etc/ghostdesk/bashrc-prompt.sh' >> /home/vscode/.bashrc
+RUN echo '. /etc/ghostdesk/bashrc-prompt.sh' >> /home/vscode/.bashrc \
+    && install -d -m 0755 -o vscode -g vscode \
+         /home/vscode/.config /home/vscode/.config/sway \
+    && install -d -m 0700 -o vscode -g vscode /home/vscode/.config/wayvnc
 
 EXPOSE 3000 5900 6080
 

@@ -156,7 +156,10 @@ COPY --from=novnc /opt/novnc /usr/share/novnc
 # remove it before claiming the UID for `agent`.
 RUN userdel -r ubuntu 2>/dev/null || true \
     && groupadd -g 1000 agent \
-    && useradd -m -u 1000 -g agent -s /bin/bash agent
+    && useradd -m -u 1000 -g agent -s /bin/bash agent \
+    && install -d -m 0755 -o agent -g agent \
+         /home/agent/.config /home/agent/.config/sway \
+    && install -d -m 0700 -o agent -g agent /home/agent/.config/wayvnc
 
 COPY docker/supervisor/supervisord.conf /etc/supervisord.conf
 COPY docker/supervisor/conf.d/          /etc/supervisor/conf.d/
