@@ -2,6 +2,11 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [Unreleased]
+
+### Added
+- **`quality` and `scale` args on `screen_shot`.** Two opt-in knobs for trading visual fidelity for response-payload bytes — useful when an agent is running under a token budget and a session's worth of full-resolution captures dominates input-token cost. `quality` (1-100, default `80` — unchanged from the previous implicit Pillow default) is forwarded to the WebP encoder and ignored for `format="png"`. `scale` (positive float, default `None` = native resolution) is forwarded to `grim -s` so the downsample happens before the PNG-to-WebP re-encode, making `scale=0.5` cost roughly 1/4 the encoded bytes. Both are validated eagerly with `ValueError`. The capture-stabilisation poll loop honours `scale` so the agent is not billed for a full-resolution poll followed by a downsampled final frame.
+
 ## [v7.3.1] — 2026-05-02
 
 Wallpaper renders correctly on Ubuntu 26.04 production images, and brand assets no longer need a re-edit at every release.

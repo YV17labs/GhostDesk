@@ -216,7 +216,7 @@ The named volume persists the agent's home directory across restarts — browser
 ### Screen
 | Tool | Description |
 |------|-------------|
-| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
+| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize). Tune the payload with `quality=` (WebP 1-100, default 80 — drop to 50-60 when you only need to locate elements) and `scale=` (e.g. `0.5` halves each dimension for wide-area layout sweeps; default native) |
 
 ### Mouse
 | Tool | Description |
