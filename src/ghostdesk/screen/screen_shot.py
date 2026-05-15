@@ -22,12 +22,15 @@ ImageFormat = Literal["webp", "png"]
 
 _STABILITY_TIMEOUT_S = 2.5
 _STABILITY_POLL_S = 0.15
+_DEFAULT_WEBP_QUALITY = 80
 
 
 async def screen_shot(
     region: Region | None = None,
     format: ImageFormat = "webp",
     stabilize: bool = True,
+    quality: int = _DEFAULT_WEBP_QUALITY,
+    scale: float | None = None,
 ) -> Image:
     """Capture the current screen as an image.
 
@@ -42,7 +45,9 @@ async def screen_shot(
 
     Args:
         region: Area to capture as ``(x, y, width, height)``. Omit to
-            capture the full screen — almost always the right choice.
+            capture the full screen. Cropping to the relevant area cuts
+            the payload by roughly the area ratio — prefer it whenever
+            you already know where the target lives.
         format: ``"webp"`` (default, small payload, visually stable at
             UI resolutions) or ``"png"`` (lossless, larger).
         stabilize: When true (default), wait up to 2.5 s for two
@@ -50,15 +55,29 @@ async def screen_shot(
             pages still animating after a click or navigation. Set to
             false only when you need to observe a genuinely animating UI
             in motion.
+        quality: WebP encoder quality 1-100. Default 80 is the Pillow
+            default and visually indistinguishable from lossless on UI
+            content. Lower (e.g. 50-60) shrinks the payload further when
+            you only need to locate elements, not read fine pixels.
+            Ignored when ``format="png"``.
+        scale: Optional output scale factor passed to grim. ``0.5``
+            halves each dimension (≈1/4 the encoded bytes). Useful for
+            wide-area sweeps where you only need to see layout, not
+            read text. ``None`` (default) means native resolution.
     """
+    if not 1 <= quality <= 100:
+        raise ValueError(f"quality must be between 1 and 100, got {quality}")
+    if scale is not None and scale <= 0:
+        raise ValueError(f"scale must be positive, got {scale}")
+
     capture_region = _clamp_region(region)
 
     if stabilize:
-        raw_png = await _capture_until_stable(capture_region)
+        raw_png = await _capture_until_stable(capture_region, scale)
     else:
-        raw_png = await capture_png(capture_region)
+        raw_png = await capture_png(capture_region, scale=scale)
 
-    img_bytes = _reencode(raw_png, format)
+    img_bytes = _reencode(raw_png, format, quality)
     return Image(data=img_bytes, format=format)
 
 
@@ -73,17 +92,20 @@ def _clamp_region(region: Region | None) -> Region | None:
     return Region(x, y, w, h)
 
 
-async def _capture_until_stable(region: Region | None = None) -> bytes:
+async def _capture_until_stable(
+    region: Region | None = None,
+    scale: float | None = None,
+) -> bytes:
     """Poll grim until two consecutive frames are pixel-stable.
 
     Gives up after :data:`_STABILITY_TIMEOUT_S` and returns the latest
     frame regardless — a genuinely animating screen shouldn't block the
     agent forever.
     """
-    prev = await capture_png(region)
+    prev = await capture_png(region, scale=scale)
     deadline = time.monotonic() + _STABILITY_TIMEOUT_S
     while time.monotonic() < deadline:
-        curr = await capture_png(region)
+        curr = await capture_png(region, scale=scale)
         if screens_stable(prev, curr):
             return curr
         await asyncio.sleep(_STABILITY_POLL_S)
@@ -91,9 +113,9 @@ async def _capture_until_stable(region: Region | None = None) -> bytes:
     return prev
 
 
-def _reencode(raw_png: bytes, fmt: ImageFormat) -> bytes:
+def _reencode(raw_png: bytes, fmt: ImageFormat, quality: int = _DEFAULT_WEBP_QUALITY) -> bytes:
     """Re-encode raw PNG bytes into the requested format."""
     if fmt == "png":
         return raw_png
     img = PILImage.open(io.BytesIO(raw_png))
-    return save_image_bytes(img, fmt)
+    return save_image_bytes(img, fmt, quality=quality)

@@ -109,13 +109,17 @@ def diff_against_rgb(before_rgb: Image.Image, b_bytes: bytes) -> bool:
     return ratio is None or ratio >= _STABILITY_MAX_DIFF_RATIO
 
 
-def save_image_bytes(img: Image.Image, fmt: str = "png") -> bytes:
-    """Encode PIL image to bytes in the requested format."""
+def save_image_bytes(img: Image.Image, fmt: str = "png", quality: int = 80) -> bytes:
+    """Encode PIL image to bytes in the requested format.
+
+    ``quality`` is forwarded to the WebP encoder (1-100, Pillow default 80).
+    Ignored for PNG (lossless).
+    """
     if fmt == "webp":
         img = img.convert("RGB")
     buf = io.BytesIO()
     if fmt == "webp":
-        img.save(buf, format="WebP", method=4)
+        img.save(buf, format="WebP", method=4, quality=quality)
     else:
         img.save(buf, format="PNG")
     return buf.getvalue()
