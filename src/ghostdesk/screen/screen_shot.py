@@ -4,12 +4,14 @@
 import asyncio
 import io
 import time
-from typing import Literal
 
 from PIL import Image as PILImage
 from mcp.server.fastmcp import Image
 
 from ghostdesk.screen._shared import (
+    _DEFAULT_IMAGE_FORMAT,
+    _DEFAULT_WEBP_QUALITY,
+    ImageFormat,
     Region,
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
@@ -18,16 +20,15 @@ from ghostdesk.screen._shared import (
     screens_stable,
 )
 
-ImageFormat = Literal["webp", "png"]
-
 _STABILITY_TIMEOUT_S = 2.5
 _STABILITY_POLL_S = 0.15
 
 
 async def screen_shot(
     region: Region | None = None,
-    format: ImageFormat = "webp",
+    format: ImageFormat = _DEFAULT_IMAGE_FORMAT,
     stabilize: bool = True,
+    quality: int = _DEFAULT_WEBP_QUALITY,
 ) -> Image:
     """Capture the current screen as an image.
 
@@ -50,7 +51,16 @@ async def screen_shot(
             pages still animating after a click or navigation. Set to
             false only when you need to observe a genuinely animating UI
             in motion.
+        quality: WebP encoder quality 1-100. Default ``50`` — visually
+            indistinguishable from ``80`` on typical UI content (text on
+            solid backgrounds, buttons, menus) but roughly half the
+            encoded bytes. Raise to ``80+`` when you need to read fine
+            pixels (small fonts in a PDF, design mockups, photo content).
+            Ignored when ``format="png"``.
     """
+    if not 1 <= quality <= 100:
+        raise ValueError(f"quality must be between 1 and 100, got {quality}")
+
     capture_region = _clamp_region(region)
 
     if stabilize:
@@ -58,7 +68,7 @@ async def screen_shot(
     else:
         raw_png = await capture_png(capture_region)
 
-    img_bytes = _reencode(raw_png, format)
+    img_bytes = _reencode(raw_png, format, quality)
     return Image(data=img_bytes, format=format)
 
 
@@ -91,9 +101,9 @@ async def _capture_until_stable(region: Region | None = None) -> bytes:
     return prev
 
 
-def _reencode(raw_png: bytes, fmt: ImageFormat) -> bytes:
+def _reencode(raw_png: bytes, fmt: ImageFormat, quality: int = _DEFAULT_WEBP_QUALITY) -> bytes:
     """Re-encode raw PNG bytes into the requested format."""
     if fmt == "png":
         return raw_png
     img = PILImage.open(io.BytesIO(raw_png))
-    return save_image_bytes(img, fmt)
+    return save_image_bytes(img, fmt, quality)

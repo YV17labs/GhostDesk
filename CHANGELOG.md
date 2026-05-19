@@ -2,6 +2,19 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v7.4.0] — 2026-05-19
+
+`screen_shot` exposes a WebP `quality` knob, and its effective default drops from 80 to 50 — roughly halving the encoded payload on every capture without altering coordinates or breaking any caller.
+
+### Added
+- **`quality` parameter on `screen_shot`.** Accepts `1-100`, validated eagerly with `ValueError`. Forwarded to the WebP encoder via `Pillow.Image.save(..., format="WebP", quality=...)`. Ignored when `format="png"` (PNG is lossless by construction). The docstring spells out when the agent should raise it back to `80+` — small fonts in PDFs, design mockups, photo content — so the model has a deterministic policy instead of paying for the maximum on every capture.
+- **`save_image_bytes(..., quality=)` propagation** in `ghostdesk.screen._shared`. The shared encoder helper threads `quality` through to Pillow for any caller that bypasses `screen_shot`.
+
+### Changed
+- **Default WebP encoder quality 80 → 50.** Previously Pillow's implicit default (80) was used; the encoder call is now explicit at 50, chosen empirically on Hacker News, GitHub, and IDE captures: the visual difference vs. 80 is imperceptible on solid-background UI content (text, buttons, menus), while encoded bytes shrink by roughly 50% on a typical 1280×1024 desktop. Agents that need full fidelity explicitly pass `quality=80+`. Pixel coordinates are unaffected — the image dimensions stay native, so `mouse_click` / `mouse_drag` receive screen-space coordinates verbatim and the change is safe for any LLM regardless of vision-coordinate calibration.
+
+---
+
 ## [v7.3.1] — 2026-05-02
 
 Wallpaper renders correctly on Ubuntu 26.04 production images, and brand assets no longer need a re-edit at every release.
@@ -314,7 +327,9 @@ Initial public release.
 - Google Sheets automation demo; Wikipedia agent demo GIF.
 - VS Code devcontainer with MCP server auto-start.
 
-[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v7.3.0...HEAD
+[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v7.4.0...HEAD
+[v7.4.0]: https://github.com/yv17labs/ghostdesk/compare/v7.3.1...v7.4.0
+[v7.3.1]: https://github.com/yv17labs/ghostdesk/compare/v7.3.0...v7.3.1
 [v7.3.0]: https://github.com/yv17labs/ghostdesk/compare/v7.2.0...v7.3.0
 [v7.2.0]: https://github.com/yv17labs/ghostdesk/compare/v7.1.0...v7.2.0
 [v7.1.0]: https://github.com/yv17labs/ghostdesk/compare/v7.0.1...v7.1.0

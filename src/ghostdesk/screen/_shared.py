@@ -6,15 +6,26 @@ from __future__ import annotations
 import asyncio
 import io
 from dataclasses import dataclass
+from typing import Literal
 
 from PIL import Image, ImageChops
 
 from ghostdesk._coords import SCREEN_HEIGHT, SCREEN_WIDTH
 
+ImageFormat = Literal["webp", "png"]
+
 # Stability detection: max ratio of changed area below which two
 # consecutive captures are considered "stable enough" (ignores tiny
 # diffs like a blinking cursor).
 _STABILITY_MAX_DIFF_RATIO = 0.005
+
+# Agent-facing default: WebP for compact payloads. Callers needing
+# lossless output (design surfaces, PDFs) opt in via ``format="png"``.
+_DEFAULT_IMAGE_FORMAT: ImageFormat = "webp"
+
+# WebP encoder quality default. Empirically chosen: visually
+# indistinguishable from 80 on UI content, ~half the encoded bytes.
+_DEFAULT_WEBP_QUALITY = 50
 
 
 @dataclass
@@ -109,13 +120,16 @@ def diff_against_rgb(before_rgb: Image.Image, b_bytes: bytes) -> bool:
     return ratio is None or ratio >= _STABILITY_MAX_DIFF_RATIO
 
 
-def save_image_bytes(img: Image.Image, fmt: str = "png") -> bytes:
-    """Encode PIL image to bytes in the requested format."""
+def save_image_bytes(img: Image.Image, fmt: ImageFormat = "png", quality: int = _DEFAULT_WEBP_QUALITY) -> bytes:
+    """Encode PIL image to bytes in the requested format.
+
+    ``quality`` is the WebP encoder quality (1-100). Ignored for PNG (lossless).
+    """
     if fmt == "webp":
         img = img.convert("RGB")
     buf = io.BytesIO()
     if fmt == "webp":
-        img.save(buf, format="WebP", method=4)
+        img.save(buf, format="WebP", method=4, quality=quality)
     else:
         img.save(buf, format="PNG")
     return buf.getvalue()
