@@ -2,6 +2,15 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v7.4.1] — 2026-05-19
+
+Operator-supplied `LANG` (e.g. `fr_CA.UTF-8`, `de_DE.UTF-8`) is honored again at boot. The Ubuntu 26.04 base regression that crashed any non-default locale on `docker run` is neutralized inside the entrypoint.
+
+### Fixed
+- **Container restart loop when `-e LANG=` is set to anything other than `en_US.UTF-8` or `C.UTF-8`.** Ubuntu 26.04 (introduced in v7.3.0) ships `rust-coreutils 0.8.0`, whose `icu_collator` panics with `index out of bounds` when `locale-gen` runs while `LC_COLLATE` points at the locale being generated — a chicken-and-egg trigger that fires on every locale the base image does not pre-build. `locale-gen` then exits 0 with nothing actually built, `update-locale` rejects the result, `set -e` kills the entrypoint, and Docker loops on exit 255 with no useful signal beyond the perl/ICU warning soup. Two-part defense in `docker/init/entrypoint.sh`: pin `LC_ALL=C` around both `locale-gen` and `update-locale` so the broken collator path never fires, and verify the locale actually landed in `locale -a` instead of trusting `locale-gen`'s misleading exit code. If the requested locale cannot be built (typo, unsupported tag), the entrypoint logs an explicit `WARN ... falling back to en_US.UTF-8` and continues — the operator gets a one-line diagnosis in `docker logs`, not a silent restart loop. The `locale -a` membership check uses the documented glibc internal mapping (`.UTF-8` → `.utf8`) and applies no other normalization — what the operator writes is what the operator gets.
+
+---
+
 ## [v7.4.0] — 2026-05-19
 
 `screen_shot` exposes a WebP `quality` knob, and its effective default drops from 80 to 50 — roughly halving the encoded payload on every capture without altering coordinates or breaking any caller.

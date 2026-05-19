@@ -85,13 +85,34 @@ chown "${GHOSTDESK_USER}:${GHOSTDESK_USER}" "${XDG_RUNTIME_DIR}"
 chmod 0700 "${XDG_RUNTIME_DIR}"
 
 # ---- Locale & timezone ----
-# Re-applied every boot so `docker restart` with a different LANG/TZ
-# takes effect without a rebuild. Both calls are idempotent.
+# Re-applied every boot so `docker restart` picks up a new LANG/TZ
+# without a rebuild.
+#
+# Ubuntu 26.04's rust-coreutils panics inside icu_collator when
+# locale-gen runs with LC_COLLATE pointing at the locale being
+# generated (chicken/egg). locale-gen then exits 0 with nothing
+# built, update-locale rejects, set -e kills PID 1. LC_ALL=C around
+# both calls avoids the panic; verifying via `locale -a` instead of
+# locale-gen's exit code catches any other silent failure and falls
+# back to en_US.UTF-8 (always pre-built in the base image).
 LANG_VAL="${LANG:-en_US.UTF-8}"
-echo "entrypoint: locale-gen ${LANG_VAL}"
-locale-gen "${LANG_VAL}" >/dev/null 2>&1 \
-    || echo "entrypoint: WARN locale-gen failed for ${LANG_VAL}" >&2
-update-locale LANG="${LANG_VAL}"
+# `locale -a` reports codesets in glibc's internal form (`fr_CA.utf8`).
+LANG_GLIBC="${LANG_VAL/.UTF-8/.utf8}"
+locale_present() {
+    LC_ALL=C locale -a 2>/dev/null | grep -qxF "${LANG_GLIBC}"
+}
+if locale_present; then
+    echo "entrypoint: locale ${LANG_VAL} already present"
+else
+    echo "entrypoint: locale-gen ${LANG_VAL}"
+    LC_ALL=C locale-gen "${LANG_VAL}" >/dev/null 2>&1 || true
+    if ! locale_present; then
+        echo "entrypoint: WARN ${LANG_VAL} not generated, falling back to en_US.UTF-8" >&2
+        LANG_VAL="en_US.UTF-8"
+    fi
+fi
+LC_ALL=C update-locale LANG="${LANG_VAL}"
+export LANG="${LANG_VAL}"
 
 TZ_VAL="${TZ:-America/New_York}"
 if [ -f "/usr/share/zoneinfo/${TZ_VAL}" ]; then
