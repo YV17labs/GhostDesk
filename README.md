@@ -288,6 +288,24 @@ Run whatever local model you like. Four from the Qwen vision family that I've us
 - **[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)** — dense 27B; as of today the strongest of the four on complex, multi-step tasks, at the cost of slower inference.
 - **[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)** — 35B parameters, only 3B active per token.
 
+The exact command I run for my Qwen3.6-35B-A3B tests, against the fork above (`--cache-type-v turbo3` is its turbo-quant KV cache):
+
+```bash
+build/bin/llama-server \
+  --model models/Qwen3.6-35B-A3B-Q5_K_M.gguf \
+  --mmproj models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
+  --alias 'Qwen3-6-35B-A3B' \
+  --ctx-size 32768 \
+  --host 127.0.0.1 \
+  --port 8080 \
+  --cache-type-k q8_0 \
+  --cache-type-v turbo3 \
+  --reasoning on \
+  --reasoning-format deepseek
+```
+
+`llama-server` exposes an OpenAI-compatible endpoint on `http://127.0.0.1:8080`; point your MCP host's inference backend at it and remember the `GhostDesk-Model-Space: 1000` header for the Qwen family.
+
 ---
 
 ## From one agent to a workforce
