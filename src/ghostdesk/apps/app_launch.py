@@ -25,8 +25,11 @@ _launched_pids: set[int] = set()
 async def app_launch(command: str, ctx: Context | None = None) -> dict:
     """Start a GUI application in the background.
 
-    Only executables listed by ``app_list()`` are accepted. The process
-    runs detached; its stdout and stderr are captured to
+    Only bare executable names listed by ``app_list()`` are accepted
+    (e.g. ``"firefox"``). Additional command-line arguments are not
+    allowed — pass the ``exec`` field from ``app_list()`` verbatim.
+
+    The process runs detached; its stdout and stderr are captured to
     ``/tmp/ghostdesk/proc-<pid>.log`` and can be tailed with
     ``app_status(pid)``.
 
@@ -53,6 +56,18 @@ async def app_launch(command: str, ctx: Context | None = None) -> dict:
     if not parts:
         return {"error": "No command provided"}
 
+    # Security: only a single token (the executable) is allowed.
+    # Arbitrary arguments could be abused to achieve command execution
+    # via apps that accept --exec / -e style flags (CWE-78).
+    if len(parts) > 1:
+        return {
+            "error": (
+                "Arguments are not allowed — pass only the executable "
+                "name from app_list(). "
+                f"Got: {command!r}"
+            )
+        }
+
     # Security: reject anything that is not a known desktop GUI app.
     exe = Path(parts[0]).name
     if exe not in known_executables():
@@ -72,7 +87,7 @@ async def app_launch(command: str, ctx: Context | None = None) -> dict:
     try:
         log_file = open(fd, "w")  # noqa: SIM115
         proc = await asyncio.create_subprocess_exec(
-            *parts,
+            parts[0],
             stdout=log_file,
             stderr=log_file,
             process_group=0,
@@ -92,10 +107,10 @@ async def app_launch(command: str, ctx: Context | None = None) -> dict:
     _launched_pids.add(proc.pid)
 
     if ctx is not None:
-        await ctx.info(f"app_launch: {command} (pid={proc.pid}, log={final_path})")
+        await ctx.info(f"app_launch: {exe} (pid={proc.pid}, log={final_path})")
 
     return {
         "pid": proc.pid,
         "log_file": str(final_path),
-        "action": f"Launched: {command}",
+        "action": f"Launched: {exe}",
     }

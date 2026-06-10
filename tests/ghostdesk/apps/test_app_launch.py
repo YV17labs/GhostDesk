@@ -44,7 +44,7 @@ def patch_subprocess(mock_process, tmp_path):
 async def test_app_launch_rejects_unknown_executable():
     """app_launch() rejects commands not in the GUI app whitelist."""
     with patch(f"{MODULE}.known_executables", return_value=frozenset({"firefox"})):
-        result = await app_launch("rm -rf /")
+        result = await app_launch("rm")
     assert "error" in result
     assert "not a known gui app" in result["error"].lower()
 
@@ -60,6 +60,22 @@ async def test_app_launch_accepts_full_path_to_known(patch_subprocess):
     """app_launch() accepts /usr/bin/firefox when 'firefox' is whitelisted."""
     result = await app_launch("/usr/bin/firefox")
     assert "pid" in result
+
+
+# --- argument rejection (CWE-78 hardening) ---
+
+async def test_app_launch_rejects_arguments(patch_subprocess):
+    """app_launch() rejects commands with extra arguments."""
+    result = await app_launch("firefox https://example.com")
+    assert "error" in result
+    assert "arguments are not allowed" in result["error"].lower()
+
+
+async def test_app_launch_rejects_quoted_arguments(patch_subprocess):
+    """app_launch() rejects commands even with quoted arguments."""
+    result = await app_launch('gedit "/tmp/my file.txt"')
+    assert "error" in result
+    assert "arguments are not allowed" in result["error"].lower()
 
 
 # --- PID registry ---
@@ -82,9 +98,9 @@ async def test_app_launch_does_not_register_on_failure():
 async def test_app_launch_success(patch_subprocess):
     """app_launch() starts the process and returns pid + log path."""
     mock_exec, _, _ = patch_subprocess
-    result = await app_launch("firefox https://example.com")
+    result = await app_launch("firefox")
     assert result["pid"] == 99999
-    assert result["action"] == "Launched: firefox https://example.com"
+    assert result["action"] == "Launched: firefox"
     assert "proc-99999.log" in result["log_file"]
     mock_exec.assert_awaited_once()
 
@@ -135,12 +151,11 @@ async def test_app_launch_path_includes_usr_games(patch_subprocess):
     assert "/usr/local/games" in path_entries
 
 
-async def test_app_launch_quoted_arguments(patch_subprocess):
-    """app_launch() correctly splits quoted arguments."""
+async def test_app_launch_only_passes_executable(patch_subprocess):
+    """app_launch() passes only the executable to create_subprocess_exec."""
     mock_exec, _, _ = patch_subprocess
-    result = await app_launch('gedit "/tmp/my file.txt"')
-    assert result["pid"] == 99999
-    assert mock_exec.call_args[0] == ("gedit", "/tmp/my file.txt")
+    await app_launch("firefox")
+    assert mock_exec.call_args[0] == ("firefox",)
 
 
 # --- ctx-based MCP logging ---
