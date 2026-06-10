@@ -18,6 +18,23 @@ LOG_DIR = Path("/tmp/ghostdesk")
 # basenames like `gnome-chess` resolve.
 _LAUNCH_PATH = os.environ.get("PATH", "") + ":/usr/games:/usr/local/games"
 
+# Security: server-only secrets that must never leak into a launched GUI
+# app's environment. The MCP server needs these (bearer-token auth, VNC
+# password), but a browser or any other child the agent spawns does not —
+# and any code execution inside such a child would otherwise inherit them.
+_SCRUBBED_ENV_KEYS = frozenset({
+    "GHOSTDESK_AUTH_TOKEN",
+    "GHOSTDESK_VNC_PASSWORD",
+})
+
+
+def _launch_env() -> dict[str, str]:
+    """Build the environment for a launched app: server secrets stripped,
+    PATH extended for Debian game basenames."""
+    env = {k: v for k, v in os.environ.items() if k not in _SCRUBBED_ENV_KEYS}
+    env["PATH"] = _LAUNCH_PATH
+    return env
+
 # Registry of PIDs launched by this session — checked by app_status.
 _launched_pids: set[int] = set()
 
@@ -91,7 +108,7 @@ async def app_launch(command: str, ctx: Context | None = None) -> dict:
             stdout=log_file,
             stderr=log_file,
             process_group=0,
-            env={**os.environ, "PATH": _LAUNCH_PATH},
+            env=_launch_env(),
         )
     except FileNotFoundError:
         log_file.close()

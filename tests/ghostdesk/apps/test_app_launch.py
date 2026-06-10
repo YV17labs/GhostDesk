@@ -151,6 +151,19 @@ async def test_app_launch_path_includes_usr_games(patch_subprocess):
     assert "/usr/local/games" in path_entries
 
 
+async def test_app_launch_scrubs_server_secrets_from_env(patch_subprocess):
+    """Launched apps must not inherit server-only secrets (auth/VNC)."""
+    mock_exec, _, _ = patch_subprocess
+    with patch.dict(
+        "os.environ",
+        {"GHOSTDESK_AUTH_TOKEN": "s3cret", "GHOSTDESK_VNC_PASSWORD": "vncpw"},
+    ):
+        await app_launch("firefox")
+    env = mock_exec.call_args.kwargs["env"]
+    assert "GHOSTDESK_AUTH_TOKEN" not in env
+    assert "GHOSTDESK_VNC_PASSWORD" not in env
+
+
 async def test_app_launch_only_passes_executable(patch_subprocess):
     """app_launch() passes only the executable to create_subprocess_exec."""
     mock_exec, _, _ = patch_subprocess
