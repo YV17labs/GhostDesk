@@ -2,6 +2,19 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v7.4.2] — 2026-06-10
+
+Server-only secrets stop leaking into the GUI apps the agent launches, the dependency lockfile is refreshed, and the package finally advertises itself as Production/Stable.
+
+### Security
+- **Server auth/VNC secrets scrubbed from launched app environments.** `app_launch` handed every GUI child (`firefox`, `mousepad`, …) the full `{**os.environ, ...}`, so `GHOSTDESK_AUTH_TOKEN` (MCP bearer auth) and `GHOSTDESK_VNC_PASSWORD` were inherited by processes that have no business seeing them — any code execution inside such a child (a malicious page, a rogue extension, a compromised binary) could read the server's credentials straight out of `/proc/self/environ` and then authenticate to the MCP endpoint or the VNC console as the operator. A new `_SCRUBBED_ENV_KEYS` frozenset is stripped by a `_launch_env()` helper before the child is spawned, while the extended `PATH` (so Debian game basenames like `gnome-chess` still resolve via `/usr/games`) is preserved untouched. The MCP server process itself keeps its environment intact — only spawned GUI children are scrubbed. Covered by `test_app_launch_scrubs_server_secrets_from_env`.
+
+### Changed
+- **Package classifier `3 - Alpha` → `5 - Production/Stable`.** GhostDesk is deployed in production across multiple companies; the trove classifier in `pyproject.toml` no longer reflected reality.
+- **Locked dependencies refreshed** via `uv lock --upgrade`, within the existing `pyproject` constraints: cryptography `47.0.0 → 48.0.1`, starlette `1.0.0 → 1.2.1`, uvicorn `0.46.0 → 0.49.0`, typer `0.25.1 → 0.26.7`, mcp `1.27.0 → 1.27.2`, rpds-py `0.30.0 → 2026.5.1` (upstream switched to CalVer), pyjwt `2.12.1 → 2.13.0`, python-multipart `0.0.27 → 0.0.32`, plus minor bumps across certifi / click / coverage / idna / markdown-it-py / pydantic / pydantic-core / pydantic-settings / pytest-asyncio / sse-starlette. All transitive — GhostDesk imports none of them directly. `pywayland` stays pinned `>=0.4.18,<0.5` by design (CFFI binding against the fixed `zwlr_virtual_pointer_v1` / `zwp_virtual_keyboard_v1` protocol versions). 228 tests pass.
+
+---
+
 ## [v7.4.1] — 2026-05-19
 
 Operator-supplied `LANG` (e.g. `fr_CA.UTF-8`, `de_DE.UTF-8`) is honored again at boot. The Ubuntu 26.04 base regression that crashed any non-default locale on `docker run` is neutralized inside the entrypoint.
