@@ -3,7 +3,7 @@
 # See SECURITY.md for threat model, auth requirements, and rotation.
 
 ARG UBUNTU_VERSION=26.04
-ARG UV_VERSION=0.11
+ARG UV_VERSION=0.12
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
@@ -33,16 +33,13 @@ COPY src/ ./src/
 RUN echo 'See https://github.com/yv17labs/ghostdesk' > README.md \
     && uv sync --frozen --no-dev --compile-bytecode --no-editable
 
-# ---- Stage 2: vnc-builder — wayvnc + neatvnc + aml from pinned SHAs ----
-# The wayvnc shipped by Ubuntu (0.7.2) does not advertise RFB security
-# type 2 (classic VNC Auth) to its clients. wayvnc added opt-in DES auth
-# in commit 1497397fc4 (2026-04-06); neatvnc in 6109e61b04 (2026-03-08).
-# Until these land in a tagged release, we build from pinned master SHAs.
-# Replace with a tag once wayvnc ships one that contains 1497397fc4.
+# ---- Stage 2: vnc-builder — wayvnc + neatvnc + aml from pinned tags ----
+# Ubuntu's wayvnc (0.7.2) does not advertise RFB security type 2 (classic
+# VNC Auth), so these three are built from upstream release tags.
 FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
 
-ARG WAYVNC_REF=v0.10.0
-ARG NEATVNC_REF=v1.0.0
+ARG WAYVNC_REF=v0.10.1
+ARG NEATVNC_REF=v1.0.1
 ARG AML_REF=v1.0.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

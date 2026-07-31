@@ -9,8 +9,8 @@ ARG UBUNTU_VERSION=26.04
 # Same pins as docker/base/Dockerfile; keep them in lockstep.
 FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
 
-ARG WAYVNC_REF=v0.10.0
-ARG NEATVNC_REF=v1.0.0
+ARG WAYVNC_REF=v0.10.1
+ARG NEATVNC_REF=v1.0.1
 ARG AML_REF=v1.0.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -131,7 +131,7 @@ RUN install -d -m 0755 /etc/apt/keyrings \
     && apt-get install -y --no-install-recommends firefox/mozilla \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /usr/local/bin/uv
 
 # Shared runtime with prod. GHOSTDESK_USER and the Wayland/DBus/WLR env
 # come from .devcontainer/docker-compose.yml in dev (prod bakes them in

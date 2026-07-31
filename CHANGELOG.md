@@ -2,6 +2,26 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v7.5.0] — 2026-07-31
+
+Security-maintenance release. Every known advisory affecting the locked dependency tree is cleared (17 CVEs across Pillow, mcp, starlette and pydantic-settings), the VNC stack picks up upstream memory-safety fixes, and the build/CI toolchain moves to current majors. No behaviour or API changes.
+
+### Security
+- **Pillow `12.2.0 → 12.3.0`** — clears 13 advisories, several reachable from image decode paths GhostDesk exercises on every capture: heap out-of-bounds writes in `ImageFilter.RankFilter` (GHSA-xj96-63gp-2gmr), `Image.paste()` / `Image.crop()` signed-coordinate overflow (GHSA-6r8x-57c9-28j4) and `ImageCmsTransform.apply()` (GHSA-9hw9-ch79-4vh6); an out-of-bounds read on the mmap path (GHSA-62p4-gmf7-7g93); four decompression-bomb bypasses (GHSA-45hq-cxwh-f6vc, GHSA-5x94-69rx-g8h2, GHSA-8v84-f9pq-wr9x, GHSA-phj9-mv4w-65pm); plus PDF/JPEG2000/EPS DoS and a TGA heap-disclosure. Direct pin `Pillow>=12.0` → `Pillow>=12.3`.
+- **mcp `1.27.2 → 1.29.0`** — GHSA-vj7q-gjh5-988w (HIGH): the WebSocket server transport performed no `Host` / `Origin` validation. Fixed in 1.28.1.
+- **starlette `1.2.1 → 1.3.1`** — GHSA-82w8-qh3p-5jfq (HIGH): `request.form()` limits silently ignored for `application/x-www-form-urlencoded`, enabling DoS; GHSA-jp82-jpqv-5vv3: unvalidated request path concatenated into the authority, poisoning `request.url.hostname`.
+- **pydantic-settings `2.14.1 → 2.14.2`** — GHSA-4xgf-cpjx-pc3j: `NestedSecretsSettingsSource` followed symlinks outside `secrets_dir`, enabling local file read.
+- **neatvnc `v1.0.0 → v1.0.1`** — upstream fixes for uninitialised memory in the composite framebuffer, a null dereference on frame metadata, and clients being exposed before reaching the ready state.
+- **wayvnc `v0.10.0 → v0.10.1`** — string truncation fixes in the control-IPC `jvprintf` path plus detached-mode correctness fixes.
+- **`uv` build toolchain `0.11 → 0.12`** in `docker/base/Dockerfile` and `.devcontainer/Dockerfile`. Adds supply-chain hardening at install time: MD5-only hashes rejected in hash-checking mode, wheels that could replace the Python interpreter rejected, unsupported sdist/wheel archive formats rejected. The lockfile (`revision = 3`) and the `uv sync --frozen --no-dev --compile-bytecode --no-editable` builder step were verified against 0.12.0 before the bump.
+- **GitHub Actions moved to current majors** in `.github/workflows/docker.yml`: `actions/checkout` v4 → v7 (credentials now persisted to a separate file; fork-PR checkout blocked under `pull_request_target` / `workflow_run`), `docker/setup-qemu-action` and `docker/setup-buildx-action` v3 → v4, `docker/login-action` v3 → v4, `docker/metadata-action` v5 → v6, `docker/build-push-action` v6 → v7. The v4 majors also retire the deprecated Node runtimes the older releases pinned.
+
+### Changed
+- **`mcp[cli]` constraint `>=1.27` → `>=1.29,<2`.** The upper bound is deliberate: mcp 2.0.0 removes `mcp.server.fastmcp`, which every tool module, `_lifespan`, `_middleware` and `server.py` import. Migrating to the 2.x server API is its own release, not a dependency refresh.
+- **Remaining lockfile refresh** via `uv lock --upgrade`: cryptography `48.0.1 → 49.0.0`, uvicorn `0.49.0 → 0.52.0`, typer `0.26.7 → 0.27.0`, anyio `4.13.0 → 4.14.2`, cffi `2.0.0 → 2.1.0`, coverage `7.14.1 → 7.15.2`, pytest `9.0.3 → 9.1.1`, typing-extensions `4.15.0 → 4.16.0`, rpds-py `2026.5.1 → 2026.6.3`, sse-starlette `3.4.4 → 3.4.6`, plus minor bumps across annotated-doc / annotated-types / certifi / click. All transitive. `pywayland` stays pinned `>=0.4.18,<0.5` by design. 228 tests pass.
+
+---
+
 ## [v7.4.2] — 2026-06-10
 
 Server-only secrets stop leaking into the GUI apps the agent launches, the dependency lockfile is refreshed, and the package finally advertises itself as Production/Stable.
