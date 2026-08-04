@@ -10,6 +10,8 @@
 use std::future::Future;
 use std::sync::OnceLock;
 
+use crate::screen::Region;
+
 /// Fallbacks, used only if nothing installs a size — a unit test reaching
 /// into `screen` or `wayland` without booting the app.
 const DEFAULT_WIDTH: i64 = 1280;
@@ -58,15 +60,8 @@ pub fn model_space() -> i64 {
     MODEL_SPACE.try_with(|space| *space).unwrap_or(0)
 }
 
-/// True when coordinate normalisation is active.
-pub fn is_enabled() -> bool {
-    model_space() > 0
-}
-
-fn rescale(value: i64, extent: i64, from: i64, to: i64) -> i64 {
-    // Same rounding as Python's `round(v * a / b)` for the non-negative
-    // values coordinates actually take.
-    let _ = extent;
+/// Map `value` out of a `from`-wide space into a `to`-wide one.
+fn rescale(value: i64, from: i64, to: i64) -> i64 {
     ((value as f64) * (to as f64) / (from as f64)).round() as i64
 }
 
@@ -77,68 +72,60 @@ pub fn to_pixels(mx: i64, my: i64) -> (i64, i64) {
         return (mx, my);
     }
     (
-        rescale(mx, 0, space, screen_width()),
-        rescale(my, 0, space, screen_height()),
+        rescale(mx, space, screen_width()),
+        rescale(my, space, screen_height()),
     )
 }
 
-/// Screen pixels → model coords. Pass-through when disabled.
-pub fn to_model(px: i64, py: i64) -> (i64, i64) {
+/// A model-space region → a pixel region. Pass-through when disabled.
+///
+/// Only this direction exists: nothing ever reports coordinates back to the
+/// agent, so a pixels→model counterpart would be an API with no caller.
+pub fn region_to_pixels(region: Region) -> Region {
     let space = model_space();
     if space == 0 {
-        return (px, py);
+        return region;
     }
-    (
-        rescale(px, 0, screen_width(), space),
-        rescale(py, 0, screen_height(), space),
-    )
-}
-
-/// A model-space `{x, y, width, height}` → pixel region.
-pub fn region_to_pixels(x: i64, y: i64, w: i64, h: i64) -> (i64, i64, i64, i64) {
-    let space = model_space();
-    if space == 0 {
-        return (x, y, w, h);
+    Region {
+        x: rescale(region.x, space, screen_width()),
+        y: rescale(region.y, space, screen_height()),
+        width: rescale(region.width, space, screen_width()),
+        height: rescale(region.height, space, screen_height()),
     }
-    (
-        rescale(x, 0, space, screen_width()),
-        rescale(y, 0, space, screen_height()),
-        rescale(w, 0, space, screen_width()),
-        rescale(h, 0, space, screen_height()),
-    )
-}
-
-/// A pixel region → model space.
-pub fn region_to_model(x: i64, y: i64, w: i64, h: i64) -> (i64, i64, i64, i64) {
-    let space = model_space();
-    if space == 0 {
-        return (x, y, w, h);
-    }
-    (
-        rescale(x, 0, screen_width(), space),
-        rescale(y, 0, screen_height(), space),
-        rescale(w, 0, screen_width(), space),
-        rescale(h, 0, screen_height(), space),
-    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    const FULL: Region = Region {
+        x: 0,
+        y: 0,
+        width: 1000,
+        height: 1000,
+    };
+
     #[tokio::test]
     async fn pass_through_when_no_space_is_installed() {
         assert_eq!(to_pixels(383, 22), (383, 22));
-        assert!(!is_enabled());
+        assert_eq!(region_to_pixels(FULL), FULL);
     }
 
     #[tokio::test]
     async fn rescales_from_a_normalised_space() {
         with_model_space(1000, async {
-            assert!(is_enabled());
             // 500/1000 of a 1280x1024 screen.
             assert_eq!(to_pixels(500, 500), (640, 512));
-            assert_eq!(to_model(640, 512), (500, 500));
+            // The whole normalised square covers the whole screen.
+            assert_eq!(
+                region_to_pixels(FULL),
+                Region {
+                    x: 0,
+                    y: 0,
+                    width: 1280,
+                    height: 1024,
+                },
+            );
         })
         .await;
     }

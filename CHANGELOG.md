@@ -28,6 +28,7 @@ GhostDesk is rewritten in Rust on [NestRS](https://nestrs.dev). The MCP surface 
 - **Python, `uv`, and the `.venv`.** `pyproject.toml`, `uv.lock`, `src/ghostdesk/` and `tests/` are gone, along with the `uv sync` step in the entrypoint and the `python3-dev` / `libwayland-dev` build dependencies.
 
 ### Added
+- **Every structured tool now publishes an `outputSchema`.** The eleven tools that answer with data (`mouse_*`, `key_*`, `app_*`) return `Json<T>`, so the schema a client validates the result against is derived from the same type that produced it. The three that answer with an image or plain text (`screen_shot`, `clipboard_get`, `clipboard_set`) carry none, correctly. The Python port advertised no output schemas at all.
 - **`.github/workflows/rust.yml`** — `cargo fmt --check`, `clippy -D warnings`, `cargo test`, all on the toolchain pinned by `rust-toolchain.toml`, plus a lockfile-freshness check.
 - **A Rust devcontainer** with the pinned toolchain, `mold` for fast incremental links, `rust-analyzer` wired to `clippy`, and named volumes for `target/` and the cargo registry so a rebuild does not throw away incremental state.
 

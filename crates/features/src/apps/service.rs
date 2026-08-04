@@ -32,7 +32,7 @@ const SCRUBBED_KEYS: &[&str] = &["GHOSTDESK_AUTH_TOKEN", "GHOSTDESK_VNC_PASSWORD
 pub const DEFAULT_TAIL: usize = 50;
 
 /// One open window, as the agent sees it.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 pub struct RunningApp {
     /// `app_id` for Wayland-native clients, else the X11 window class.
     pub app: String,
@@ -42,7 +42,7 @@ pub struct RunningApp {
 }
 
 /// What `app_launch` answers with.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 pub struct Launched {
     pub pid: u32,
     pub log_file: String,
@@ -50,7 +50,7 @@ pub struct Launched {
 }
 
 /// What `app_status` answers with.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 pub struct AppStatus {
     pub pid: u32,
     pub running: bool,

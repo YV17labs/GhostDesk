@@ -10,8 +10,12 @@ use configparser::ini::Ini;
 
 const APPS_DIR: &str = "/usr/share/applications";
 
-/// One launchable entry as the agent sees it.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+/// One launchable entry.
+///
+/// Deliberately not `Serialize`: the wire shape of the app catalogue belongs
+/// to the MCP adapter (`features::mcp::dto::AppEntry`), so renaming a field
+/// here cannot silently change what clients receive.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopApp {
     /// Human-readable application name.
     pub name: String,

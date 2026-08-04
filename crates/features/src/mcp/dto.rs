@@ -6,6 +6,7 @@
 //! plain choice would have nothing to check.
 
 use nest_rs::core::input;
+use platform::desktop::DesktopApp;
 use platform::screen::{ImageFormat, Region};
 use platform::wayland::{Button, ScrollDirection};
 use schemars::JsonSchema;
@@ -209,6 +210,54 @@ pub struct StatusParams {
 #[derive(Debug)]
 pub struct ClipboardSetParams {
     pub text: String,
+}
+
+// --- outputs ------------------------------------------------------------
+//
+// Returning `Json<T>` is what makes rmcp derive each tool's `outputSchema`,
+// so these types are the published shape of every structured result. They
+// are plain `Serialize + JsonSchema`: nothing deserializes a response, and
+// nothing validates one on the way out.
+
+/// One installed GUI application.
+///
+/// A DTO rather than `platform::desktop::DesktopApp` directly: renaming a
+/// field in the `.desktop` parser would otherwise silently change the MCP
+/// contract, with nothing in this module to notice.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct AppEntry {
+    /// Human-readable application name.
+    pub name: String,
+    /// The string to pass to `app_launch`.
+    pub exec: String,
+}
+
+impl From<DesktopApp> for AppEntry {
+    fn from(app: DesktopApp) -> Self {
+        Self {
+            name: app.name,
+            exec: app.exec,
+        }
+    }
+}
+
+/// A list result.
+///
+/// `structuredContent` is typed as a JSON *object* by the spec, so a tool
+/// whose natural result is a list needs a field to hang it on. `result` is
+/// the name the Python original used, kept so existing prompts and clients
+/// see the same shape.
+#[derive(Debug, Clone, Serialize, JsonSchema)]
+pub struct Listed<T> {
+    pub result: Vec<T>,
+}
+
+impl<T> Listed<T> {
+    pub fn new(result: impl IntoIterator<Item = T>) -> Self {
+        Self {
+            result: result.into_iter().collect(),
+        }
+    }
 }
 
 #[cfg(test)]

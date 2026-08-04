@@ -11,8 +11,9 @@
 //! job — `GhostdeskToolContext` installed the space, and every `x`/`y` below
 //! goes through `coords::to_pixels` before a service sees it.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
+use nest_rs::mcp::ToolRouter;
 use nest_rs::mcp::model::{
     Implementation, ListResourcesResult, PaginatedRequestParams, ReadResourceRequestParams,
     ReadResourceResponse, ReadResourceResult, Resource, ResourceContents, ServerCapabilities,
@@ -21,22 +22,23 @@ use nest_rs::mcp::model::{
 use nest_rs::mcp::rmcp;
 use nest_rs::mcp::service::{RequestContext, RoleServer};
 use nest_rs::mcp::{
-    CallToolResult, ContentBlock, McpError, Parameters, ServerHandler, mcp, tool, tool_handler,
-    tool_router,
+    CallToolResult, ContentBlock, Json, McpError, Parameters, ServerHandler, mcp, tool,
+    tool_handler, tool_router,
 };
 use platform::coords;
-use serde::Serialize;
 
 use super::dto::*;
 use super::icons::icons;
 use super::instructions::INSTRUCTIONS;
-use crate::apps::AppsService;
+use crate::apps::{AppStatus, AppsService, Launched, RunningApp};
 use crate::clipboard::ClipboardService;
-use crate::input::InputService;
+use crate::input::{Feedback, InputService};
 use crate::screen::ScreenService;
 
 const APPS_URI: &str = "ghostdesk://apps";
+const APPS_MIME: &str = "application/json";
 const CLIPBOARD_URI: &str = "ghostdesk://clipboard";
+const CLIPBOARD_MIME: &str = "text/plain";
 
 #[mcp(path = "/mcp")]
 #[derive(Clone)]
@@ -62,9 +64,12 @@ impl GhostdeskMcp {
         McpError::internal_error(message, None)
     }
 
-    fn json<T: Serialize>(value: &T) -> Result<CallToolResult, McpError> {
-        let value = serde_json::to_value(value).map_err(Self::failed)?;
-        Ok(CallToolResult::structured(value))
+    /// The caller asked for something the server will not do — bad key name,
+    /// arguments where none are allowed, a PID this session did not launch.
+    /// A structured `invalid_params` is what lets the model correct itself
+    /// and retry, where an `internal_error` reads as "stop trying".
+    fn invalid(err: impl std::fmt::Display) -> McpError {
+        McpError::invalid_params(err.to_string(), None)
     }
 }
 
@@ -88,20 +93,11 @@ impl GhostdeskMcp {
         Parameters(params): Parameters<ScreenShotParams>,
     ) -> Result<CallToolResult, McpError> {
         use nest_rs::core::validator::Validate;
-        params
-            .validate()
-            .map_err(|err| McpError::invalid_params(err.to_string(), None))?;
+        params.validate().map_err(Self::invalid)?;
 
-        let region = params.region.map(|region| {
-            let (x, y, width, height) =
-                coords::region_to_pixels(region.x, region.y, region.width, region.height);
-            platform::screen::Region {
-                x,
-                y,
-                width,
-                height,
-            }
-        });
+        let region = params
+            .region
+            .map(|region| coords::region_to_pixels(region.into()));
 
         let capture = self
             .screen
@@ -138,9 +134,13 @@ impl GhostdeskMcp {
     async fn mouse_move(
         &self,
         Parameters(params): Parameters<MoveParams>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<Feedback>, McpError> {
         let (x, y) = coords::to_pixels(params.x, params.y);
-        Self::json(&self.input.mouse_move(x, y).await.map_err(Self::failed)?)
+        self.input
+            .mouse_move(x, y)
+            .await
+            .map(Json)
+            .map_err(Self::failed)
     }
 
     #[tool(
@@ -156,15 +156,13 @@ impl GhostdeskMcp {
     async fn mouse_click(
         &self,
         Parameters(params): Parameters<ClickParams>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<Feedback>, McpError> {
         let (x, y) = coords::to_pixels(params.x, params.y);
-        Self::json(
-            &self
-                .input
-                .mouse_click(x, y, params.button.into())
-                .await
-                .map_err(Self::failed)?,
-        )
+        self.input
+            .mouse_click(x, y, params.button.into())
+            .await
+            .map(Json)
+            .map_err(Self::failed)
     }
 
     #[tool(
@@ -177,15 +175,13 @@ impl GhostdeskMcp {
     async fn mouse_double_click(
         &self,
         Parameters(params): Parameters<ClickParams>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<Feedback>, McpError> {
         let (x, y) = coords::to_pixels(params.x, params.y);
-        Self::json(
-            &self
-                .input
-                .mouse_double_click(x, y, params.button.into())
-                .await
-                .map_err(Self::failed)?,
-        )
+        self.input
+            .mouse_double_click(x, y, params.button.into())
+            .await
+            .map(Json)
+            .map_err(Self::failed)
     }
 
     #[tool(
@@ -201,16 +197,14 @@ impl GhostdeskMcp {
     async fn mouse_drag(
         &self,
         Parameters(params): Parameters<DragParams>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<Feedback>, McpError> {
         let from = coords::to_pixels(params.from_x, params.from_y);
         let to = coords::to_pixels(params.to_x, params.to_y);
-        Self::json(
-            &self
-                .input
-                .mouse_drag(from, to, params.button.into())
-                .await
-                .map_err(Self::failed)?,
-        )
+        self.input
+            .mouse_drag(from, to, params.button.into())
+            .await
+            .map(Json)
+            .map_err(Self::failed)
     }
 
     #[tool(
@@ -227,15 +221,13 @@ impl GhostdeskMcp {
     async fn mouse_scroll(
         &self,
         Parameters(params): Parameters<ScrollParams>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<Feedback>, McpError> {
         let (x, y) = coords::to_pixels(params.x, params.y);
-        Self::json(
-            &self
-                .input
-                .mouse_scroll(x, y, params.direction.into(), params.amount)
-                .await
-                .map_err(Self::failed)?,
-        )
+        self.input
+            .mouse_scroll(x, y, params.direction.into(), params.amount)
+            .await
+            .map(Json)
+            .map_err(Self::failed)
     }
 
     #[tool(
@@ -253,14 +245,12 @@ impl GhostdeskMcp {
     async fn key_type(
         &self,
         Parameters(params): Parameters<TypeParams>,
-    ) -> Result<CallToolResult, McpError> {
-        Self::json(
-            &self
-                .input
-                .key_type(&params.text)
-                .await
-                .map_err(Self::failed)?,
-        )
+    ) -> Result<Json<Feedback>, McpError> {
+        self.input
+            .key_type(&params.text)
+            .await
+            .map(Json)
+            .map_err(Self::failed)
     }
 
     #[tool(
@@ -279,14 +269,13 @@ impl GhostdeskMcp {
     async fn key_press(
         &self,
         Parameters(params): Parameters<PressParams>,
-    ) -> Result<CallToolResult, McpError> {
-        // An unknown key name is the caller's mistake, not a server failure —
-        // invalid_params is what lets the model correct itself and retry.
+    ) -> Result<Json<Feedback>, McpError> {
+        // An unknown key name is the caller's mistake, not a server failure.
         self.input
             .key_press(&params.keys)
             .await
-            .map_err(|err| McpError::invalid_params(err.to_string(), None))
-            .and_then(|feedback| Self::json(&feedback))
+            .map(Json)
+            .map_err(Self::invalid)
     }
 
     #[tool(
@@ -300,8 +289,10 @@ impl GhostdeskMcp {
         annotations(read_only_hint = true, idempotent_hint = true),
         icons = icons()
     )]
-    async fn app_list(&self) -> Result<CallToolResult, McpError> {
-        Self::json(&self.apps.list())
+    async fn app_list(&self) -> Result<Json<Listed<AppEntry>>, McpError> {
+        Ok(Json(Listed::new(
+            self.apps.list().into_iter().map(AppEntry::from),
+        )))
     }
 
     #[tool(
@@ -315,8 +306,12 @@ impl GhostdeskMcp {
         annotations(read_only_hint = true),
         icons = icons()
     )]
-    async fn app_running(&self) -> Result<CallToolResult, McpError> {
-        Self::json(&self.apps.running().await.map_err(Self::failed)?)
+    async fn app_running(&self) -> Result<Json<Listed<RunningApp>>, McpError> {
+        self.apps
+            .running()
+            .await
+            .map(|apps| Json(Listed::new(apps)))
+            .map_err(Self::failed)
     }
 
     #[tool(
@@ -336,15 +331,14 @@ impl GhostdeskMcp {
     async fn app_launch(
         &self,
         Parameters(params): Parameters<LaunchParams>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<Launched>, McpError> {
         // Refusals here are all "you asked for the wrong thing" — arguments
-        // supplied, unknown executable, bad quoting — so they come back as
-        // invalid_params rather than an opaque server error.
+        // supplied, unknown executable, bad quoting.
         self.apps
             .launch(&params.command)
             .await
-            .map_err(|err| McpError::invalid_params(err.to_string(), None))
-            .and_then(|launched| Self::json(&launched))
+            .map(Json)
+            .map_err(Self::invalid)
     }
 
     #[tool(
@@ -360,11 +354,11 @@ impl GhostdeskMcp {
     async fn app_status(
         &self,
         Parameters(params): Parameters<StatusParams>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<AppStatus>, McpError> {
         self.apps
             .status(params.pid, params.lines)
-            .map_err(|err| McpError::invalid_params(err.to_string(), None))
-            .and_then(|status| Self::json(&status))
+            .map(Json)
+            .map_err(Self::invalid)
     }
 
     #[tool(
@@ -406,7 +400,19 @@ impl GhostdeskMcp {
     }
 }
 
-#[tool_handler]
+/// The tool table, built once for the process.
+///
+/// `#[tool_handler]` defaults to `router = Self::tool_router()`, and that
+/// expression is inlined into the generated `call_tool` *and* `list_tools` —
+/// so every tool invocation would otherwise rebuild all fourteen `Tool`
+/// structs, re-run the name validator, and clone the icon data URI fourteen
+/// times. The table never changes, so it is built once and borrowed.
+static ROUTER: LazyLock<ToolRouter<GhostdeskMcp>> = LazyLock::new(GhostdeskMcp::tool_router);
+
+// Parenthesised on purpose: the macro splices this straight into
+// `#router.call(…)`, and unparenthesised the `&*` would bind to the call's
+// result rather than to `ROUTER`.
+#[tool_handler(router = (&*ROUTER))]
 impl ServerHandler for GhostdeskMcp {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(
@@ -442,14 +448,14 @@ impl ServerHandler for GhostdeskMcp {
                         "Installed GUI applications as a JSON array of {name, exec}. \
                          Same data as the app_list tool.",
                     )
-                    .with_mime_type("application/json")
+                    .with_mime_type(APPS_MIME)
                     .with_icons(icons()),
                 Resource::new(CLIPBOARD_URI, "clipboard")
                     .with_description(
                         "Current system clipboard text. Same data as the \
                          clipboard_get tool.",
                     )
-                    .with_mime_type("text/plain")
+                    .with_mime_type(CLIPBOARD_MIME)
                     .with_icons(icons()),
             ],
             ..ListResourcesResult::default()
@@ -463,10 +469,27 @@ impl ServerHandler for GhostdeskMcp {
     ) -> Result<ReadResourceResponse, McpError> {
         let contents = match request.uri.as_str() {
             APPS_URI => ResourceContents::text(
-                serde_json::to_string(&self.apps.list()).map_err(Self::failed)?,
+                // A plain array here, not the `Listed` wrapper: a resource is
+                // a document, not a `structuredContent` object, and the
+                // published description promises "a JSON array of
+                // {name, exec}".
+                serde_json::to_string(
+                    &self
+                        .apps
+                        .list()
+                        .into_iter()
+                        .map(AppEntry::from)
+                        .collect::<Vec<_>>(),
+                )
+                .map_err(Self::failed)?,
                 &request.uri,
-            ),
-            CLIPBOARD_URI => ResourceContents::text(self.clipboard.get().await, &request.uri),
+            )
+            // `ResourceContents::text` defaults to text/plain; without this
+            // the contents would contradict the `application/json` the
+            // listing advertises for this URI.
+            .with_mime_type(APPS_MIME),
+            CLIPBOARD_URI => ResourceContents::text(self.clipboard.get().await, &request.uri)
+                .with_mime_type(CLIPBOARD_MIME),
             unknown => {
                 return Err(McpError::resource_not_found(
                     format!("unknown resource `{unknown}`"),

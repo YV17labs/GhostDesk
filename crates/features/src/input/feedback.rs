@@ -13,7 +13,7 @@ pub const POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const POLL_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// The standard payload every input tool returns.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 pub struct Feedback {
     /// What was performed, in words.
     pub action: String,
