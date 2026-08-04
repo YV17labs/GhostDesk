@@ -16,6 +16,7 @@ use std::time::Instant;
 
 use nest_rs::core::injectable;
 use platform::sway;
+use tokio::task::JoinSet;
 
 use crate::config::GhostdeskConfig;
 
@@ -77,53 +78,41 @@ impl IdleService {
             })
             .collect();
 
-        if targets.is_empty() {
-            return 0;
+        let mut kills = JoinSet::new();
+        for (id, label) in targets {
+            kills.spawn(async move {
+                match sway::kill_view(id).await {
+                    Ok(()) => {
+                        tracing::info!(
+                            target: "ghostdesk::idle",
+                            con_id = id,
+                            view = %label,
+                            "closed view",
+                        );
+                        true
+                    }
+                    Err(err) => {
+                        tracing::error!(
+                            target: "ghostdesk::idle",
+                            con_id = id,
+                            view = %label,
+                            error = %err,
+                            "failed to close view",
+                        );
+                        false
+                    }
+                }
+            });
         }
 
-        futures_lite(targets.into_iter().map(|(id, label)| async move {
-            match sway::kill_view(id).await {
-                Ok(()) => {
-                    tracing::info!(
-                        target: "ghostdesk::idle",
-                        con_id = id,
-                        view = %label,
-                        "closed view",
-                    );
-                    true
-                }
-                Err(err) => {
-                    tracing::error!(
-                        target: "ghostdesk::idle",
-                        con_id = id,
-                        view = %label,
-                        error = %err,
-                        "failed to close view",
-                    );
-                    false
-                }
+        let mut closed = 0;
+        while let Some(outcome) = kills.join_next().await {
+            if outcome.unwrap_or(false) {
+                closed += 1;
             }
-        }))
-        .await
-    }
-}
-
-/// Run every future concurrently and count the `true`s.
-///
-/// A hand-rolled join keeps `futures` out of the dependency graph for the one
-/// place the project needs it.
-async fn futures_lite<F>(futures: impl Iterator<Item = F>) -> usize
-where
-    F: Future<Output = bool> + Send + 'static,
-{
-    let handles: Vec<_> = futures.map(tokio::spawn).collect();
-    let mut closed = 0;
-    for handle in handles {
-        if handle.await.unwrap_or(false) {
-            closed += 1;
         }
+        closed
     }
-    closed
 }
 
 #[cfg(test)]

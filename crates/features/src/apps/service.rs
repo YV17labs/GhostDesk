@@ -84,11 +84,7 @@ impl AppsService {
                 app: node
                     .get("app_id")
                     .and_then(|v| v.as_str())
-                    .or_else(|| {
-                        node.get("window_properties")
-                            .and_then(|p| p.get("class"))
-                            .and_then(|v| v.as_str())
-                    })
+                    .or_else(|| sway::window_class(node))
                     .unwrap_or("?")
                     .to_string(),
                 title: node
@@ -117,16 +113,12 @@ impl AppsService {
             .ok_or_else(|| anyhow::anyhow!("Invalid command syntax: {command:?}"))?;
 
         let [executable] = parts.as_slice() else {
+            if parts.is_empty() {
+                anyhow::bail!("No command provided");
+            }
             anyhow::bail!(
-                "{}",
-                if parts.is_empty() {
-                    "No command provided".to_string()
-                } else {
-                    format!(
-                        "Arguments are not allowed — pass only the executable name \
-                         from app_list(). Got: {command:?}"
-                    )
-                }
+                "Arguments are not allowed — pass only the executable name \
+                 from app_list(). Got: {command:?}"
             );
         };
 

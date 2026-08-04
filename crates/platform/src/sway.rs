@@ -182,17 +182,20 @@ fn collect<'a>(node: &'a Value, out: &mut Vec<&'a Value>) {
     }
 }
 
+/// The X11 window class of a view, for the clients that have no `app_id`.
+pub fn window_class(node: &Value) -> Option<&str> {
+    node.get("window_properties")
+        .and_then(|props| props.get("class"))
+        .and_then(Value::as_str)
+}
+
 /// The label the idle watchdog logs for a view: `app_id`, else the window
 /// title, else the X11 class.
 pub fn view_label(node: &Value) -> String {
     node.get("app_id")
         .and_then(Value::as_str)
         .or_else(|| node.get("name").and_then(Value::as_str))
-        .or_else(|| {
-            node.get("window_properties")
-                .and_then(|props| props.get("class"))
-                .and_then(Value::as_str)
-        })
+        .or_else(|| window_class(node))
         .unwrap_or("?")
         .to_string()
 }

@@ -47,29 +47,29 @@ impl FeedbackService {
         let baseline = screen::decode_rgb(before)?;
         let start = Instant::now();
 
+        let mut screen_changed = false;
         while start.elapsed() < POLL_TIMEOUT {
             tokio::time::sleep(POLL_INTERVAL).await;
             let now = screen::capture_png(None, Some(FEEDBACK_SCALE)).await?;
             if screen::decode_rgb(&now).is_ok_and(|now| screen::differ_rgb(&baseline, &now)) {
-                return Ok(Feedback {
-                    action: action.into(),
-                    screen_changed: true,
-                    reaction_time_ms: start.elapsed().as_millis() as u64,
-                });
+                screen_changed = true;
+                break;
             }
         }
 
         let feedback = Feedback {
             action: action.into(),
-            screen_changed: false,
+            screen_changed,
             reaction_time_ms: start.elapsed().as_millis() as u64,
         };
-        tracing::warn!(
-            target: "ghostdesk::input",
-            action = %feedback.action,
-            timeout_ms = POLL_TIMEOUT.as_millis() as u64,
-            "no visible screen change",
-        );
+        if !screen_changed {
+            tracing::warn!(
+                target: "ghostdesk::input",
+                action = %feedback.action,
+                timeout_ms = POLL_TIMEOUT.as_millis() as u64,
+                "no visible screen change",
+            );
+        }
         Ok(feedback)
     }
 }

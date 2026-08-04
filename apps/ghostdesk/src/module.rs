@@ -1,21 +1,9 @@
-//! Auth ≡ TLS, decided at boot by whether an operator mounted a cert+key.
+//! The composition root: which modules the binary imports, and why.
 //!
-//! * **Cert mounted** (`NESTRS_HTTP__TLS_CERT_FILE` + `..._KEY_FILE`, which
-//!   `docker/init/entrypoint.sh` points at `/etc/ghostdesk/tls/server.{crt,key}`
-//!   when those files exist) — the transport serves `https://` through rustls
-//!   and [`BearerMcpGuard`] rejects any operation missing
-//!   `Authorization: Bearer $GHOSTDESK_AUTH_TOKEN`. The token is mandatory in
-//!   this posture; the guard fails boot without it.
-//!
-//! * **No cert** — plain `http://` and [`OpenMcpGuard`] lets every operation
-//!   through. Shipping a static bearer token over cleartext would be security
-//!   theatre (no rotation, no per-user identity), so the surface is left open
-//!   and the operator is expected to mount a cert or keep the port on a
-//!   trusted loopback. See SECURITY.md § Authentication.
-//!
-//! Both guards are real `dyn McpOperationGuard` bindings: a bare `#[mcp]`
-//! endpoint is deny-all, so the open posture has to *say* it is open. Which
-//! one is active is in the boot log.
+//! Each transport attaches itself at boot from the import list below — there
+//! is no transport constructed here, and no logic. The security posture the
+//! MCP endpoint runs under is owned by `features::mcp::guard`, which is the
+//! one copy of that doctrine.
 
 use nest_rs::config::ConfigModule;
 use nest_rs::core::module;
