@@ -254,11 +254,19 @@ fn launch_env() -> Vec<(String, String)> {
 /// Whether a process is still alive. A live process we may not signal
 /// (`EPERM`) still counts as running.
 fn is_running(pid: u32) -> bool {
-    match rustix::process::test_kill_process(rustix::process::Pid::from_raw(pid as i32).unwrap()) {
-        Ok(()) => true,
-        Err(rustix::io::Errno::PERM) => true,
-        Err(_) => false,
-    }
+    // `Pid::from_raw` rejects 0 (which would mean "our whole process group")
+    // and negatives. Only PIDs this session launched reach here, so the
+    // `None` arm is unreachable in practice — it just refuses to guess.
+    let Some(pid) = i32::try_from(pid)
+        .ok()
+        .and_then(rustix::process::Pid::from_raw)
+    else {
+        return false;
+    };
+    !matches!(
+        rustix::process::test_kill_process(pid),
+        Err(rustix::io::Errno::SRCH)
+    )
 }
 
 /// The last `lines` lines of a file, or `""` when it is not there.
