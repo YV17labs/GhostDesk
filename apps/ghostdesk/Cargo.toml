@@ -1,0 +1,21 @@
+[package]
+name = "ghostdesk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+description = "MCP server to control a virtual Linux desktop from an LLM agent"
+
+[[bin]]
+name = "ghostdesk"
+path = "src/main.rs"
+
+[dependencies]
+features = { path = "../../crates/features" }
+
+anyhow.workspace = true
+nest-rs.workspace = true
+tokio.workspace = true

@@ -5,8 +5,19 @@ services:
       dockerfile: .devcontainer/Dockerfile
     volumes:
       - ..:/workspaces/ghostdesk:cached
+      # Named volumes, not bind mounts: `target/` and the cargo registry are
+      # large, write-heavy and full of small files — exactly where a bind
+      # mount to the host filesystem hurts most. Keeping them in the
+      # container's own storage also means a `cargo clean` on the host never
+      # invalidates the container's incremental state.
+      - ghostdesk-target:/workspaces/ghostdesk/target
+      - ghostdesk-cargo:/home/vscode/.cargo/registry
     environment:
       - GHOSTDESK_DIR=/workspaces/ghostdesk
       - GHOSTDESK_USER=vscode
       - TZ=America/Montreal
       - LANG=fr_CA.UTF-8
+
+volumes:
+  ghostdesk-target:
+  ghostdesk-cargo:

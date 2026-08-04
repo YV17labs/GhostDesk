@@ -4,7 +4,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
-  <img src="https://img.shields.io/badge/python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python 3.12+">
+  <img src="https://img.shields.io/badge/rust-1.96+-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust 1.96+">
+  <img src="https://img.shields.io/badge/built%20with-NestRS-7B6FDE?style=for-the-badge" alt="Built with NestRS">
   <img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge" alt="FSL-1.1-ALv2 License">
   <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Docker-orange?style=for-the-badge&logo=docker&logoColor=white" alt="Platform">
 </p>
@@ -76,6 +77,23 @@ GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP se
 The agent perceives the screen by calling `screen_shot()`, which captures the full desktop at native resolution and returns it as WebP (or PNG). An optional `region=` argument can crop to a sub-rectangle when the agent explicitly wants to narrow its focus.
 
 This works with **any application** — web apps, native apps, legacy software, Canvas, WebGL.
+
+### Built in Rust, on NestRS
+
+GhostDesk is a single compiled binary. It links `libc` and nothing else — no
+interpreter, no virtual environment, no package tree to harden at build time.
+
+The server is built on [**NestRS**](https://nestrs.dev), a declarative Rust
+backend framework: the tool host is a `#[mcp]` provider that self-mounts on
+the HTTP transport, each domain is an `#[injectable]` service, the whole
+dependency graph is verified at boot, and the endpoint is **closed by
+default** — a guard has to bind before `/mcp` answers anything at all.
+
+The compositor is driven from pure Rust too. GhostDesk speaks
+`zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` directly over the
+Wayland socket, with an XKB keymap it generates on the fly — which is why
+text entry produces identical output on a French AZERTY host and a US
+QWERTY one.
 
 ---
 
@@ -426,6 +444,7 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | `GHOSTDESK_PORT` | `3000` | MCP server listening port |
 | `GHOSTDESK_HOST` | `127.0.0.1` (standalone) / `0.0.0.0` (container) | Bind address for the MCP endpoint. Defaults to loopback per [MCP transports spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http); the container's entrypoint exports `0.0.0.0` so Docker's port-publishing layer can reach it. |
 | `GHOSTDESK_ALLOWED_ORIGINS` | *(empty)* | Comma-separated list of `Origin` headers accepted from browser clients (e.g. `https://app.example.com,https://localhost:8080`). Non-browser clients (Claude Desktop, SDKs, `curl`) send no `Origin` and are always allowed. Required for any browser-based MCP UI; without it, browser requests are rejected with HTTP 403 to mitigate DNS rebinding (per MCP transports spec). |
+| `GHOSTDESK_ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Comma-separated `Host` header allow-list for the MCP endpoint. A request whose `Host` is not listed gets HTTP 403 — this is what stops a page on an attacker's origin from pointing its own hostname at a locally-running GhostDesk and calling your tools. **A deployment reached under a real hostname must name itself here.** Do not empty the list. |
 | `GHOSTDESK_TLS_CERT` | `/etc/ghostdesk/tls/server.crt` | Path to the TLS certificate. When the file exists, `websockify` and the MCP server auto-switch to `wss://` / `https://`. See [Security](#security). |
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
 | `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
@@ -433,6 +452,13 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | `GHOSTDESK_IDLE_TIMEOUT` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
+
+Every knob above is also reachable under the framework's own names —
+`NESTRS_HTTP__PORT`, `NESTRS_GHOSTDESK__IDLE_TIMEOUT_SECS`, and so on. The
+container entrypoint maps `GHOSTDESK_*` onto them and defers to anything you
+set directly, so both spellings work and the explicit one wins. A malformed
+value fails the boot naming the variable rather than silently falling back to
+a default.
 
 ### Pinned values (not configurable)
 

@@ -70,7 +70,8 @@ If your deployment exposes GhostDesk without a proxy and an authenticated edge, 
 GhostDesk's transport model is driven by a single switch: **is a cert mounted at `/etc/ghostdesk/tls/server.{crt,key}`?** The answer flips every exposed surface between *plain + unauthenticated* (dev) and *TLS + authenticated* (prod). The product does not generate or manage a TLS trust chain on its own.
 
 - **Port 6080 — `websockify` / noVNC.** With a cert mounted, [`docker/services/websockify/run.sh`](docker/services/websockify/run.sh) starts `websockify` with `--cert`, `--key`, `--ssl-only`, serving `https://` + `wss://`. Without a cert it serves plain `http://` + `ws://`. websockify is the transport bridge only — authentication lives in wayvnc below.
-- **Port 3000 — MCP server.** With a cert mounted, [`src/ghostdesk/server.py`](src/ghostdesk/server.py) runs uvicorn with `ssl_certfile` / `ssl_keyfile` and installs an ASGI middleware that rejects any request missing `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>` (constant-time compare via `hmac.compare_digest`). Without a cert, it serves plain HTTP with **no authentication gate** — the intended dev posture, described in [Authentication](#authentication) below.
+- **Port 3000 — MCP server.** With a cert mounted, [`docker/init/entrypoint.sh`](docker/init/entrypoint.sh) maps it to `NESTRS_HTTP__TLS_CERT_FILE` / `..._KEY_FILE` and the transport terminates TLS through rustls. Authentication is an [`McpOperationGuard`](crates/features/src/mcp/guard.rs) that runs in-band on every MCP operation and rejects any request missing `Authorization: Bearer <GHOSTDESK_AUTH_TOKEN>`, compared in constant time via `subtle::ConstantTimeEq`. Without a cert, it serves plain HTTP with **no authentication gate** — the intended dev posture, described in [Authentication](#authentication) below. Note the framework's default: a `#[mcp]` endpoint with *no* guard bound is **deny-all**, so the open posture is something GhostDesk has to declare explicitly, not something it can fall into by forgetting a line.
+- **Port 3000 — `Host` header allow-list.** The MCP transport refuses any request whose `Host` is not in `NESTRS_MCP__ALLOWED_HOSTS` (default: `localhost,127.0.0.1,::1`), which is what stops a page on an attacker's origin from resolving its own hostname to this container and POSTing to `/mcp`. A deployment reached under a real hostname must name itself — see `GHOSTDESK_ALLOWED_HOSTS` in the README. Browser `Origin` is the HTTP transport's CORS policy (`GHOSTDESK_ALLOWED_ORIGINS` → `NESTRS_HTTP__CORS_ORIGINS`) and covers every route, not just `/mcp`.
 - **Port 5900 — wayvnc.** Hard-pinned to `127.0.0.1` inside the container's netns by [`docker/init/entrypoint.sh`](docker/init/entrypoint.sh); `GHOSTDESK_VNC_ADDRESS` overrides are ignored. Under TLS, wayvnc is configured with `enable_auth=true` + `allow_broken_crypto=true` + `relax_encryption=true` + `password=${GHOSTDESK_VNC_PASSWORD}` (no username) so it advertises **RFB security type 2** (classic VNC Auth). noVNC handles this natively and shows a single-password prompt in its overlay. The DES challenge/response used by RFB type 2 is cryptographically weak on its own — the upstream maintainer explicitly labels it "broken crypto" and it is only enabled because noVNC still does not interoperate with wayvnc's modern security types (VeNCrypt X509Plain / RSA-AES). Confidentiality is provided end-to-end by the `wss://` envelope on the websockify leg; the DES flow is only an authentication token carried inside that tunnel. GhostDesk ships wayvnc and neatvnc built from pinned upstream release tags — see [`docker/base/Dockerfile`](docker/base/Dockerfile) `vnc-builder` stage.
 
 ### Cert provisioning
@@ -116,7 +117,7 @@ entrypoint: FATAL GHOSTDESK_AUTH_TOKEN is required when TLS is enabled (cert mou
 entrypoint: FATAL GHOSTDESK_VNC_PASSWORD is required when TLS is enabled (cert mounted at /etc/ghostdesk/tls/server.crt)
 ```
 
-The MCP server has a belt-and-braces check that raises `SystemExit` with the same message for non-container invocations (e.g. `uv run ghostdesk` locally with a cert mounted but no token exported). See [`src/ghostdesk/server.py`](src/ghostdesk/server.py) `main()`.
+The server enforces the same invariant itself, for every way the binary starts that is not the container entrypoint (e.g. `cargo run` locally with a cert mounted but no token exported). It is a boot-time lifecycle hook, and init hooks are strict — the first error aborts the boot before any port opens, so there is no window in which an HTTPS endpoint is serving unauthenticated. See [`crates/features/src/mcp/guard.rs`](crates/features/src/mcp/guard.rs), `McpSecurityPosture::check_posture`.
 
 ### Dev posture (no cert)
 
@@ -167,13 +168,13 @@ There is no support for hot-reloading credentials without a restart. This is del
 
 ### Read-only application code
 
-In the prod image (`docker/base/Dockerfile`), after `uv sync` installs the Python venv at `/opt/ghostdesk/.venv`:
+The prod image (`docker/base/Dockerfile`) ships the server as a single binary at `/usr/local/bin/ghostdesk`, `root:root`, mode `0555`.
 
-1. Source `.py` files are compiled to PEP 3147 sourceless `.pyc` (`compileall -b`) next to the originals.
-2. All `.py` and `__pycache__` are deleted — only the flat `.pyc` remain.
-3. The entire venv is `chown root:root` with `0555` on dirs and `0444` on files.
+The runtime user (`agent`, UID 1000) can **execute** it and **cannot modify it**. A compromised agent process cannot persist modifications to the product surface. Code tampering requires root inside the container, which in turn requires a container-escape CVE.
 
-The runtime user (`agent`, UID 1000) can **import and execute** the code but **cannot modify it**. A compromised agent process cannot persist modifications to the product surface. Code tampering requires root inside the container, which in turn requires a container-escape CVE.
+This used to take a hardening pass — byte-compile the venv, strip every source file, then `chmod` a tree of thousands — because an interpreter loads whatever code is on disk at import time. A compiled binary has no such surface: there is one file, and it is not writable. There is also no `site-packages` for a dependency-confusion attack to land in, and no interpreter on `PATH` for a compromised process to re-enter the product through.
+
+Dependencies are resolved from a committed `Cargo.lock` and the release build runs with `--locked`, so a tagged image cannot silently pick up a different version of anything than the one that was reviewed.
 
 ### Distribution image: `sudo NOPASSWD`
 

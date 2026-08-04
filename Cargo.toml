@@ -1,0 +1,62 @@
+[workspace]
+resolver = "3"
+members = ["apps/*", "crates/*"]
+
+[workspace.package]
+version = "8.0.0"
+edition = "2024"
+rust-version = "1.96"
+license = "LicenseRef-FSL-1.1-ALv2"
+authors = ["Yoann Vanitou <yvanitou@gmail.com>"]
+repository = "https://github.com/YV17labs/ghostdesk"
+
+[workspace.dependencies]
+# The framework. `mcp` pulls the HTTP transport the endpoint self-mounts on
+# plus the guard surface that gates it; `schedule` is what makes the idle
+# watchdog a decorated method instead of a hand-rolled task.
+nest-rs = { version = "2.0", features = ["mcp", "schedule"] }
+
+# `rmcp`'s `#[tool_router]` / `#[tool_handler]` expand to bare `rmcp::` paths.
+# They are relative, so `use nest_rs::mcp::rmcp;` resolves them at the exact
+# major nest-rs was built against — never a second rmcp in the graph.
+tokio = { version = "1.53", features = ["full"] }
+async-trait = "0.1"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Wayland. The compositor is driven directly over two unstable extensions —
+# `zwlr_virtual_pointer_v1` (wlroots) and `zwp_virtual_keyboard_v1` — whose
+# bindings these crates generate at build time. The Python port carried 6.4k
+# lines of committed protocol glue; here there is none.
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+
+# Screen capture pipeline: decode grim's PNG, diff two frames, re-encode.
+image = { version = "0.25", default-features = false, features = ["png"] }
+# Lossy WebP — `image` only decodes it. libwebp is vendored and built by
+# `cc`, so there is no system package to install in the runtime image.
+webp = "0.3"
+
+# `memfd_create` for the XKB keymap fd handed to the virtual keyboard, and
+# `kill(pid, 0)` for the app_status liveness probe.
+rustix = { version = "1.1", features = ["fs", "process"] }
+
+# `.desktop` entries are INI; `Exec=` values are shell-quoted.
+configparser = "3.1"
+shlex = "1.3"
+
+# Constant-time bearer-token comparison — a plain `==` leaks the length and
+# the matching prefix through its early return.
+subtle = "2.6"
+
+# The logo mark travels to clients as a `data:` URI.
+base64 = "0.23"
+
+# Tool input schemas. Must resolve to the same crate rmcp re-exports, or the
+# derive produces a different trait than `Parameters<T>` expects — hence the
+# same `major.minor` nest-rs builds against.
+schemars = "1.2"

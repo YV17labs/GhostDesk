@@ -19,10 +19,9 @@ export LOGNAME="${GHOSTDESK_USER}"
 # in both docker/base/Dockerfile and .devcontainer/Dockerfile, so every
 # process in the container (PID 1, supervisord, VS Code task shells,
 # `docker exec`) inherits it directly from Docker — no re-export here.
-# Only GHOSTDESK_DIR stays because it's an operator-overridable knob
-# with a PATH that depends on it.
+# Only GHOSTDESK_DIR stays because it's an operator-overridable knob.
 export GHOSTDESK_DIR="${GHOSTDESK_DIR:-/opt/ghostdesk}"
-export PATH="${GHOSTDESK_DIR}/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # ---- TLS detection + conditional secrets ----
 # Auth ≡ TLS. Two postures keyed off a mounted cert+key at
@@ -67,11 +66,43 @@ else
     fi
 fi
 
+# ---- Operator env → framework env ----
+# GHOSTDESK_* is the deployment's contract (docker-compose.yml, README,
+# SECURITY.md) and does not change. The server reads NestRS-namespaced
+# variables — NESTRS_HTTP__* for the transport, NESTRS_GHOSTDESK__* for
+# GhostDesk's own settings — so the translation happens once, here.
+#
+# Each assignment defers to an already-set NESTRS_* value, so an operator
+# who prefers to speak the framework's own names directly can, and wins.
+gd_map() {
+    # gd_map <target> <value>  — set <target> unless it is already non-empty.
+    eval "current=\${$1:-}"
+    if [ -z "${current}" ] && [ -n "$2" ]; then
+        export "$1=$2"
+    fi
+}
+
 # Inside the container the MCP server must listen on every interface so
-# Docker's port-publishing layer can reach it. Standalone `uv run
-# ghostdesk` invocations stay on 127.0.0.1 by default per MCP transports
-# spec — the override here only affects containerized runs.
-export GHOSTDESK_HOST="${GHOSTDESK_HOST:-0.0.0.0}"
+# Docker's port-publishing layer can reach it. A standalone `ghostdesk`
+# invocation stays on 127.0.0.1 per the MCP transports spec — the override
+# here only affects containerized runs.
+gd_map NESTRS_HTTP__HOST "${GHOSTDESK_HOST:-0.0.0.0}"
+gd_map NESTRS_HTTP__PORT "${GHOSTDESK_PORT:-}"
+gd_map NESTRS_HTTP__CORS_ORIGINS "${GHOSTDESK_ALLOWED_ORIGINS:-}"
+
+if [ "${TLS_ENABLED}" = "1" ]; then
+    gd_map NESTRS_HTTP__TLS_CERT_FILE "${TLS_CRT}"
+    gd_map NESTRS_HTTP__TLS_KEY_FILE "${TLS_KEY}"
+fi
+
+gd_map NESTRS_GHOSTDESK__AUTH_TOKEN "${GHOSTDESK_AUTH_TOKEN:-}"
+gd_map NESTRS_GHOSTDESK__IDLE_TIMEOUT_SECS "${GHOSTDESK_IDLE_TIMEOUT:-}"
+
+# The MCP transport refuses a Host header it does not know, which is what
+# stops a page on an attacker's origin from pointing its own hostname at
+# this container and POSTing to /mcp. The default covers loopback only, so
+# a deployment reached under a real hostname has to name itself.
+gd_map NESTRS_MCP__ALLOWED_HOSTS "${GHOSTDESK_ALLOWED_HOSTS:-}"
 
 # wayvnc is pinned to 127.0.0.1 (see Wayvnc config below). Warn loudly
 # rather than silently ignore operator overrides.
@@ -124,15 +155,16 @@ else
 fi
 
 # ---- Sway config ----
-# The virtual output resolution is the single source of truth for both
-# the compositor (this file) and the coordinate layer the agent sees
-# (`ghostdesk._coords` reads the same env vars at import). Substituting
-# them at install time — instead of hardcoding in the shipped config —
-# means the user picks the resolution once in docker-compose.yml and
-# the whole stack stays coherent.
+# The virtual output resolution is the single source of truth for both the
+# compositor (this file) and the coordinate layer the agent sees. The server
+# reads it from GhostdeskConfig, which is why it is mapped into the
+# framework's namespace right beside the substitution — one value in
+# docker-compose.yml, two consumers, no drift.
 SWAY_CFG_DIR="${HOME}/.config/sway"
 export GHOSTDESK_SCREEN_WIDTH="${GHOSTDESK_SCREEN_WIDTH:-1280}"
 export GHOSTDESK_SCREEN_HEIGHT="${GHOSTDESK_SCREEN_HEIGHT:-1024}"
+gd_map NESTRS_GHOSTDESK__SCREEN_WIDTH "${GHOSTDESK_SCREEN_WIDTH}"
+gd_map NESTRS_GHOSTDESK__SCREEN_HEIGHT "${GHOSTDESK_SCREEN_HEIGHT}"
 envsubst '${GHOSTDESK_SCREEN_WIDTH} ${GHOSTDESK_SCREEN_HEIGHT}' \
     < /etc/ghostdesk/sway.config > "${SWAY_CFG_DIR}/config"
 chown "${GHOSTDESK_USER}:${GHOSTDESK_USER}" "${SWAY_CFG_DIR}/config"
@@ -181,13 +213,9 @@ chmod 0600 "${WAYVNC_CFG_FILE}"
 
 rm -f "${WAYVNC_CFG_DIR}/rsa_key.pem" "${WAYVNC_CFG_DIR}/rsa_key.pem.pub"
 
-# ---- uv sync (devcontainer only; no-op in prod) ----
-if command -v uv >/dev/null 2>&1 && [ -f "${GHOSTDESK_DIR}/pyproject.toml" ]; then
-    echo "entrypoint: uv sync ${GHOSTDESK_DIR}/.venv..."
-    ( cd "${GHOSTDESK_DIR}" && runuser -u "${GHOSTDESK_USER}" -- uv sync --frozen )
-fi
-
 # ---- Hand off ----
+# No dependency sync step: prod ships a compiled binary, and in a
+# devcontainer the developer runs `cargo build` when they mean to.
 if [ $# -eq 0 ]; then
     echo "entrypoint: exec supervisord"
     exec /usr/bin/supervisord -c /etc/supervisord.conf

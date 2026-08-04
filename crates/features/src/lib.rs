@@ -1,0 +1,16 @@
+//! GhostDesk's feature crate — one folder per domain, each exposing an
+//! `#[injectable]` service, and a single `mcp/` adapter that publishes all of
+//! them on one endpoint.
+//!
+//! The MCP spec namespaces tools *per endpoint*, and every shipped client
+//! config points at one URL, so GhostDesk mounts exactly one `#[mcp]` host.
+//! It plays the part a `#[controller]` plays over HTTP: thin, injecting the
+//! four domain services, translating between wire DTOs and domain calls.
+
+pub mod apps;
+pub mod clipboard;
+pub mod config;
+pub mod input;
+pub mod mcp;
+pub mod screen;
+pub mod session;

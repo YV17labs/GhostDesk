@@ -1,0 +1,77 @@
+//! Async runner for the system commands GhostDesk shells out to
+//! (`swaymsg`, `grim`, `wl-paste`, …).
+
+use std::process::Stdio;
+use std::time::Duration;
+
+use tokio::process::Command;
+use tokio::time::timeout;
+
+/// Everything that can go wrong running a helper binary. Kept as a typed
+/// error rather than `anyhow` because callers branch on the variants:
+/// `sway::swaymsg` retries a dead socket on any failure, and `clipboard_get`
+/// turns a non-zero exit into an empty string.
+#[derive(Debug, thiserror::Error)]
+pub enum CmdError {
+    #[error("command timed out after {secs}s: {cmd}")]
+    Timeout { cmd: String, secs: u64 },
+    #[error("{0}")]
+    Failed(String),
+    #[error("could not spawn {cmd}: {source}")]
+    Spawn {
+        cmd: String,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+/// Default ceiling, matching the Python port's `_cmd.run`.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Run `argv` and return its stdout, trimmed. Never goes through a shell, so
+/// no argument is ever word-split or glob-expanded.
+pub async fn run(argv: &[&str], limit: Duration) -> Result<String, CmdError> {
+    let raw = run_bytes(argv, limit).await?;
+    Ok(String::from_utf8_lossy(&raw).trim().to_string())
+}
+
+/// `run`, but handing back raw stdout — `grim` writes PNG to it.
+pub async fn run_bytes(argv: &[&str], limit: Duration) -> Result<Vec<u8>, CmdError> {
+    let rendered = argv.join(" ");
+    let child = Command::new(argv[0])
+        .args(&argv[1..])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|source| CmdError::Spawn {
+            cmd: rendered.clone(),
+            source,
+        })?;
+
+    let output = match timeout(limit, child.wait_with_output()).await {
+        Ok(result) => result.map_err(|source| CmdError::Spawn {
+            cmd: rendered.clone(),
+            source,
+        })?,
+        // `kill_on_drop` reaps the process when `child` is dropped on the way
+        // out of this arm, so a timed-out helper never survives the call.
+        Err(_) => {
+            return Err(CmdError::Timeout {
+                cmd: rendered,
+                secs: limit.as_secs(),
+            });
+        }
+    };
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(CmdError::Failed(if stderr.is_empty() {
+            format!("command failed with {}: {rendered}", output.status)
+        } else {
+            stderr
+        }));
+    }
+
+    Ok(output.stdout)
+}

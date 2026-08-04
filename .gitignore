@@ -1,12 +1,12 @@
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-*.egg-info/
-dist/
-build/
+# Rust
+/target/
+**/*.rs.bk
+
+# Secrets / local state
 .env
 .env.local
-.coverage
+tls/
+
+# Editor / agent
 .claude/
 .DS_Store

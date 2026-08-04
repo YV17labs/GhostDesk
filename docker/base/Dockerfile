@@ -3,35 +3,48 @@
 # See SECURITY.md for threat model, auth requirements, and rotation.
 
 ARG UBUNTU_VERSION=26.04
-ARG UV_VERSION=0.12
+# Keep in lockstep with rust-toolchain.toml.
+ARG RUST_VERSION=1.97.1
 
-FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
-
-# ---- Stage 1: builder — Python venv with full build toolchain ----
+# ---- Stage 1: builder — the Rust binary ----
+# Built on the same Ubuntu release as the runtime stage. The output links
+# only libc/libm/libgcc_s, so matching the glibc it will run against is the
+# one compatibility constraint that matters.
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 
+ARG RUST_VERSION
 ENV DEBIAN_FRONTEND=noninteractive \
-    PYTHONDONTWRITEBYTECODE=1
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+# `cc` builds libwebp from vendored sources — there is no system libwebp to
+# install, and no libwayland either: the compositor is driven from pure Rust.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-        python3 python3-dev \
-        libwayland-dev pkg-config \
-        build-essential \
-        ca-certificates
+        build-essential pkg-config \
+        ca-certificates curl
 
-COPY --from=uv /uv /usr/local/bin/uv
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        -o /tmp/rustup-init.sh \
+    && sh /tmp/rustup-init.sh -y --no-modify-path \
+        --default-toolchain ${RUST_VERSION} --profile minimal \
+    && rm -f /tmp/rustup-init.sh
 
-WORKDIR /opt/ghostdesk
-# hatchling reads README.md at wheel-build time but its content is
-# irrelevant. Stubbing keeps the `uv sync` layer cache-stable across doc edits.
-# LICENSE is required by pyproject.toml `license = { file = "LICENSE" }`
-# and hatchling validates it exists at wheel-build time.
-COPY pyproject.toml uv.lock LICENSE ./
-COPY src/ ./src/
-RUN echo 'See https://github.com/yv17labs/ghostdesk' > README.md \
-    && uv sync --frozen --no-dev --compile-bytecode --no-editable
+WORKDIR /src
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY apps/ ./apps/
+COPY crates/ ./crates/
+
+# `--locked` makes the build fail rather than silently resolve a different
+# dependency than the committed lockfile — a release must be reproducible
+# from the tag. Both caches are mounts, so the binary has to be copied out
+# of `target/` inside this same RUN or it disappears with the mount.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/src/target,sharing=locked \
+    cargo build --release --locked --bin ghostdesk \
+    && install -D -m 0755 target/release/ghostdesk /out/usr/local/bin/ghostdesk
 
 # ---- Stage 2: vnc-builder — wayvnc + neatvnc + aml from pinned tags ----
 # Ubuntu's wayvnc (0.7.2) does not advertise RFB security type 2 (classic
@@ -97,7 +110,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY docker/services/novnc/index.html /opt/novnc/index.html
 COPY assets/logo-mark.svg              /opt/novnc/app/images/ghostdesk-logo.svg
 
-# ---- Stage 4: runtime — Wayland stack + supervisord + hardened venv ----
+# ---- Stage 4: runtime — Wayland stack + supervisord + the server binary ----
 FROM ubuntu:${UBUNTU_VERSION} AS runtime
 
 ARG TARGETARCH
@@ -109,7 +122,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     LANG=en_US.UTF-8 \
     GHOSTDESK_USER=agent \
     GHOSTDESK_DIR=/opt/ghostdesk \
-    PATH=/opt/ghostdesk/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     XDG_RUNTIME_DIR=/run/user/1000 \
     XDG_SESSION_TYPE=wayland \
     WAYLAND_DISPLAY=wayland-1 \
@@ -119,14 +132,17 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WLR_LIBINPUT_NO_DEVICES=1 \
     WLR_RENDERER=pixman
 
-# Runtime-only python3 (no -dev, no compilers). TZ/LANG are re-applied at
-# boot by entrypoint.sh, so only en_US/C fallbacks are pre-generated.
+# No compilers, no headers, and no language runtime for GhostDesk itself —
+# the server is one statically-wired binary against libc. `python3` is here
+# only because `websockify` is a Python program; nothing GhostDesk ships
+# imports it. TZ/LANG are re-applied at boot by entrypoint.sh, so only the
+# en_US/C fallbacks are pre-generated.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
         sway mako-notifier \
         grim wl-clipboard \
-        libwayland-client0 libxkbcommon0 \
+        libxkbcommon0 \
         dbus dbus-user-session libglib2.0-bin \
         websockify \
         supervisor \
@@ -186,18 +202,16 @@ RUN printf '#!/bin/sh\necho "bwrap: No permissions to create a new namespace" >&
     && chmod 0755 /usr/local/bin/bwrap
 
 RUN install -d -o agent -g agent /opt/ghostdesk
-COPY --from=builder /opt/ghostdesk/.venv /opt/ghostdesk/.venv
 
-# Harden the venv: sourceless .pyc, root-owned, 0555/0444. `agent` can
-# import and execute, nothing running as `agent` can modify the code.
-# See SECURITY.md for rationale.
-RUN python3 -m compileall -qb /opt/ghostdesk/.venv \
-    && find /opt/ghostdesk/.venv -type f -name '*.py' -delete \
-    && find /opt/ghostdesk/.venv -type d -name __pycache__ -exec rm -rf {} + \
-    && chown -R root:root /opt/ghostdesk/.venv \
-    && find /opt/ghostdesk/.venv -type d -exec chmod 0555 {} + \
-    && find /opt/ghostdesk/.venv -type f -exec chmod 0444 {} + \
-    && find /opt/ghostdesk/.venv/bin -type f -exec chmod 0555 {} +
+# The server: one root-owned, world-executable, non-writable binary.
+#
+# The Python build needed a whole hardening pass here — strip sources,
+# byte-compile, then chmod a tree of thousands of files — because an
+# interpreter loads whatever code is on disk at import time. A compiled
+# binary has no such surface: `agent` can execute it and cannot modify it,
+# and there is nothing else to protect. See SECURITY.md.
+COPY --from=builder --chown=root:root --chmod=0555 \
+     /out/usr/local/bin/ghostdesk /usr/local/bin/ghostdesk
 
 LABEL org.opencontainers.image.title="ghostdesk" \
       org.opencontainers.image.description="MCP server controlling a headless Wayland desktop for LLM agents" \

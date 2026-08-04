@@ -1,0 +1,49 @@
+name: Rust
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: rust-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # A CI failure should name the offending crate, not dump a backtrace-less
+  # panic message.
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No toolchain input: rust-toolchain.toml pins the channel and the
+      # components, so CI and every developer resolve the same compiler.
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+
+      # libwebp is built from vendored sources by `cc`; nothing else needs a
+      # system package (wayland-client speaks the protocol from pure Rust).
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential pkg-config
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --all-targets --locked
+
+      # `--locked` above already fails on a stale lockfile; this makes the
+      # reason explicit rather than surfacing as a confusing resolve error.
+      - name: Lockfile is current
+        run: cargo metadata --locked --format-version 1 > /dev/null

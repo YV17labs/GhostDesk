@@ -2,6 +2,37 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v8.0.0] — 2026-08-04
+
+GhostDesk is rewritten in Rust on [NestRS](https://nestrs.dev). The MCP surface is unchanged — same endpoint, same fourteen tools, same two resources, same annotations, icons and instructions — so existing clients need no reconfiguration. What changes is everything underneath: no interpreter, no virtual environment, no committed protocol bindings, and an endpoint that is closed until a guard says otherwise.
+
+### Changed
+- **The server is a single binary.** `apps/ghostdesk` wires modules and owns no logic; `crates/features` holds one `#[injectable]` service per domain (screen, input, apps, clipboard, session) plus the single `#[mcp(path = "/mcp")]` host that publishes all of them; `crates/platform` is the OS substrate (Wayland, Sway IPC, `grim`, `.desktop`, coordinate space) and carries no framework types. The whole dependency graph is verified at boot — a missing provider fails the boot naming it, rather than surfacing on the first tool call.
+- **The Wayland stack loses 6 400 lines.** `pywayland` needed committed CFFI bindings for `wl_*`, `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` — 6 400 lines of generated Python under version control. `wayland-client` generates them at build time from the protocol XML, so there are none. The connection now lives on one dedicated thread that owns the event queue and consumes commands off a channel; that single consumer *is* the serialisation the protocol needs, replacing the explicit lock every call site had to remember to take.
+- **Configuration follows the framework's dual-path rule.** GhostDesk's own settings are a `#[config(namespace = "ghostdesk")]` struct, validated at boot. `GHOSTDESK_*` remains the deployment contract — `docker/init/entrypoint.sh` maps it onto `NESTRS_HTTP__*` / `NESTRS_GHOSTDESK__*` and defers to anything you set directly, so both spellings work and the explicit one wins.
+- **A malformed setting now fails the boot** naming the variable, instead of quietly falling back to a default. `GHOSTDESK_IDLE_TIMEOUT=18OO` used to be indistinguishable from deliberately choosing 1800.
+- **The idle watchdog is a `#[scheduled]` method** on a regular provider, ticking every 5 s and comparing one atomic. The previous hand-rolled `asyncio` task derived its poll interval from the timeout (`timeout/10`, clamped); a fixed cadence costs nothing and fires within seconds of the deadline whatever it is set to.
+- **`app_status` no longer reports a dead app as running.** Launched children are reaped in the background, so a crashed process disappears from `kill(pid, 0)` instead of lingering as a zombie that still answers it.
+
+### Security
+- **`/mcp` is deny-all by default.** A NestRS `#[mcp]` endpoint answers 401 until an `McpOperationGuard` binds, so the open dev posture is now something GhostDesk declares out loud rather than something it can fall into by forgetting a middleware. Bearer comparison moved from `hmac.compare_digest` to `subtle::ConstantTimeEq`; behaviour is identical.
+- **The TLS-without-a-token check runs on every start path.** It is a boot-time lifecycle hook, and init hooks are strict: the first error aborts before any port opens, so there is no window where an HTTPS endpoint serves unauthenticated. The container entrypoint keeps its own check.
+- **DNS-rebinding defence is now a `Host` allow-list** (`GHOSTDESK_ALLOWED_HOSTS`, default loopback only) enforced by the MCP transport, in addition to the `Origin`/CORS policy (`GHOSTDESK_ALLOWED_ORIGINS`) which now covers every route rather than `/mcp` alone. **A deployment reached under a real hostname must name itself** or it will answer 403.
+- **Launched apps are scrubbed of every `NESTRS_*` variable**, not just the two names the Python port listed. That namespace carries the bearer token and inline TLS key material, and a browser the agent spawns has no business with any of it.
+- **Image hardening collapses to one line.** The Python build byte-compiled the venv, stripped every source file and `chmod`-ed a tree of thousands, because an interpreter loads whatever code is on disk. The binary is one root-owned `0555` file: no `site-packages` for a dependency-confusion attack to land in, and no interpreter on `PATH` to re-enter the product through. Release builds run `--locked`, so a tagged image cannot resolve a different dependency than the reviewed one.
+- **The runtime image drops `libwayland-client0`** — the protocol is spoken from pure Rust — and no longer ships a language runtime for GhostDesk. `python3` remains only because `websockify` is a Python program.
+
+### Removed
+- **MCP logging notifications** (`notifications/message`), which the Python port used to push a warning when an input produced no visible change. Logging is deprecated by [SEP-2577](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2577) and slated for removal. The signal the model actually reads — `screen_changed: false` in every input tool's result — is unchanged, and the server-side `warn` is still emitted on the `ghostdesk::input` target.
+- **The argument-coercion middleware.** It repaired `x="383, 22"` into `x=383, y=22`, a shape a JSON-Schema-typed integer parameter cannot take: the model now gets a validation error naming the field and corrects itself.
+- **Python, `uv`, and the `.venv`.** `pyproject.toml`, `uv.lock`, `src/ghostdesk/` and `tests/` are gone, along with the `uv sync` step in the entrypoint and the `python3-dev` / `libwayland-dev` build dependencies.
+
+### Added
+- **`.github/workflows/rust.yml`** — `cargo fmt --check`, `clippy -D warnings`, `cargo test`, all on the toolchain pinned by `rust-toolchain.toml`, plus a lockfile-freshness check.
+- **A Rust devcontainer** with the pinned toolchain, `mold` for fast incremental links, `rust-analyzer` wired to `clippy`, and named volumes for `target/` and the cargo registry so a rebuild does not throw away incremental state.
+
+---
+
 ## [v7.5.0] — 2026-07-31
 
 Security-maintenance release. Every known advisory affecting the locked dependency tree is cleared (17 CVEs across Pillow, mcp, starlette and pydantic-settings), the VNC stack picks up upstream memory-safety fixes, and the build/CI toolchain moves to current majors. No behaviour or API changes.

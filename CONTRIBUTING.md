@@ -10,9 +10,13 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 
 ### Prerequisites
 
-- Python 3.12+
 - Docker and Docker Compose
 - Git
+- VS Code with the Dev Containers extension (recommended)
+
+You do **not** need to install Rust by hand. `rust-toolchain.toml` pins the
+channel, so `rustup` resolves the same compiler for everyone; the
+devcontainer ships it pre-installed along with `mold` for fast links.
 
 ### Development Setup
 
@@ -28,27 +32,39 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
    git checkout -b feature/your-feature-name
    ```
 
-4. **Set up development environment:**
-   ```bash
-   # Install dependencies
-   uv sync
+4. **Open the devcontainer** ("Dev Containers: Reopen in Container"), then
+   start the desktop stack with the **GhostDesk: Start stack** VS Code task —
+   it runs supervisord, which brings up Sway, mako, wayvnc, websockify and
+   the MCP server.
 
-   # Start the development environment
-   docker-compose up -d
+5. **Build and test:**
+   ```bash
+   cargo build
+   cargo test
    ```
 
-5. **Run tests:**
+6. **Run the server against the running desktop:**
    ```bash
-   pytest
+   cargo run --bin ghostdesk
    ```
+   It listens on `http://127.0.0.1:3000/mcp`. The stack's own instance is
+   already on that port, so stop it first (`GhostDesk: Stop stack`) or point
+   yours elsewhere with `NESTRS_HTTP__PORT`.
 
 ## Making Changes
 
 ### Code Style
 
-- Follow PEP 8 guidelines for Python code
-- Use type hints where appropriate
-- Keep functions and methods focused and concise
+- `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings` both pass;
+  CI enforces them
+- Follow the framework's shape: a domain is an `#[injectable]` service in
+  `crates/features/src/<domain>/`, wired by a `#[module]`, and the MCP
+  adapter in `crates/features/src/mcp/` is the only place that knows about
+  the wire
+- Keep `crates/platform` free of framework types — it is the OS substrate
+  (Wayland, Sway IPC, `grim`, `.desktop`) and stays testable on its own
+- Comment the *why*, not the *what*; the surprising constraint is worth a
+  sentence, the obvious call is not
 - Write clear, descriptive commit messages
 
 ### Commits
@@ -59,12 +75,17 @@ This project adheres to a [Code of Conduct](CODE_OF_CONDUCT.md). By participatin
 
 ### Testing
 
-- Write tests for new functionality
-- Ensure all tests pass before submitting a PR:
+- Write tests for new functionality — unit tests live in a `#[cfg(test)]`
+  module beside the code they cover
+- Ensure everything passes before submitting a PR:
   ```bash
-  pytest
+  cargo fmt --all --check
+  cargo clippy --all-targets --locked -- -D warnings
+  cargo test --locked
   ```
-- Maintain or improve code coverage
+- Prefer testing the decision, not the plumbing: the `.desktop` filter, the
+  chord parser, the frame-diff threshold and the launch-environment scrub all
+  have unit tests; the Wayland socket does not.
 
 ## Submitting Changes
 
@@ -100,7 +121,7 @@ Include:
 - Clear description of the issue
 - Steps to reproduce
 - Expected vs actual behavior
-- Environment details (OS, Python version, etc.)
+- Environment details (OS, image tag or `rustc --version`, etc.)
 - Screenshots or error logs if applicable
 
 ### Feature Requests
@@ -112,14 +133,31 @@ Include:
 
 ## Project Structure
 
+A Cargo workspace in the layout NestRS uses: one binary under `apps/`, the
+domains in a shared `features` crate, and the OS substrate beside it.
+
 ```
 GhostDesk/
-├── src/ghostdesk/     # Main source code
-├── tests/             # Test suite
-├── .devcontainer/     # Development container config
-├── .docker/           # Docker configuration
-├── .github/workflows/ # CI/CD workflows
-└── README.md          # Project documentation
+├── apps/ghostdesk/          # The binary — wires modules, owns no logic
+│   └── src/module.rs        # GhostdeskModule: HTTP + MCP + Schedule + features
+├── crates/features/         # One folder per domain
+│   ├── config.rs            # GhostdeskConfig — #[config(namespace = "ghostdesk")]
+│   ├── screen/              # capture, stabilise, encode
+│   ├── input/               # mouse, keyboard, post-action feedback
+│   ├── apps/                # .desktop catalogue, launch, status
+│   ├── clipboard/           # wl-copy / wl-paste
+│   ├── session/             # idle watchdog (#[scheduled])
+│   └── mcp/                 # the single #[mcp] host: 14 tools, 2 resources,
+│                            # the bearer guard and the model-space context
+├── crates/platform/         # OS substrate — no framework types
+│   ├── wayland/             # virtual pointer + keyboard, XKB keymap
+│   ├── sway.rs              # IPC socket discovery, tree walking
+│   ├── screen.rs            # grim, frame diff, WebP/PNG
+│   ├── desktop.rs           # .desktop parser
+│   └── coords.rs            # model-space ↔ pixels
+├── docker/                  # Base image, services, entrypoint
+├── .devcontainer/           # Development container config
+└── .github/workflows/       # CI/CD workflows
 ```
 
 ## Security

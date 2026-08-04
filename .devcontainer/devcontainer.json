@@ -8,10 +8,19 @@
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-python.python",
-        "charliermarsh.ruff",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "vadimcn.vscode-lldb",
         "Anthropic.claude-code"
-      ]
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.cargo.allTargets": true,
+        "editor.formatOnSave": true,
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer"
+        }
+      }
     }
   }
 }
