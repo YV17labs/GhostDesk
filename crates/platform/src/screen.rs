@@ -32,13 +32,6 @@ pub enum ImageFormat {
 }
 
 impl ImageFormat {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Webp => "webp",
-            Self::Png => "png",
-        }
-    }
-
     pub fn mime(self) -> &'static str {
         match self {
             Self::Webp => "image/webp",
@@ -113,15 +106,38 @@ fn bbox_ratio(a: &RgbImage, b: &RgbImage) -> Option<f64> {
     let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0u32, 0u32);
     let mut differs = false;
 
+    // Row-at-a-time over the raw buffers. Comparing whole rows first is the
+    // point: an unchanged row is one vectorised memcmp instead of `width`
+    // bounds-checked `get_pixel` pairs, and on a desktop capture almost every
+    // row *is* unchanged. This runs ~15x per input action and once per
+    // stabilisation tick, so it is the hottest loop in the server.
+    const CHANNELS: usize = 3;
+    let stride = width as usize * CHANNELS;
+    let (raw_a, raw_b) = (a.as_raw(), b.as_raw());
+
     for y in 0..height {
-        for x in 0..width {
-            if a.get_pixel(x, y) != b.get_pixel(x, y) {
-                differs = true;
-                min_x = min_x.min(x);
-                min_y = min_y.min(y);
-                max_x = max_x.max(x);
-                max_y = max_y.max(y);
-            }
+        let start = y as usize * stride;
+        let row_a = &raw_a[start..start + stride];
+        let row_b = &raw_b[start..start + stride];
+        if row_a == row_b {
+            continue;
+        }
+
+        let first = row_a
+            .chunks_exact(CHANNELS)
+            .zip(row_b.chunks_exact(CHANNELS))
+            .position(|(pa, pb)| pa != pb);
+        let last = row_a
+            .chunks_exact(CHANNELS)
+            .zip(row_b.chunks_exact(CHANNELS))
+            .rposition(|(pa, pb)| pa != pb);
+
+        if let (Some(first), Some(last)) = (first, last) {
+            differs = true;
+            min_x = min_x.min(first as u32);
+            max_x = max_x.max(last as u32);
+            min_y = min_y.min(y);
+            max_y = max_y.max(y);
         }
     }
 
@@ -136,46 +152,26 @@ fn bbox_ratio(a: &RgbImage, b: &RgbImage) -> Option<f64> {
     Some((dw * dh) / (width as f64 * height as f64))
 }
 
-/// True when two captures differ by more than the stability threshold.
+/// True when two decoded frames differ by more than the stability threshold.
 /// A size mismatch counts as a difference.
-pub fn screens_differ(a: &[u8], b: &[u8]) -> bool {
-    if a == b {
-        return false;
-    }
-    let (Ok(a), Ok(b)) = (decode_rgb(a), decode_rgb(b)) else {
-        return true;
-    };
-    differ_rgb(&a, &b)
-}
-
-/// `screens_differ` against a baseline that is already decoded — the polling
-/// loops hold `before` fixed and would otherwise re-decode it every tick.
+///
+/// Every caller holds decoded frames: the feedback loop keeps one fixed
+/// baseline, and the stabilisation loop carries the previous frame forward.
+/// So a frame is decoded exactly once no matter how many comparisons it takes
+/// part in.
 pub fn differ_rgb(before: &RgbImage, after: &RgbImage) -> bool {
     bbox_ratio(before, after).is_none_or(|ratio| ratio >= STABILITY_MAX_DIFF_RATIO)
 }
 
-/// True when two captures look the same up to the stability threshold. The
-/// positive form reads better at the screenshot stabilisation call site.
-pub fn screens_stable(a: &[u8], b: &[u8]) -> bool {
-    !screens_differ(a, b)
-}
-
-/// Re-encode raw PNG bytes into the requested wire format.
+/// Encode a decoded frame as lossy WebP.
 ///
-/// `quality` is the WebP encoder quality (1-100); PNG is lossless and
-/// ignores it, so the original bytes are handed straight back.
-pub fn reencode(raw_png: &[u8], format: ImageFormat, quality: u8) -> anyhow::Result<Vec<u8>> {
-    match format {
-        ImageFormat::Png => Ok(raw_png.to_vec()),
-        ImageFormat::Webp => {
-            let rgb = decode_rgb(raw_png)?;
-            let (width, height) = rgb.dimensions();
-            let encoded = webp::Encoder::from_rgb(rgb.as_raw(), width, height)
-                .encode(f32::from(quality))
-                .to_vec();
-            Ok(encoded)
-        }
-    }
+/// `quality` is 1-100. PNG needs no counterpart: grim already hands us PNG,
+/// and re-encoding a lossless format to itself is pure waste.
+pub fn encode_webp(image: &RgbImage, quality: u8) -> Vec<u8> {
+    let (width, height) = image.dimensions();
+    webp::Encoder::from_rgb(image.as_raw(), width, height)
+        .encode(f32::from(quality))
+        .to_vec()
 }
 
 #[cfg(test)]
@@ -196,8 +192,30 @@ mod tests {
     #[test]
     fn identical_frames_do_not_differ() {
         let img = solid(100, 100, [10, 20, 30]);
-        assert!(!screens_differ(&to_png(&img), &to_png(&img)));
-        assert!(screens_stable(&to_png(&img), &to_png(&img)));
+        assert!(!differ_rgb(&img, &img.clone()));
+    }
+
+    #[test]
+    fn the_difference_box_spans_every_changed_row_and_column() {
+        // Two far-apart pixels: the box is their bounding rectangle, not two
+        // separate specks — 41x41 of 100x100 is 16.8%, well over threshold.
+        let before = solid(100, 100, [0, 0, 0]);
+        let mut after = before.clone();
+        after.put_pixel(30, 30, Rgb([255, 255, 255]));
+        after.put_pixel(70, 70, Rgb([255, 255, 255]));
+        assert!(differ_rgb(&before, &after));
+    }
+
+    #[test]
+    fn a_change_in_the_last_row_and_column_is_seen() {
+        // Guards the row-slice indexing: an off-by-one on `stride` would miss
+        // the final row entirely.
+        let before = solid(20, 20, [0, 0, 0]);
+        let mut after = before.clone();
+        for x in 0..20 {
+            after.put_pixel(x, 19, Rgb([255, 255, 255]));
+        }
+        assert!(differ_rgb(&before, &after));
     }
 
     #[test]
@@ -230,15 +248,19 @@ mod tests {
     }
 
     #[test]
-    fn png_round_trips_untouched_and_webp_shrinks() {
+    fn a_decoded_frame_encodes_to_webp() {
         let img = solid(320, 240, [120, 120, 200]);
-        let png = to_png(&img);
-
-        assert_eq!(reencode(&png, ImageFormat::Png, 50).unwrap(), png);
-
-        let webp = reencode(&png, ImageFormat::Webp, DEFAULT_WEBP_QUALITY).unwrap();
+        let webp = encode_webp(&img, DEFAULT_WEBP_QUALITY);
         assert!(webp.starts_with(b"RIFF"), "a WebP payload starts with RIFF");
-        assert!(!webp.is_empty());
+        assert!(webp.len() < to_png(&img).len() * 2);
+    }
+
+    #[test]
+    fn a_png_decodes_to_the_pixels_it_was_built_from() {
+        let img = solid(64, 48, [7, 8, 9]);
+        let decoded = decode_rgb(&to_png(&img)).unwrap();
+        assert_eq!(decoded.dimensions(), (64, 48));
+        assert!(!differ_rgb(&img, &decoded));
     }
 
     #[test]

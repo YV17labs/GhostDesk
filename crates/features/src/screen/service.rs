@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use image::RgbImage;
 use nest_rs::core::{hooks, injectable};
 use platform::coords;
 use platform::screen::{self, ImageFormat, Region};
@@ -56,33 +57,57 @@ impl ScreenService {
     ) -> anyhow::Result<Capture> {
         let region = region.map(Region::clamped);
 
-        let raw = if stabilize {
-            self.capture_until_stable(region).await?
+        // The stabilisation loop already decoded the frame it settled on, so
+        // the WebP encode below reuses it rather than decoding a third time
+        // (grim's PNG → compare → encode used to decode the same bytes twice
+        // per tick plus once at the end).
+        let (png, decoded) = if stabilize {
+            let (png, rgb) = self.capture_until_stable(region).await?;
+            (png, Some(rgb))
         } else {
-            screen::capture_png(region, None).await?
+            (screen::capture_png(region, None).await?, None)
         };
 
-        Ok(Capture {
-            bytes: screen::reencode(&raw, format, quality)?,
-            format,
-        })
+        let bytes = match format {
+            // grim already hands us PNG; re-encoding lossless to lossless
+            // would cost a decode and an encode to produce the same picture.
+            ImageFormat::Png => png,
+            ImageFormat::Webp => {
+                let rgb = match decoded {
+                    Some(rgb) => rgb,
+                    None => screen::decode_rgb(&png)?,
+                };
+                screen::encode_webp(&rgb, quality)
+            }
+        };
+
+        Ok(Capture { bytes, format })
     }
 
     /// Poll grim until two consecutive frames are pixel-stable — this is what
     /// catches a page still animating after a click or a navigation.
-    async fn capture_until_stable(&self, region: Option<Region>) -> anyhow::Result<Vec<u8>> {
-        let mut previous = screen::capture_png(region, None).await?;
+    ///
+    /// Returns the settled frame both encoded and decoded; the decoded half
+    /// is what the caller re-uses instead of decoding it again.
+    async fn capture_until_stable(
+        &self,
+        region: Option<Region>,
+    ) -> anyhow::Result<(Vec<u8>, RgbImage)> {
+        let mut previous_png = screen::capture_png(region, None).await?;
+        let mut previous = screen::decode_rgb(&previous_png)?;
         let deadline = Instant::now() + STABILITY_TIMEOUT;
 
         while Instant::now() < deadline {
-            let current = screen::capture_png(region, None).await?;
-            if screen::screens_stable(&previous, &current) {
-                return Ok(current);
+            let current_png = screen::capture_png(region, None).await?;
+            let current = screen::decode_rgb(&current_png)?;
+            if !screen::differ_rgb(&previous, &current) {
+                return Ok((current_png, current));
             }
             tokio::time::sleep(STABILITY_POLL).await;
+            previous_png = current_png;
             previous = current;
         }
 
-        Ok(previous)
+        Ok((previous_png, previous))
     }
 }

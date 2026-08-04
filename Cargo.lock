@@ -898,6 +898,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.23.1",
+ "image",
  "nest-rs",
  "platform",
  "rustix",
