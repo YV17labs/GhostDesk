@@ -3,8 +3,6 @@
 # See SECURITY.md for threat model, auth requirements, and rotation.
 
 ARG UBUNTU_VERSION=26.04
-# Keep in lockstep with rust-toolchain.toml.
-ARG RUST_VERSION=1.97.1
 
 # ---- Stage 1: builder — the Rust binary ----
 # Built on the same Ubuntu release as the runtime stage. The output links
@@ -12,7 +10,6 @@ ARG RUST_VERSION=1.97.1
 # one compatibility constraint that matters.
 FROM ubuntu:${UBUNTU_VERSION} AS builder
 
-ARG RUST_VERSION
 ENV DEBIAN_FRONTEND=noninteractive \
     RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
@@ -26,14 +23,19 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
         build-essential pkg-config \
         ca-certificates curl
 
+# Install rustup with no toolchain, then let `rust-toolchain.toml` name it.
+# The channel is pinned in exactly one file, so a bump is a one-line change
+# and prod can never drift from what CI and the devcontainer resolve.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
         -o /tmp/rustup-init.sh \
-    && sh /tmp/rustup-init.sh -y --no-modify-path \
-        --default-toolchain ${RUST_VERSION} --profile minimal \
+    && sh /tmp/rustup-init.sh -y --no-modify-path --default-toolchain none \
     && rm -f /tmp/rustup-init.sh
 
 WORKDIR /src
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY rust-toolchain.toml ./
+RUN rustup toolchain install
+
+COPY Cargo.toml Cargo.lock ./
 COPY apps/ ./apps/
 COPY crates/ ./crates/
 

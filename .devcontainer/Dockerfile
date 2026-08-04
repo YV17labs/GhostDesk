@@ -5,11 +5,6 @@
 
 ARG UBUNTU_VERSION=26.04
 
-# Keep in lockstep with rust-toolchain.toml. rustup honours that file and
-# would download the pinned channel on first use anyway; naming it here means
-# the image ships with it already installed.
-ARG RUST_VERSION=1.97.1
-
 # ---- Stage 1: vnc-builder — wayvnc + neatvnc + aml from pinned refs ----
 # Same pins as docker/base/Dockerfile; keep them in lockstep.
 FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
@@ -61,7 +56,6 @@ COPY assets/logo-mark.svg              /opt/novnc/app/images/ghostdesk-logo.svg
 FROM mcr.microsoft.com/devcontainers/base:ubuntu26.04
 
 ARG TARGETARCH
-ARG RUST_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/Montreal \
@@ -146,14 +140,18 @@ ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/home/vscode/.cargo \
     PATH=/home/vscode/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+# rustup is installed with no toolchain; `rust-toolchain.toml` names the
+# channel *and* the components, so the version lives in exactly one file and
+# the devcontainer cannot drift from CI or the prod builder. `rust-src` is the
+# one extra rust-analyzer wants and the toml has no reason to carry.
+COPY rust-toolchain.toml /tmp/rust-toolchain.toml
 RUN install -d -m 0755 "${RUSTUP_HOME}" \
     && install -d -m 0755 -o vscode -g vscode "${CARGO_HOME}" \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && chmod 0755 /tmp/rustup-init.sh \
-    && su vscode -c "/tmp/rustup-init.sh -y --no-modify-path \
-            --default-toolchain ${RUST_VERSION} \
-            --profile minimal -c clippy -c rustfmt -c rust-src" \
-    && rm -f /tmp/rustup-init.sh \
+    && su vscode -c "/tmp/rustup-init.sh -y --no-modify-path --default-toolchain none" \
+    && su vscode -c "cd /tmp && rustup toolchain install && rustup component add rust-src" \
+    && rm -f /tmp/rustup-init.sh /tmp/rust-toolchain.toml \
     && chmod -R a+rX "${RUSTUP_HOME}"
 
 # mold cuts incremental link time to a fraction of GNU ld's. It lives in the
