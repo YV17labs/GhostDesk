@@ -20,6 +20,15 @@ start app="ghostdesk":
 build app="ghostdesk":
     cargo build --release {{ if app == "--all" { "--workspace" } else { "-p " + app } }}
 
+# Install an app's release binary into ~/.cargo/bin. The path is spelled out
+# because the workspace root is a virtual manifest: a bare `cargo install` has
+# no package to install and refuses rather than picking a member. `--locked`
+# builds the dependency set the lockfile pins — the one CI checked — instead of
+# re-resolving to whatever crates.io offers today.
+# Usage: nestrs run install
+install app="ghostdesk":
+    cargo install --path apps/{{app}} --locked
+
 # Type-check the workspace.
 check:
     cargo check --workspace
