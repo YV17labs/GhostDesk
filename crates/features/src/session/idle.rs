@@ -1,24 +1,24 @@
-//! Idle session watchdog — close every Sway view after N seconds of MCP
-//! silence.
+//! Idle session watchdog — close every application window after N seconds
+//! of MCP silence.
 //!
 //! Long-running agents leak GUI apps: every Firefox tab, every `foot` shell,
 //! every `mousepad` window stays resident until the container is killed.
 //! Configuration is operator-side, never client-side — the agent cannot
 //! extend or disable its own leash.
 //!
-//! The desktop's own infrastructure (sway, mako, wayvnc, supervisord, this
-//! server) is spared: none of those are Sway *views*, so walking the tree's
-//! view nodes never reaches them.
+//! The desktop's own infrastructure (compositor, notification daemon, VNC
+//! bridge, this server) is spared: the [`WindowManager`] contract lists only
+//! real application windows, so the sweep never reaches them.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::Instant;
 
 use nest_rs::core::injectable;
-use platform::sway;
+use platform::window::WindowManager;
 use tokio::task::JoinSet;
 
-use crate::config::GhostdeskConfig;
+use super::config::SessionConfig;
 
 /// Monotonic origin for the idle clock.
 ///
@@ -30,7 +30,9 @@ static ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 #[injectable]
 pub struct IdleService {
     #[inject]
-    config: Arc<GhostdeskConfig>,
+    config: Arc<SessionConfig>,
+    #[inject]
+    windows: Arc<dyn WindowManager>,
     /// Milliseconds since [`ORIGIN`] at the last MCP operation. An atomic,
     /// not a lock: this is written on every single operation and read by a
     /// timer, and neither should ever wait on the other.
@@ -60,44 +62,47 @@ impl IdleService {
         self.config.idle_timeout_secs
     }
 
-    /// Close every Sway client window. Returns how many were closed.
+    /// Close every application window. Returns how many were closed.
     ///
-    /// Each kill is a *graceful* close request: the client receives a Wayland
+    /// Each close is a *graceful* request: the client receives the OS's
     /// close event and may flush state before exiting. They run concurrently
     /// so one slow-closing client cannot hold up the rest.
     pub async fn cleanup_views(&self) -> usize {
-        let Some(tree) = sway::get_tree().await else {
-            return 0;
+        let windows = match self.windows.windows().await {
+            Ok(windows) => windows,
+            Err(err) => {
+                tracing::error!(
+                    target: "ghostdesk::idle",
+                    error = %err,
+                    "window enumeration failed — nothing closed",
+                );
+                return 0;
+            }
         };
 
-        let targets: Vec<(i64, String)> = sway::iter_views(&tree)
-            .into_iter()
-            .filter_map(|node| {
-                let id = node.get("id").and_then(|v| v.as_i64())?;
-                Some((id, sway::view_label(node)))
-            })
-            .collect();
-
         let mut kills = JoinSet::new();
-        for (id, label) in targets {
+        for window in windows {
+            let manager = Arc::clone(&self.windows);
             kills.spawn(async move {
-                match sway::kill_view(id).await {
+                match manager.close(&window.id).await {
                     Ok(()) => {
                         tracing::info!(
                             target: "ghostdesk::idle",
-                            con_id = id,
-                            view = %label,
-                            "closed view",
+                            window = %window.id,
+                            app = %window.app,
+                            title = %window.title,
+                            "closed window",
                         );
                         true
                     }
                     Err(err) => {
                         tracing::error!(
                             target: "ghostdesk::idle",
-                            con_id = id,
-                            view = %label,
+                            window = %window.id,
+                            app = %window.app,
+                            title = %window.title,
                             error = %err,
-                            "failed to close view",
+                            "failed to close window",
                         );
                         false
                     }
@@ -118,13 +123,14 @@ impl IdleService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::NoWindows;
 
     fn service(timeout_secs: u64) -> IdleService {
         IdleService {
-            config: Arc::new(GhostdeskConfig {
+            config: Arc::new(SessionConfig {
                 idle_timeout_secs: timeout_secs,
-                ..GhostdeskConfig::default()
             }),
+            windows: Arc::new(NoWindows),
             last_activity_ms: AtomicU64::new(ORIGIN.elapsed().as_millis() as u64),
         }
     }

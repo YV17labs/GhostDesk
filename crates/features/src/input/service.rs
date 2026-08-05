@@ -1,18 +1,15 @@
-//! Mouse and keyboard control, driven by the Wayland virtual-input protocols.
+//! Mouse and keyboard control, delegated to the host's [`InputBackend`].
 //!
-//! Text entry is layout-independent: GhostDesk pushes its own XKB keymap and
-//! never consults the compositor's, so a French AZERTY host and a US QWERTY
-//! one produce byte-identical output.
+//! This service owns the *policy* — clamping, feedback capture, the message
+//! an agent reads back — and none of the mechanism. How a click actually
+//! happens (a Wayland virtual pointer, a CGEvent) is the backend's business.
 
 use std::sync::Arc;
 
 use nest_rs::core::{hooks, injectable};
-use platform::wayland::keysym;
-use platform::wayland::{Button, ScrollDirection, WaylandInput};
-use tokio::sync::OnceCell;
+use platform::input::{Button, Conventions, InputBackend, ScrollDirection};
 
 use super::feedback::{Feedback, FeedbackService};
-use super::keys;
 
 /// Wheel notches allowed in a single call. Long pages are scrolled by
 /// chaining calls, each with its own screenshot — one call that scrolls a
@@ -24,40 +21,38 @@ const SCROLL_MAX: u32 = 5;
 pub struct InputService {
     #[inject]
     feedback: Arc<FeedbackService>,
-    /// The connection is opened once and reused for the process lifetime.
-    /// `OnceCell` rather than a plain field because the boot hook and the
-    /// first tool call must not be able to open two.
-    wayland: OnceCell<WaylandInput>,
+    #[inject]
+    backend: Arc<dyn InputBackend>,
 }
 
 #[hooks]
 impl InputService {
-    /// Bind the virtual pointer and keyboard at boot.
+    /// Warm the input backend up at boot.
     ///
-    /// A compositor missing either protocol is a deployment error, and this
-    /// hook is what turns it into a failed boot with a clear message instead
-    /// of a puzzling failure on the agent's first click. Init hooks are
-    /// strict — the first error aborts, and nothing is listening yet.
+    /// A host missing what the backend needs (a Wayland protocol, an OS
+    /// permission) is a deployment error, and this hook is what turns it
+    /// into a failed boot with a clear message instead of a puzzling failure
+    /// on the agent's first click. Init hooks are strict — the first error
+    /// aborts, and nothing is listening yet.
     #[on_application_bootstrap]
     async fn warm_up(&self) -> anyhow::Result<()> {
-        self.wayland().await?;
-        tracing::info!(
-            target: "ghostdesk::input",
-            "Wayland input ready (virtual pointer + keyboard bound)",
-        );
+        self.backend.warm_up().await?;
+        tracing::info!(target: "ghostdesk::input", "input backend ready");
         Ok(())
     }
 }
 
 impl InputService {
-    async fn wayland(&self) -> anyhow::Result<&WaylandInput> {
-        self.wayland.get_or_try_init(WaylandInput::connect).await
+    /// How this desktop spells its standard shortcuts — what the agent's
+    /// session brief is built from.
+    pub fn conventions(&self) -> Conventions {
+        self.backend.conventions()
     }
 
     /// Move the cursor without pressing anything — hover-only UI reactions.
     pub async fn mouse_move(&self, x: i64, y: i64) -> anyhow::Result<Feedback> {
         let before = self.feedback.capture_before().await?;
-        self.wayland().await?.move_to(x, y).await?;
+        self.backend.move_to(x, y).await?;
         self.feedback
             .observe(format!("Moved cursor to ({x}, {y})"), &before)
             .await
@@ -68,10 +63,9 @@ impl InputService {
     /// The baseline is captured *after* the pointer is in place, so the
     /// cursor's own repaint is not what gets reported as a change.
     pub async fn mouse_click(&self, x: i64, y: i64, button: Button) -> anyhow::Result<Feedback> {
-        let wayland = self.wayland().await?;
-        wayland.move_to(x, y).await?;
+        self.backend.move_to(x, y).await?;
         let before = self.feedback.capture_before().await?;
-        wayland.click(button).await?;
+        self.backend.click(button).await?;
         self.feedback
             .observe(
                 format!("Clicked {} at ({x}, {y})", button.as_str()),
@@ -87,11 +81,10 @@ impl InputService {
         y: i64,
         button: Button,
     ) -> anyhow::Result<Feedback> {
-        let wayland = self.wayland().await?;
-        wayland.move_to(x, y).await?;
+        self.backend.move_to(x, y).await?;
         let before = self.feedback.capture_before().await?;
-        wayland.click(button).await?;
-        wayland.click(button).await?;
+        self.backend.click(button).await?;
+        self.backend.click(button).await?;
         self.feedback
             .observe(
                 format!("Double-clicked {} at ({x}, {y})", button.as_str()),
@@ -108,7 +101,7 @@ impl InputService {
         button: Button,
     ) -> anyhow::Result<Feedback> {
         let before = self.feedback.capture_before().await?;
-        self.wayland().await?.drag(from, to, button).await?;
+        self.backend.drag(from, to, button).await?;
         self.feedback
             .observe(
                 format!(
@@ -129,10 +122,9 @@ impl InputService {
         amount: u32,
     ) -> anyhow::Result<Feedback> {
         let amount = amount.clamp(SCROLL_MIN, SCROLL_MAX);
-        let wayland = self.wayland().await?;
-        wayland.move_to(x, y).await?;
+        self.backend.move_to(x, y).await?;
         let before = self.feedback.capture_before().await?;
-        wayland.scroll(direction, amount).await?;
+        self.backend.scroll(direction, amount).await?;
         self.feedback
             .observe(
                 format!(
@@ -146,9 +138,8 @@ impl InputService {
 
     /// Type text at the current keyboard focus.
     pub async fn key_type(&self, text: &str) -> anyhow::Result<Feedback> {
-        let keysyms: Vec<u32> = text.chars().map(keysym::keysym_for_char).collect();
         let before = self.feedback.capture_before().await?;
-        self.wayland().await?.type_keysyms(keysyms).await?;
+        self.backend.type_text(text).await?;
         self.feedback
             .observe(
                 format!("Typed {} characters", text.chars().count()),
@@ -161,9 +152,9 @@ impl InputService {
     pub async fn key_press(&self, keys: &str) -> anyhow::Result<Feedback> {
         // Resolve before capturing: an unknown key name should fail without
         // costing a screenshot.
-        let (mask, keysyms) = keys::resolve_chord(keys)?;
+        let chord = self.backend.resolve_chord(keys)?;
         let before = self.feedback.capture_before().await?;
-        self.wayland().await?.press_chord(mask, keysyms).await?;
+        self.backend.press_chord(chord).await?;
         self.feedback
             .observe(format!("Pressed {keys}"), &before)
             .await

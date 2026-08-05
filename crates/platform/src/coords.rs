@@ -21,7 +21,7 @@ static SCREEN: OnceLock<(i64, i64)> = OnceLock::new();
 
 /// Install the screen size for the process.
 ///
-/// The value belongs to `GhostdeskConfig`, which is loaded and validated by
+/// The value belongs to `ScreenConfig`, which is loaded and validated by
 /// the framework at boot; this crate deliberately reads no environment of its
 /// own, so there is exactly one place the size can come from. Idempotent —
 /// a second call is ignored, which keeps concurrent tests honest.

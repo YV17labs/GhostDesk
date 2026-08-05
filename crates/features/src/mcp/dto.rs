@@ -7,8 +7,8 @@
 
 use nest_rs::core::input;
 use platform::desktop::DesktopApp;
+use platform::input::{Button, ScrollDirection};
 use platform::screen::{ImageFormat, Region};
-use platform::wayland::{Button, ScrollDirection};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

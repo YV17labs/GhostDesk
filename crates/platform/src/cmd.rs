@@ -4,6 +4,7 @@
 use std::process::Stdio;
 use std::time::Duration;
 
+use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 use tokio::time::timeout;
 
@@ -33,6 +34,56 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 pub async fn run(argv: &[&str], limit: Duration) -> Result<String, CmdError> {
     let raw = run_bytes(argv, limit).await?;
     Ok(String::from_utf8_lossy(&raw).trim().to_string())
+}
+
+/// Feed `input` to a helper on stdin and wait for it to exit.
+///
+/// Deliberately waits on the *child*, not on its pipes, which is what
+/// separates this from [`run`]. `wl-copy` forks a daemon that keeps serving
+/// the clipboard and inherits stdout/stderr, so those pipes never close and
+/// `wait_with_output` would block for the session's lifetime; the parent
+/// exiting right after the fork is what means "the clipboard is set".
+pub async fn run_with_stdin(argv: &[&str], input: &[u8], limit: Duration) -> Result<(), CmdError> {
+    let rendered = argv.join(" ");
+    let mut child = Command::new(argv[0])
+        .args(&argv[1..])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|source| CmdError::Spawn {
+            cmd: rendered.clone(),
+            source,
+        })?;
+
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| CmdError::Failed(format!("{rendered} was spawned without a stdin pipe")))?;
+    let written = async {
+        stdin.write_all(input).await?;
+        stdin.shutdown().await
+    }
+    .await;
+    drop(stdin);
+    written.map_err(|source| CmdError::Spawn {
+        cmd: rendered.clone(),
+        source,
+    })?;
+
+    match timeout(limit, child.wait()).await {
+        Ok(status) => status.map_err(|source| CmdError::Spawn {
+            cmd: rendered,
+            source,
+        })?,
+        Err(_) => {
+            return Err(CmdError::Timeout {
+                cmd: rendered,
+                secs: limit.as_secs(),
+            });
+        }
+    };
+    Ok(())
 }
 
 /// `run`, but handing back raw stdout — `grim` writes PNG to it.

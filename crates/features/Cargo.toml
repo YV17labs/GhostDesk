@@ -12,7 +12,6 @@ publish = false
 platform = { path = "../platform" }
 
 anyhow.workspace = true
-async-trait.workspace = true
 base64.workspace = true
 image.workspace = true
 nest-rs.workspace = true

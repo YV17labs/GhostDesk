@@ -24,12 +24,12 @@ use nest_rs::http::poem::{Error, Request, Response, Result};
 use nest_rs::mcp::{BoxFuture, McpOperationGuard};
 use subtle::ConstantTimeEq;
 
-use crate::config::GhostdeskConfig;
+use super::config::AuthConfig;
 
 #[injectable]
 pub struct McpAuthGuard {
     #[inject]
-    config: Arc<GhostdeskConfig>,
+    config: Arc<AuthConfig>,
 }
 
 /// The boot-time half of the posture, split into its own provider on purpose.
@@ -41,7 +41,7 @@ pub struct McpAuthGuard {
 #[injectable]
 pub struct McpSecurityPosture {
     #[inject]
-    config: Arc<GhostdeskConfig>,
+    config: Arc<AuthConfig>,
     #[inject]
     http: Arc<HttpConfig>,
 }
@@ -55,9 +55,9 @@ impl McpSecurityPosture {
     /// containerised runs; this covers every other way the binary starts.
     #[on_module_init]
     async fn check_posture(&self) -> anyhow::Result<()> {
-        match (self.http.tls.is_some(), self.config.auth_token.is_some()) {
+        match (self.http.tls.is_some(), self.config.token.is_some()) {
             (true, false) => anyhow::bail!(
-                "NESTRS_GHOSTDESK__AUTH_TOKEN is required when TLS is enabled — \
+                "GHOSTDESK_AUTH__TOKEN is required when TLS is enabled — \
                  an HTTPS endpoint with no bearer token is an open desktop",
             ),
             (true, true) => tracing::info!(
@@ -73,7 +73,7 @@ impl McpSecurityPosture {
                 target: "ghostdesk::mcp",
                 "no TLS cert — serving plain HTTP with NO authentication. This \
                  is the intended dev posture; deploy behind a cert plus \
-                 NESTRS_GHOSTDESK__AUTH_TOKEN for any non-loopback exposure.",
+                 GHOSTDESK_AUTH__TOKEN for any non-loopback exposure.",
             ),
         }
         Ok(())
@@ -100,7 +100,7 @@ fn token_matches(provided: &str, expected: &str) -> bool {
 impl McpOperationGuard for McpAuthGuard {
     fn before<'a>(&'a self, req: &'a mut Request) -> BoxFuture<'a, Result<()>> {
         Box::pin(async move {
-            let Some(expected) = self.config.auth_token.as_deref() else {
+            let Some(expected) = self.config.token.as_deref() else {
                 return Ok(());
             };
 

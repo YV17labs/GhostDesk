@@ -1,6 +1,10 @@
 use nest_rs::core::module;
 
 use super::service::ClipboardService;
+use crate::host::HostModule;
 
-#[module(providers = [ClipboardService])]
+#[module(
+    imports = [HostModule],
+    providers = [ClipboardService],
+)]
 pub struct ClipboardModule;

@@ -1,4 +1,8 @@
-//! Sway IPC — resilient socket discovery and tree walking.
+//! The Linux [`WindowManager`] — Sway IPC, with resilient socket discovery.
+//!
+//! The raw `get_tree` JSON never leaves this module: every node is folded
+//! into a [`WindowInfo`] here, so the feature layer cannot grow a dependency
+//! on Sway's tree shape.
 //!
 //! `$XDG_RUNTIME_DIR` is often a persistent volume in container deploys, so
 //! dead `sway-ipc.<uid>.<pid>.sock` files from previous boots stick around
@@ -20,10 +24,13 @@
 
 use std::time::Duration;
 
+use anyhow::Result;
+use async_trait::async_trait;
 use serde_json::Value;
 use tokio::sync::Mutex;
 
 use crate::cmd;
+use crate::window::{WindowId, WindowInfo, WindowManager};
 
 static CACHED_SOCK: Mutex<Option<String>> = Mutex::const_new(None);
 
@@ -103,7 +110,7 @@ async fn resolve(force: bool) -> Option<String> {
 }
 
 /// Run `swaymsg` against the live socket, with one self-healing retry.
-pub async fn swaymsg(args: &[&str], limit: Duration) -> anyhow::Result<String> {
+async fn swaymsg(args: &[&str], limit: Duration) -> anyhow::Result<String> {
     let sock = resolve(false)
         .await
         .ok_or_else(|| anyhow::anyhow!("sway: no live IPC socket found"))?;
@@ -127,7 +134,7 @@ pub async fn swaymsg(args: &[&str], limit: Duration) -> anyhow::Result<String> {
 }
 
 /// The parsed Sway tree, or `None` on IPC/JSON failure.
-pub async fn get_tree() -> Option<Value> {
+async fn get_tree() -> Option<Value> {
     let raw = match swaymsg(&["-t", "get_tree"], cmd::DEFAULT_TIMEOUT).await {
         Ok(raw) => raw,
         Err(err) => {
@@ -145,7 +152,7 @@ pub async fn get_tree() -> Option<Value> {
 }
 
 /// Send a graceful close request to one Sway view by container id.
-pub async fn kill_view(con_id: i64) -> anyhow::Result<()> {
+async fn kill_view(con_id: i64) -> anyhow::Result<()> {
     swaymsg(
         &[&format!("[con_id={con_id}]"), "kill"],
         cmd::DEFAULT_TIMEOUT,
@@ -159,7 +166,7 @@ pub async fn kill_view(con_id: i64) -> anyhow::Result<()> {
 /// Workspaces, outputs and the scratchpad have no pid, and layer-shell
 /// clients (mako) are not part of the regular tree at all, so walking this
 /// way never reaches the desktop's own infrastructure.
-pub fn iter_views(tree: &Value) -> Vec<&Value> {
+fn iter_views(tree: &Value) -> Vec<&Value> {
     let mut out = Vec::new();
     collect(tree, &mut out);
     out
@@ -183,21 +190,57 @@ fn collect<'a>(node: &'a Value, out: &mut Vec<&'a Value>) {
 }
 
 /// The X11 window class of a view, for the clients that have no `app_id`.
-pub fn window_class(node: &Value) -> Option<&str> {
+fn window_class(node: &Value) -> Option<&str> {
     node.get("window_properties")
         .and_then(|props| props.get("class"))
         .and_then(Value::as_str)
 }
 
-/// The label the idle watchdog logs for a view: `app_id`, else the window
-/// title, else the X11 class.
-pub fn view_label(node: &Value) -> String {
-    node.get("app_id")
-        .and_then(Value::as_str)
-        .or_else(|| node.get("name").and_then(Value::as_str))
-        .or_else(|| window_class(node))
-        .unwrap_or("?")
-        .to_string()
+/// Fold one tree node into the neutral shape, or `None` for a node without a
+/// container id — nothing upstream could address it.
+fn window_info(node: &Value) -> Option<WindowInfo> {
+    let con_id = node.get("id").and_then(Value::as_i64)?;
+    Some(WindowInfo {
+        id: WindowId::new(con_id, format!("con_id={con_id}")),
+        // `app_id` for Wayland-native clients, else the X11 class for
+        // XWayland ones.
+        app: node
+            .get("app_id")
+            .and_then(Value::as_str)
+            .or_else(|| window_class(node))
+            .unwrap_or("?")
+            .to_string(),
+        title: node
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        pid: node.get("pid").and_then(Value::as_i64).unwrap_or_default(),
+        focused: node
+            .get("focused")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
+/// The [`WindowManager`] the host selector hands out on Linux.
+pub struct Sway;
+
+#[async_trait]
+impl WindowManager for Sway {
+    async fn windows(&self) -> Result<Vec<WindowInfo>> {
+        let tree = get_tree()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("swaymsg get_tree failed (see server logs)"))?;
+        Ok(iter_views(&tree)
+            .into_iter()
+            .filter_map(window_info)
+            .collect())
+    }
+
+    async fn close(&self, window: &WindowId) -> Result<()> {
+        kill_view(*window.payload::<i64>()?).await
+    }
 }
 
 #[cfg(test)]
@@ -217,7 +260,8 @@ mod tests {
         let tree = json!({
             "id": 1, "name": "root", "nodes": [
                 {"id": 2, "name": "workspace", "nodes": [
-                    {"id": 3, "pid": 111, "app_id": "firefox", "name": "Mozilla"},
+                    {"id": 3, "pid": 111, "app_id": "firefox", "name": "Mozilla",
+                     "focused": true},
                 ], "floating_nodes": [
                     {"id": 4, "pid": 222, "name": "Dialog",
                      "window_properties": {"class": "Xdialog"}},
@@ -225,10 +269,23 @@ mod tests {
             ],
         });
 
-        let views = iter_views(&tree);
+        let views: Vec<_> = iter_views(&tree)
+            .into_iter()
+            .filter_map(window_info)
+            .collect();
         assert_eq!(views.len(), 2, "only nodes carrying a pid are views");
-        assert_eq!(view_label(views[0]), "firefox");
-        assert_eq!(view_label(views[1]), "Dialog");
+
+        let wayland = &views[0];
+        assert_eq!(wayland.app, "firefox", "Wayland clients go by app_id");
+        assert_eq!(wayland.title, "Mozilla");
+        assert_eq!(wayland.pid, 111);
+        assert!(wayland.focused);
+        assert_eq!(*wayland.id.payload::<i64>().unwrap(), 3);
+
+        let xwayland = &views[1];
+        assert_eq!(xwayland.app, "Xdialog", "X11 clients fall back to class");
+        assert_eq!(xwayland.title, "Dialog");
+        assert!(!xwayland.focused);
     }
 
     #[test]

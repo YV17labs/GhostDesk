@@ -14,7 +14,7 @@ repository = "https://github.com/YV17labs/ghostdesk"
 # The framework. `mcp` pulls the HTTP transport the endpoint self-mounts on
 # plus the guard surface that gates it; `schedule` is what makes the idle
 # watchdog a decorated method instead of a hand-rolled task.
-nest-rs = { version = "2.0", features = ["mcp", "schedule"] }
+nest-rs = { version = "2.1", features = ["mcp", "schedule"] }
 
 # `rmcp`'s `#[tool_router]` / `#[tool_handler]` expand to bare `rmcp::` paths.
 # They are relative, so `use nest_rs::mcp::rmcp;` resolves them at the exact
@@ -41,6 +41,38 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 # `cc`, so there is no system package to install in the runtime image.
 webp = "0.3"
 
+# macOS. The desktop is driven through the C/Objective-C frameworks directly —
+# Quartz Event Services for input, Accessibility for windows — so there is no
+# Swift helper process and no second language in the build. Each crate is
+# feature-gated down to the handful of headers actually bound; the default
+# would compile the whole framework surface.
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "CFBase",
+    "CFArray",
+    "CFDictionary",
+    "CFNumber",
+    "CFString",
+    "CFCGTypes",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = [
+    "std",
+    "libc",
+    "CGError",
+    "CGEvent",
+    "CGEventTypes",
+    "CGEventSource",
+    "CGRemoteOperation",
+    "CGDirectDisplay",
+    "CGWindow",
+] }
+objc2-application-services = { version = "0.3", default-features = false, features = [
+    "std",
+    "libc",
+    "HIServices",
+    "AXError",
+    "AXUIElement",
+] }
 # `memfd_create` for the XKB keymap fd handed to the virtual keyboard, and
 # `kill(pid, 0)` for the app_status liveness probe.
 rustix = { version = "1.1", features = ["fs", "process"] }

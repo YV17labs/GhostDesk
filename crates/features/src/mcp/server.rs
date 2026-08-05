@@ -29,7 +29,7 @@ use platform::coords;
 
 use super::dto::*;
 use super::icons::icons;
-use super::instructions::INSTRUCTIONS;
+use super::instructions::instructions;
 use crate::apps::{AppStatus, AppsService, Launched, RunningApp};
 use crate::clipboard::ClipboardService;
 use crate::input::{Feedback, InputService};
@@ -235,8 +235,10 @@ impl GhostdeskMcp {
             Unicode, newlines and tabs. Layout-independent — a French AZERTY \
             host produces the same output as US QWERTY.\n\n\
             For more than a sentence or two, prefer clipboard_set(text) plus \
-            key_press(\"ctrl+v\"): it is instant, immune to autocomplete and \
-            autocorrect, and does not race with the app's own key handlers.\n\n\
+            the paste shortcut: it is instant, immune to autocomplete and \
+            autocorrect, and does not race with the app's own key handlers. \
+            The server instructions name the modifier this desktop uses — it \
+            is not the same on every OS.\n\n\
             A screen_changed of false almost always means the field did not \
             have focus. Click into it first and retry.",
         annotations(destructive_hint = true),
@@ -256,7 +258,10 @@ impl GhostdeskMcp {
     #[tool(
         description = "Press a key or a chord (modifiers plus key), using + as \
             separator.\n\n\
-            Modifier tokens: ctrl/control, alt, shift, super/meta/win/cmd. \
+            Modifier tokens: ctrl/control, alt/option, shift, \
+            super/meta/win/cmd. Which of them carries the standard shortcuts \
+            differs by OS — the server instructions say which, and sending \
+            the wrong one types a stray character instead of failing.\n\n\
             Non-printable tokens: return/enter, escape/esc, backspace, delete, \
             tab, space, home/end, pageup/pagedown, left/right/up/down, \
             f1..f12.\n\n\
@@ -280,7 +285,7 @@ impl GhostdeskMcp {
 
     #[tool(
         description = "Return the catalogue of installed GUI applications, \
-            read from .desktop entries.\n\n\
+            as this desktop registers them.\n\n\
             This catalogue is the strict whitelist — app_launch refuses any \
             executable not in it. Call this the first time a task names an \
             application, and again after installing software during the \
@@ -300,9 +305,8 @@ impl GhostdeskMcp {
             desktop — one entry per real client window. Workspaces, outputs \
             and the bar are not included.\n\n\
             Call this before app_launch(): if the app is already in the list, \
-            switch to it (key_press(\"alt+tab\") or click its tab in the bottom \
-            bar) instead of launching a second instance and doubling memory \
-            use.",
+            switch to its window instead of launching a second instance and \
+            doubling memory use.",
         annotations(read_only_hint = true),
         icons = icons()
     )]
@@ -379,8 +383,8 @@ impl GhostdeskMcp {
 
     #[tool(
         description = "Write text to the system clipboard.\n\n\
-            The canonical pattern is clipboard_set(text) followed by \
-            key_press(\"ctrl+v\") in the target app — the fastest and most \
+            The canonical pattern is clipboard_set(text) followed by the \
+            paste shortcut in the target app — the fastest and most \
             reliable way to place more than a sentence or two into any \
             editable field. Bypasses autocomplete and autocorrect, and does \
             not race with the app's own key handlers the way key_type can.",
@@ -421,13 +425,13 @@ impl ServerHandler for GhostdeskMcp {
                 .enable_resources()
                 .build(),
         )
-        .with_instructions(INSTRUCTIONS)
+        .with_instructions(instructions(&self.input.conventions()))
         .with_server_info(
             // Not `from_build_env()`: its `env!` expands inside rmcp, so it
             // would announce the SDK's name and version instead of ours.
             Implementation::new("ghostdesk", env!("CARGO_PKG_VERSION"))
                 .with_title("GhostDesk")
-                .with_description("MCP server to control a virtual Linux desktop")
+                .with_description("MCP server to control a virtual desktop")
                 .with_icons(icons()),
         )
     }

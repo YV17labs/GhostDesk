@@ -5,12 +5,42 @@
 //! system prompt at session init. This is the single canonical source of
 //! truth: tool descriptions cover per-tool specifics, and this document
 //! covers the cross-tool doctrine a description cannot express.
+//!
+//! Built at runtime rather than declared as a constant, because one part of
+//! the brief is not the same on every desktop. A tool description is a
+//! compile-time literal and cannot say "cmd on macOS, ctrl on Linux"; this
+//! document can, and so it is where every shortcut the agent is taught
+//! lives. `Conventions` is what the backend states and this renders.
 
-pub const INSTRUCTIONS: &str = r#"
-You control a virtual Linux desktop through screen capture, mouse, and
+use platform::input::Conventions;
+
+/// Render the session brief for the desktop actually running.
+pub fn instructions(conventions: &Conventions) -> String {
+    let Conventions {
+        desktop,
+        primary_modifier,
+    } = conventions;
+    let paste = conventions.shortcut("v");
+    let copy = conventions.shortcut("c");
+
+    format!(
+        r#"
+You control a {desktop} desktop through screen capture, mouse, and
 keyboard. You cannot guess — you must see. Each tool's description covers
 its own parameters and caveats; the document below is the cross-tool
 doctrine a description cannot express.
+
+## The shortcuts on THIS desktop
+
+This desktop puts its standard shortcuts on **{primary_modifier}**. Copy is
+`{copy}`, paste is `{paste}`, and the same modifier carries save, quit,
+select-all and the rest.
+
+Use these spellings literally in `key_press()`. A shortcut you remember
+from another operating system will be delivered exactly as written — an
+agent that sends `ctrl+c` where this desktop wants `{copy}` does not copy
+anything, it types a control character into whatever had focus, and the
+only sign of it is a `screen_changed` you will misread as success.
 
 ## The non-negotiable rule: SEE → ACT → SEE
 
@@ -36,9 +66,10 @@ only string `app_launch()` will accept. Re-call it after installing
 software during the session.
 
 Know what's already open. Call `app_running()` before `app_launch()`:
-if the target app is already in the list, switch to its window
-(`key_press("alt+tab")` or click its tab in the bottom bar) instead
-of starting a second instance.
+if the target app is already in the list, switch to its window by
+clicking it instead of starting a second instance. Window-cycling
+chords vary by desktop and may not be bound at all; a click always
+works.
 
 Know what's on screen. Coordinates in any mouse call are valid only
 against the latest `screen_shot()`. Any UI change since that capture
@@ -53,7 +84,7 @@ a shortcut exists for the action you want, use it. Fall back to
 ## Two paths for text entry
 
 `key_type()` is for short, focused strings. For anything longer than a
-sentence, prefer `clipboard_set(text)` followed by the paste shortcut:
+sentence, prefer `clipboard_set(text)` followed by `key_press("{paste}")`:
 it's instant, immune to autocomplete and autocorrect, and does not
 race with the app's own key handlers.
 
@@ -68,7 +99,7 @@ field traps Tab or rejects pasted content.
 
 ## Reading the feedback every action returns
 
-Input tools return `{screen_changed, reaction_time_ms}`.
+Input tools return `{{screen_changed, reaction_time_ms}}`.
 
 `screen_changed: true` means the screen visibly changed within 2 s —
 the input landed somewhere. It does NOT prove the app did the right
@@ -110,4 +141,6 @@ Before you declare a task done, take one last `screen_shot()` and
 verify the end state against the original request. This self-check
 catches the silent failures the action loop missed — the kind where
 every keystroke succeeded but the final state is wrong.
-"#;
+"#
+    )
+}

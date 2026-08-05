@@ -15,7 +15,7 @@ use features::mcp::GhostdeskMcpModule;
 use features::session::SessionModule;
 
 /// Loopback by default, per the MCP transports spec. The container
-/// entrypoint exports `NESTRS_HTTP__HOST=0.0.0.0` so the endpoint is
+/// entrypoint exports `GHOSTDESK_HTTP__HOST=0.0.0.0` so the endpoint is
 /// reachable outside the container; a pin is a base, and the real
 /// environment overlays it field by field.
 #[module(imports = [

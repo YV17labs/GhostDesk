@@ -1,54 +1,27 @@
-//! Clipboard access through `wl-copy` / `wl-paste`.
+//! Clipboard access, delegated to the host's [`Clipboard`] backend.
 
-use std::process::Stdio;
-use std::time::Duration;
+use std::sync::Arc;
 
 use nest_rs::core::injectable;
-use platform::cmd;
-use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
+use platform::clipboard::Clipboard;
 
 #[injectable]
-#[derive(Default)]
-pub struct ClipboardService;
+pub struct ClipboardService {
+    #[inject]
+    backend: Arc<dyn Clipboard>,
+}
 
 impl ClipboardService {
-    /// The current clipboard as text.
-    ///
-    /// Empty when the clipboard is empty or holds non-text content —
-    /// `wl-paste` exits non-zero for both, and neither is an error worth
-    /// spending an agent turn on.
+    /// The current clipboard as text — empty when the clipboard is empty or
+    /// holds non-text content, neither of which is worth an agent turn.
     pub async fn get(&self) -> String {
-        cmd::run(&["wl-paste", "--no-newline"], cmd::DEFAULT_TIMEOUT)
-            .await
-            .unwrap_or_default()
+        self.backend.get().await
     }
 
-    /// Write text to the clipboard.
+    /// Write text to the clipboard. The message is agent-facing prose, so it
+    /// belongs to this layer, not to the backend.
     pub async fn set(&self, text: &str) -> anyhow::Result<String> {
-        // `wl-copy` reads stdin, then forks a daemon that keeps serving the
-        // content to other apps. We wait for the *parent* to exit — that
-        // happens right after the fork and means the clipboard is set. We
-        // must not wait on stdout/stderr closing: those pipes are inherited
-        // by the daemon child and would never close.
-        let mut child = Command::new("wl-copy")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
-
-        let mut stdin = child
-            .stdin
-            .take()
-            .ok_or_else(|| anyhow::anyhow!("wl-copy gave us no stdin"))?;
-        stdin.write_all(text.as_bytes()).await?;
-        stdin.shutdown().await?;
-        drop(stdin);
-
-        tokio::time::timeout(Duration::from_secs(5), child.wait())
-            .await
-            .map_err(|_| anyhow::anyhow!("wl-copy did not exit within 5s"))??;
-
+        self.backend.set(text).await?;
         Ok(format!(
             "Clipboard set ({} characters)",
             text.chars().count()

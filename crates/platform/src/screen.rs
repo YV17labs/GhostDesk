@@ -1,14 +1,13 @@
 //! Screen capture and frame comparison.
 //!
-//! `grim` is the only thing that talks to the compositor's screencopy
-//! protocol; everything else here decodes its PNG, compares two frames, or
-//! re-encodes one for the wire.
+//! [`ScreenBackend`] is the one seam that talks to the OS; everything else
+//! here decodes a captured PNG, compares two frames, or re-encodes one for
+//! the wire — pure pixel work, identical on every OS.
 
-use std::time::Duration;
-
+use anyhow::Result;
+use async_trait::async_trait;
 use image::{ImageFormat as ImageIoFormat, RgbImage};
 
-use crate::cmd::{self, CmdError};
 use crate::coords::{screen_height, screen_width};
 
 /// Max ratio of changed area below which two consecutive captures count as
@@ -20,7 +19,7 @@ pub const STABILITY_MAX_DIFF_RATIO: f64 = 0.005;
 pub const DEFAULT_WEBP_QUALITY: u8 = 50;
 
 /// Capture scale used while polling for post-action feedback. Smaller is a
-/// faster grim encode *and* a natural downsample that filters out
+/// cheaper capture *and* a natural downsample that filters out
 /// single-character changes.
 pub const FEEDBACK_SCALE: f32 = 0.25;
 
@@ -50,8 +49,8 @@ pub struct Region {
 }
 
 impl Region {
-    /// Clamp to the screen bounds so grim never sees a negative offset or an
-    /// extent running past the edge.
+    /// Clamp to the screen bounds so a backend never sees a negative offset
+    /// or an extent running past the edge.
     pub fn clamped(self) -> Self {
         let x = self.x.clamp(0, screen_width());
         let y = self.y.clamp(0, screen_height());
@@ -64,25 +63,29 @@ impl Region {
     }
 }
 
-/// Single grim invocation — raw PNG bytes.
-///
-/// grim writes to stdout when the output path is `-`. Region geometry follows
-/// the standard Wayland `X,Y WxH` format. `scale` below 1.0 downsamples the
-/// encoded image, which is what makes comparison-only captures cheap.
-pub async fn capture_png(region: Option<Region>, scale: Option<f32>) -> Result<Vec<u8>, CmdError> {
-    let geometry = region.map(|r| format!("{},{} {}x{}", r.x, r.y, r.width, r.height));
-    let scale = scale.map(|s| s.to_string());
+/// Screen capture, one implementation per OS. Always answers PNG bytes —
+/// the neutral pipeline below (decode, diff, re-encode) is built around
+/// exactly one wire-in format.
+#[async_trait]
+pub trait ScreenBackend: Send + Sync {
+    /// Capture the screen (or `region` of it) as raw PNG bytes.
+    ///
+    /// `scale` below 1.0 downsamples the capture, which is what makes
+    /// comparison-only captures cheap; `None` means native size. `region` is
+    /// already clamped to the screen by the caller.
+    async fn capture_png(&self, region: Option<Region>, scale: Option<f32>) -> Result<Vec<u8>>;
 
-    let mut argv: Vec<&str> = vec!["grim", "-t", "png"];
-    if let Some(geometry) = geometry.as_deref() {
-        argv.extend_from_slice(&["-g", geometry]);
-    }
-    if let Some(scale) = scale.as_deref() {
-        argv.extend_from_slice(&["-s", scale]);
-    }
-    argv.push("-");
-
-    cmd::run_bytes(&argv, Duration::from_secs(10)).await
+    /// The display's geometry in captured pixels, when the OS owns it.
+    ///
+    /// `None` leaves the operator's configured size in charge: the Linux
+    /// container drives a virtual display whose extent is a deployment
+    /// decision, and no API can second-guess that. A backend attached to real
+    /// hardware answers `Some` — the agent's coordinates have to match the
+    /// pixels it is actually shown, and that is not negotiable by config.
+    ///
+    /// Required rather than defaulted: a new backend that forgot it would
+    /// silently inherit an answer about hardware it does not own.
+    fn geometry(&self) -> Option<(i64, i64)>;
 }
 
 /// Decode PNG bytes to RGB.
@@ -165,8 +168,9 @@ pub fn differ_rgb(before: &RgbImage, after: &RgbImage) -> bool {
 
 /// Encode a decoded frame as lossy WebP.
 ///
-/// `quality` is 1-100. PNG needs no counterpart: grim already hands us PNG,
-/// and re-encoding a lossless format to itself is pure waste.
+/// `quality` is 1-100. PNG needs no counterpart on the outbound path: a
+/// backend already hands us PNG, and re-encoding a lossless format to itself
+/// is pure waste.
 pub fn encode_webp(image: &RgbImage, quality: u8) -> Vec<u8> {
     let (width, height) = image.dimensions();
     webp::Encoder::from_rgb(image.as_raw(), width, height)

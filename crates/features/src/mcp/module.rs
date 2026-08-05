@@ -2,12 +2,12 @@ use nest_rs::config::ConfigModule;
 use nest_rs::core::module;
 use nest_rs::mcp::{McpOperationGuard, McpToolContext};
 
+use super::config::AuthConfig;
 use super::context::GhostdeskToolContext;
 use super::guard::{McpAuthGuard, McpSecurityPosture};
 use super::server::GhostdeskMcp;
 use crate::apps::AppsModule;
 use crate::clipboard::ClipboardModule;
-use crate::config::GhostdeskConfig;
 use crate::input::InputModule;
 use crate::screen::ScreenModule;
 use crate::session::SessionModule;
@@ -18,7 +18,7 @@ use crate::session::SessionModule;
 /// clock never reach a tool body.
 #[module(
     imports = [
-        ConfigModule::for_feature::<GhostdeskConfig>(),
+        ConfigModule::for_feature::<AuthConfig>(),
         ScreenModule,
         InputModule,
         AppsModule,

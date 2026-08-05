@@ -1,7 +1,6 @@
 //! Input domain — mouse and keyboard control.
 
 pub mod feedback;
-pub mod keys;
 mod module;
 mod service;
 

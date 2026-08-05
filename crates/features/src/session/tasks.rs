@@ -18,7 +18,7 @@ impl IdleTasks {
         match self.idle.timeout_secs() {
             0 => tracing::info!(
                 target: "ghostdesk::idle",
-                "watchdog disabled (NESTRS_GHOSTDESK__IDLE_TIMEOUT_SECS=0)",
+                "watchdog disabled (GHOSTDESK_SESSION__IDLE_TIMEOUT_SECS=0)",
             ),
             timeout => tracing::info!(
                 target: "ghostdesk::idle",

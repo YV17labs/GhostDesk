@@ -3,12 +3,12 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use nest_rs::core::injectable;
-use platform::desktop::{self, DesktopApp};
-use platform::sway;
+use platform::desktop::{AppCatalog, DesktopApp};
+use platform::window::WindowManager;
 use tokio::process::Command;
 
 /// Where launched apps' stdout and stderr land.
@@ -19,14 +19,24 @@ const LOG_DIR: &str = "/tmp/ghostdesk";
 /// `.desktop` `Exec=` basename like `gnome-chess` resolve.
 const EXTRA_PATH: &str = "/usr/games:/usr/local/games";
 
-/// Server-only secrets that must never reach a launched GUI app.
+/// The server's own environment namespace, swept wholesale before a GUI app
+/// is spawned.
 ///
-/// The MCP server needs them; a browser the agent spawns does not — and any
-/// code execution inside that browser would otherwise inherit them. The
-/// `NESTRS_` prefix is swept wholesale because it carries the bearer token,
-/// inline TLS key material and every other transport secret.
-const SCRUBBED_PREFIXES: &[&str] = &["NESTRS_", "GHOSTDESK_TLS_"];
-const SCRUBBED_KEYS: &[&str] = &["GHOSTDESK_AUTH_TOKEN", "GHOSTDESK_VNC_PASSWORD"];
+/// The MCP server needs these; a browser the agent spawns does not — and any
+/// code execution inside that browser would otherwise inherit them. Under
+/// `NESTRS_ENV_PREFIX=GHOSTDESK` this is a single prefix rather than a list of
+/// names to keep in step with the config structs: everything the server reads
+/// is under it, so nothing new can be added on one side and forgotten here.
+///
+/// A literal rather than `EnvPrefix::current()`: the container's own knobs
+/// (`GHOSTDESK_VNC_PASSWORD`) carry this spelling without passing through the
+/// framework at all, so following the framework's prefix would drop them the
+/// moment the two diverged — which the entrypoint refuses to let happen.
+///
+/// Sweeping non-secrets (`GHOSTDESK_SCREEN__WIDTH`) along with the bearer
+/// token is deliberate. A launched `firefox` has no use for the server's
+/// settings, and a prefix rule that admits exceptions stops being a rule.
+const SCRUBBED_PREFIX: &str = "GHOSTDESK_";
 
 /// Trailing log lines returned by default.
 pub const DEFAULT_TAIL: usize = 50;
@@ -34,7 +44,7 @@ pub const DEFAULT_TAIL: usize = 50;
 /// One open window, as the agent sees it.
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 pub struct RunningApp {
-    /// `app_id` for Wayland-native clients, else the X11 window class.
+    /// Stable application identity, as this desktop reports it.
     pub app: String,
     pub title: String,
     pub pid: i64,
@@ -59,8 +69,11 @@ pub struct AppStatus {
 }
 
 #[injectable]
-#[derive(Default)]
 pub struct AppsService {
+    #[inject]
+    windows: Arc<dyn WindowManager>,
+    #[inject]
+    catalog: Arc<dyn AppCatalog>,
     /// PIDs launched by this session. `app_status` refuses anything else, so
     /// the tool cannot be turned into a general-purpose process prober.
     launched: Mutex<HashSet<u32>>,
@@ -69,34 +82,21 @@ pub struct AppsService {
 impl AppsService {
     /// The catalogue of installed GUI applications.
     pub fn list(&self) -> Vec<DesktopApp> {
-        desktop::desktop_apps()
+        self.catalog.apps()
     }
 
     /// The application windows currently open on the desktop.
     pub async fn running(&self) -> anyhow::Result<Vec<RunningApp>> {
-        let tree = sway::get_tree()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("swaymsg get_tree failed (see server logs)"))?;
-
-        Ok(sway::iter_views(&tree)
+        Ok(self
+            .windows
+            .windows()
+            .await?
             .into_iter()
-            .map(|node| RunningApp {
-                app: node
-                    .get("app_id")
-                    .and_then(|v| v.as_str())
-                    .or_else(|| sway::window_class(node))
-                    .unwrap_or("?")
-                    .to_string(),
-                title: node
-                    .get("name")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or_default()
-                    .to_string(),
-                pid: node.get("pid").and_then(|v| v.as_i64()).unwrap_or_default(),
-                focused: node
-                    .get("focused")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false),
+            .map(|window| RunningApp {
+                app: window.app,
+                title: window.title,
+                pid: window.pid,
+                focused: window.focused,
             })
             .collect())
     }
@@ -127,11 +127,13 @@ impl AppsService {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
 
-        if !desktop::known_executables().contains(&name) {
+        // One call is both the whitelist check and the lookup, so what is
+        // admitted and what is spawned can never be two different things.
+        let Some(program) = self.catalog.resolve(&name) else {
             anyhow::bail!(
                 "{name:?} is not a known GUI app. Call app_list() to see what is available."
             );
-        }
+        };
 
         std::fs::create_dir_all(LOG_DIR)?;
 
@@ -148,7 +150,7 @@ impl AppsService {
         let log = std::fs::File::create(&staging)?;
         let log_err = log.try_clone()?;
 
-        let mut command_builder = Command::new(executable);
+        let mut command_builder = Command::new(&program);
         command_builder
             .stdin(Stdio::null())
             .stdout(Stdio::from(log))
@@ -163,7 +165,7 @@ impl AppsService {
             Ok(child) => child,
             Err(err) => {
                 std::fs::remove_file(&staging).ok();
-                anyhow::bail!("Command not found: {executable} ({err})");
+                anyhow::bail!("Command not found: {} ({err})", program.display());
             }
         };
 
@@ -227,12 +229,7 @@ impl AppsService {
 /// extended for Debian's game basenames.
 fn launch_env() -> Vec<(String, String)> {
     std::env::vars()
-        .filter(|(key, _)| {
-            !SCRUBBED_KEYS.contains(&key.as_str())
-                && !SCRUBBED_PREFIXES
-                    .iter()
-                    .any(|prefix| key.starts_with(prefix))
-        })
+        .filter(|(key, _)| !key.starts_with(SCRUBBED_PREFIX))
         .map(|(key, value)| {
             if key == "PATH" {
                 (key, format!("{value}:{EXTRA_PATH}"))
@@ -274,23 +271,37 @@ fn tail(path: &Path, lines: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::testing::{EmptyCatalog, NoWindows};
+
+    fn service() -> AppsService {
+        AppsService {
+            windows: Arc::new(NoWindows),
+            catalog: Arc::new(EmptyCatalog),
+            launched: Mutex::default(),
+        }
+    }
 
     #[test]
     fn server_secrets_never_reach_a_launched_app() {
         unsafe {
-            std::env::set_var("NESTRS_GHOSTDESK__AUTH_TOKEN", "super-secret");
+            std::env::set_var("GHOSTDESK_AUTH__TOKEN", "super-secret");
             std::env::set_var("GHOSTDESK_VNC_PASSWORD", "hunter2");
-            std::env::set_var("GHOSTDESK_SCREEN_WIDTH", "1280");
+            std::env::set_var("GHOSTDESK_SCREEN__WIDTH", "1280");
+            std::env::set_var("XDG_RUNTIME_DIR", "/run/user/1000");
         }
 
         let env = launch_env();
         let keys: Vec<&str> = env.iter().map(|(k, _)| k.as_str()).collect();
 
-        assert!(!keys.contains(&"NESTRS_GHOSTDESK__AUTH_TOKEN"));
+        assert!(!keys.contains(&"GHOSTDESK_AUTH__TOKEN"));
         assert!(!keys.contains(&"GHOSTDESK_VNC_PASSWORD"));
         assert!(
-            keys.contains(&"GHOSTDESK_SCREEN_WIDTH"),
-            "non-secret GhostDesk vars still pass through",
+            !keys.contains(&"GHOSTDESK_SCREEN__WIDTH"),
+            "the whole GHOSTDESK_ namespace goes, not just the secrets in it",
+        );
+        assert!(
+            keys.contains(&"XDG_RUNTIME_DIR"),
+            "the Wayland plumbing a GUI app actually needs survives",
         );
     }
 
@@ -308,8 +319,7 @@ mod tests {
 
     #[tokio::test]
     async fn arguments_are_refused_before_anything_is_spawned() {
-        let service = AppsService::default();
-        let err = service
+        let err = service()
             .launch("firefox --new-window https://example.com")
             .await
             .unwrap_err()
@@ -319,8 +329,7 @@ mod tests {
 
     #[tokio::test]
     async fn an_unknown_executable_is_refused() {
-        let service = AppsService::default();
-        let err = service
+        let err = service()
             .launch("definitely-not-installed")
             .await
             .unwrap_err()
@@ -330,8 +339,7 @@ mod tests {
 
     #[test]
     fn status_refuses_a_pid_this_session_did_not_launch() {
-        let service = AppsService::default();
-        let err = service.status(1, DEFAULT_TAIL).unwrap_err().to_string();
+        let err = service().status(1, DEFAULT_TAIL).unwrap_err().to_string();
         assert!(
             err.contains("was not launched by this session"),
             "got: {err}"

@@ -4,10 +4,11 @@
 //! false` is the single most useful signal the agent gets: it means the input
 //! landed nowhere, and the correct next call is a screenshot, not a retry.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use nest_rs::core::injectable;
-use platform::screen::{self, FEEDBACK_SCALE};
+use platform::screen::{self, FEEDBACK_SCALE, ScreenBackend};
 
 pub const POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const POLL_TIMEOUT: Duration = Duration::from_secs(2);
@@ -24,16 +25,19 @@ pub struct Feedback {
 }
 
 #[injectable]
-#[derive(Default)]
-pub struct FeedbackService;
+pub struct FeedbackService {
+    #[inject]
+    screen: Arc<dyn ScreenBackend>,
+}
 
 impl FeedbackService {
     /// Capture the full screen at reduced resolution, before an action.
     ///
-    /// The downsample is both a faster grim encode and a filter: at a quarter
-    /// scale a blinking caret or a ticking clock digit stops registering.
+    /// The downsample is both a faster capture encode and a filter: at a
+    /// quarter scale a blinking caret or a ticking clock digit stops
+    /// registering.
     pub async fn capture_before(&self) -> anyhow::Result<Vec<u8>> {
-        Ok(screen::capture_png(None, Some(FEEDBACK_SCALE)).await?)
+        self.screen.capture_png(None, Some(FEEDBACK_SCALE)).await
     }
 
     /// Poll until the screen differs from `before`, or the timeout expires.
@@ -50,7 +54,7 @@ impl FeedbackService {
         let mut screen_changed = false;
         while start.elapsed() < POLL_TIMEOUT {
             tokio::time::sleep(POLL_INTERVAL).await;
-            let now = screen::capture_png(None, Some(FEEDBACK_SCALE)).await?;
+            let now = self.screen.capture_png(None, Some(FEEDBACK_SCALE)).await?;
             if screen::decode_rgb(&now).is_ok_and(|now| screen::differ_rgb(&baseline, &now)) {
                 screen_changed = true;
                 break;

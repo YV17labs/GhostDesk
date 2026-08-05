@@ -5,12 +5,18 @@
 //! The MCP spec namespaces tools *per endpoint*, and every shipped client
 //! config points at one URL, so GhostDesk mounts exactly one `#[mcp]` host.
 //! It plays the part a `#[controller]` plays over HTTP: thin, injecting the
-//! four domain services, translating between wire DTOs and domain calls.
+//! domain services, translating between wire DTOs and domain calls.
+//!
+//! No domain here names an OS. Each service injects one of `platform`'s
+//! backend contracts, and [`host`] is what binds them into the container.
 
 pub mod apps;
 pub mod clipboard;
-pub mod config;
+pub mod host;
 pub mod input;
 pub mod mcp;
 pub mod screen;
 pub mod session;
+
+#[cfg(test)]
+mod testing;

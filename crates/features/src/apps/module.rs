@@ -1,6 +1,10 @@
 use nest_rs::core::module;
 
 use super::service::AppsService;
+use crate::host::HostModule;
 
-#[module(providers = [AppsService])]
+#[module(
+    imports = [HostModule],
+    providers = [AppsService],
+)]
 pub struct AppsModule;
