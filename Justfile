@@ -1,3 +1,8 @@
+# Every framework variable carries this prefix (GHOSTDESK_ENV, GHOSTDESK_HTTP__PORT, …).
+# It must be set on the process, so it lives here and in your deployment —
+# never in `.env`, which is read too late to have chosen itself.
+export NESTRS_ENV_PREFIX := "GHOSTDESK"
+
 _default:
     @just --list
 

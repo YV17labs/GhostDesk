@@ -171,7 +171,7 @@ mkdir -p tls
 mkcert -cert-file tls/server.crt -key-file tls/server.key localhost 127.0.0.1 ::1
 
 # Generate the MCP and VNC secrets
-export GHOSTDESK_AUTH_TOKEN=$(openssl rand -hex 32)
+export GHOSTDESK_AUTH__TOKEN=$(openssl rand -hex 32)
 export GHOSTDESK_VNC_PASSWORD=$(openssl rand -hex 16)
 ```
 
@@ -188,13 +188,13 @@ docker run -d --name ghostdesk-my-agent \
   -v ghostdesk-my-agent-home:/home/agent \
   -v "$PWD/tls/server.crt:/etc/ghostdesk/tls/server.crt:ro" \
   -v "$PWD/tls/server.key:/etc/ghostdesk/tls/server.key:ro" \
-  -e GHOSTDESK_AUTH_TOKEN \
+  -e GHOSTDESK_AUTH__TOKEN \
   -e GHOSTDESK_VNC_PASSWORD \
   -e TZ=America/New_York \
   -e LANG=en_US.UTF-8 \
   ghcr.io/yv17labs/ghostdesk:latest
 
-echo "MCP token:    $GHOSTDESK_AUTH_TOKEN"
+echo "MCP token:    $GHOSTDESK_AUTH__TOKEN"
 echo "VNC password: $GHOSTDESK_VNC_PASSWORD"
 ```
 
@@ -208,7 +208,7 @@ Once the container is up, update your MCP client config — same shape as the de
       "type": "http",
       "url": "https://localhost:3000/mcp",
       "headers": {
-        "Authorization": "Bearer <paste $GHOSTDESK_AUTH_TOKEN here>"
+        "Authorization": "Bearer <paste $GHOSTDESK_AUTH__TOKEN here>"
       }
     }
   }
@@ -336,7 +336,7 @@ Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each 
 # docker-compose.yml — 3 specialized agents, one command
 #
 # Prerequisites: the TLS cert + key at ./tls and the two secrets
-# (GHOSTDESK_AUTH_TOKEN, GHOSTDESK_VNC_PASSWORD) in your environment or a
+# (GHOSTDESK_AUTH__TOKEN, GHOSTDESK_VNC_PASSWORD) in your environment or a
 # .env file. Generate both exactly as shown in the Secure local run
 # section above. See SECURITY.md for the production secret-handling
 # contract.
@@ -347,7 +347,7 @@ x-ghostdesk-defaults: &ghostdesk-defaults
   cap_add: [SYS_ADMIN]
   shm_size: 2g
   environment:
-    - GHOSTDESK_AUTH_TOKEN
+    - GHOSTDESK_AUTH__TOKEN
     - GHOSTDESK_VNC_PASSWORD
     - TZ=America/New_York
     - LANG=en_US.UTF-8
@@ -428,11 +428,17 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 Every variable GhostDesk reads is namespaced under `GHOSTDESK_*`. Standard POSIX variables (`TZ`, `LANG`) are kept as-is so the existing Unix ecosystem keeps working.
 
+The names come straight from the framework: the image sets `NESTRS_ENV_PREFIX=GHOSTDESK`, so what would be `NESTRS_HTTP__PORT` in a stock NestRS app is `GHOSTDESK_HTTP__PORT` here. There is no second spelling and no translation layer — one name, one place to look it up.
+
+Read them as `GHOSTDESK_<NAMESPACE>__<KEY>`: the double underscore separates the namespace from the setting. `http` and `mcp` are the framework's own namespaces; `screen`, `session` and `auth` are GhostDesk's, one per feature module. A single underscore (`GHOSTDESK_VNC_PASSWORD`) marks a container-level knob the entrypoint consumes itself, never reaching the server.
+
+`NESTRS_ENV_PREFIX` is the one name no prefix can rename, and it has to be on the process before the server starts — a `.env` file is read after it has already chosen which cascade to read. Both images bake it and the `Justfile` exports it, so a container run and a `nestrs run dev` both carry it; a binary you start any other way needs `NESTRS_ENV_PREFIX=GHOSTDESK` in its environment, or every variable below is read under its stock `NESTRS_*` name instead.
+
 ### Secrets (required — container refuses to boot without them)
 
 | Variable | Description |
 |----------|-------------|
-| `GHOSTDESK_AUTH_TOKEN` | Bearer token required on every MCP request. Generate with `openssl rand -hex 32`. |
+| `GHOSTDESK_AUTH__TOKEN` | Bearer token required on every MCP request. Generate with `openssl rand -hex 32`. |
 | `GHOSTDESK_VNC_PASSWORD` | Password for wayvnc (username is `agent` in the prod image). Generate with `openssl rand -hex 16`. |
 
 Both are plain environment variables. Wire them from your secret store (`secretKeyRef` on Kubernetes, Docker secrets / Vault / AWS SM on compose) — see [SECURITY.md](SECURITY.md#secrets-handling--rotation) for the full contract.
@@ -441,24 +447,23 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GHOSTDESK_PORT` | `3000` | MCP server listening port |
-| `GHOSTDESK_HOST` | `127.0.0.1` (standalone) / `0.0.0.0` (container) | Bind address for the MCP endpoint. Defaults to loopback per [MCP transports spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http); the container's entrypoint exports `0.0.0.0` so Docker's port-publishing layer can reach it. |
-| `GHOSTDESK_ALLOWED_ORIGINS` | *(empty)* | Comma-separated list of `Origin` headers accepted from browser clients (e.g. `https://app.example.com,https://localhost:8080`). Non-browser clients (Claude Desktop, SDKs, `curl`) send no `Origin` and are always allowed. Required for any browser-based MCP UI; without it, browser requests are rejected with HTTP 403 to mitigate DNS rebinding (per MCP transports spec). |
-| `GHOSTDESK_ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Comma-separated `Host` header allow-list for the MCP endpoint. A request whose `Host` is not listed gets HTTP 403 — this is what stops a page on an attacker's origin from pointing its own hostname at a locally-running GhostDesk and calling your tools. **A deployment reached under a real hostname must name itself here.** Do not empty the list. |
+| `GHOSTDESK_HTTP__PORT` | `3000` | MCP server listening port |
+| `GHOSTDESK_HTTP__HOST` | `127.0.0.1` (standalone) / `0.0.0.0` (container) | Bind address for the MCP endpoint. Defaults to loopback per [MCP transports spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http); the container's entrypoint exports `0.0.0.0` so Docker's port-publishing layer can reach it. |
+| `GHOSTDESK_HTTP__CORS_ORIGINS` | *(empty)* | Comma-separated list of `Origin` headers accepted from browser clients (e.g. `https://app.example.com,https://localhost:8080`). Non-browser clients (Claude Desktop, SDKs, `curl`) send no `Origin` and are always allowed. Required for any browser-based MCP UI; without it, browser requests are rejected with HTTP 403 to mitigate DNS rebinding (per MCP transports spec). |
+| `GHOSTDESK_MCP__ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Comma-separated `Host` header allow-list for the MCP endpoint. A request whose `Host` is not listed gets HTTP 403 — this is what stops a page on an attacker's origin from pointing its own hostname at a locally-running GhostDesk and calling your tools. **A deployment reached under a real hostname must name itself here.** Do not empty the list. |
 | `GHOSTDESK_TLS_CERT` | `/etc/ghostdesk/tls/server.crt` | Path to the TLS certificate. When the file exists, `websockify` and the MCP server auto-switch to `wss://` / `https://`. See [Security](#security). |
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
-| `GHOSTDESK_SCREEN_WIDTH` | `1280` | Virtual screen width in pixels |
-| `GHOSTDESK_SCREEN_HEIGHT` | `1024` | Virtual screen height in pixels |
-| `GHOSTDESK_IDLE_TIMEOUT` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable. |
+| `GHOSTDESK_SCREEN__WIDTH` | `1280` | Virtual screen width in pixels |
+| `GHOSTDESK_SCREEN__HEIGHT` | `1024` | Virtual screen height in pixels |
+| `GHOSTDESK_SESSION__IDLE_TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 
-Every knob above is also reachable under the framework's own names —
-`NESTRS_HTTP__PORT`, `NESTRS_GHOSTDESK__IDLE_TIMEOUT_SECS`, and so on. The
-container entrypoint maps `GHOSTDESK_*` onto them and defers to anything you
-set directly, so both spellings work and the explicit one wins. A malformed
-value fails the boot naming the variable rather than silently falling back to
-a default.
+`GHOSTDESK_TLS_CERT` / `_KEY` are the exception that proves the rule: the
+entrypoint *probes* those paths to decide the posture, then hands the one it
+found to the server as `GHOSTDESK_HTTP__TLS_CERT_FILE`. Everything else you
+set reaches the server verbatim. A malformed value fails the boot naming the
+variable rather than silently falling back to a default.
 
 ### Pinned values (not configurable)
 
@@ -486,7 +491,7 @@ Almost always a coordinate-space mismatch. Frontier models (Claude, GPT-4o, Gemi
 
 ### The container refuses to start with a secrets error
 
-The prod posture (cert mounted) **requires** both `GHOSTDESK_AUTH_TOKEN` and `GHOSTDESK_VNC_PASSWORD` to be set — GhostDesk refuses to boot without them on purpose, to prevent an unauthenticated prod container. Generate them as shown in [Secure local run](#secure-local-run-tls--auth) and pass them with `-e`. The demo posture (no cert) has no such requirement.
+The prod posture (cert mounted) **requires** both `GHOSTDESK_AUTH__TOKEN` and `GHOSTDESK_VNC_PASSWORD` to be set — GhostDesk refuses to boot without them on purpose, to prevent an unauthenticated prod container. Generate them as shown in [Secure local run](#secure-local-run-tls--auth) and pass them with `-e`. The demo posture (no cert) has no such requirement.
 
 ### noVNC shows a black screen or the desktop renders with graphical glitches
 

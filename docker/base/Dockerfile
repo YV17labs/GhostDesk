@@ -119,6 +119,15 @@ ARG TARGETARCH
 ARG GHOSTDESK_VERSION=dev
 ARG GHOSTDESK_GIT_SHA=unknown
 
+# Every framework variable carries this prefix: the server reads
+# GHOSTDESK_HTTP__PORT where a stock NestRS app reads NESTRS_HTTP__PORT. It is
+# a property of the deployment, so it has to be on the process before the
+# binary starts — a `.env` file is read after the prefix has already chosen
+# which cascade to read. Not overridable here the way a stock image's is:
+# entrypoint.sh hands the server GHOSTDESK_* settings by name, and refuses to
+# boot under a prefix that would leave them unread.
+ENV NESTRS_ENV_PREFIX=GHOSTDESK
+
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/New_York \
     LANG=en_US.UTF-8 \

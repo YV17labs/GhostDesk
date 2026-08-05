@@ -14,7 +14,7 @@ repository = "https://github.com/YV17labs/ghostdesk"
 # The framework. `mcp` pulls the HTTP transport the endpoint self-mounts on
 # plus the guard surface that gates it; `schedule` is what makes the idle
 # watchdog a decorated method instead of a hand-rolled task.
-nest-rs = { version = "2.1", features = ["mcp", "schedule"] }
+nest-rs = { version = "3.0", features = ["mcp", "schedule"] }
 
 # `rmcp`'s `#[tool_router]` / `#[tool_handler]` expand to bare `rmcp::` paths.
 # They are relative, so `use nest_rs::mcp::rmcp;` resolves them at the exact

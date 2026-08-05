@@ -49,7 +49,7 @@ devcontainer ships it pre-installed along with `mold` for fast links.
    ```
    It listens on `http://127.0.0.1:3000/mcp`. The stack's own instance is
    already on that port, so stop it first (`GhostDesk: Stop stack`) or point
-   yours elsewhere with `NESTRS_HTTP__PORT`.
+   yours elsewhere with `GHOSTDESK_HTTP__PORT`.
 
 ## Making Changes
 

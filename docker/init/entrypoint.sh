@@ -23,18 +23,30 @@ export LOGNAME="${GHOSTDESK_USER}"
 export GHOSTDESK_DIR="${GHOSTDESK_DIR:-/opt/ghostdesk}"
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# ---- TLS detection + conditional secrets ----
-# Auth ≡ TLS. Two postures keyed off a mounted cert+key at
-# /etc/ghostdesk/tls/server.{crt,key} (or GHOSTDESK_TLS_CERT/KEY):
-#   - Cert present → prod: TLS + auth. AUTH_TOKEN and VNC_PASSWORD
-#     are mandatory.
-#   - No cert      → dev:  plain + no auth. A static token over
-#     cleartext would be theater, so we unset it if supplied.
 die() {
     echo "entrypoint: FATAL $*" >&2
     exit 1
 }
 
+# ---- Env prefix ----
+# The server reads GHOSTDESK_* only because NESTRS_ENV_PREFIX says so, and the
+# image bakes it (docker/base/Dockerfile, .devcontainer/Dockerfile). This
+# script speaks those names by hand — the cert it discovers is handed over as
+# GHOSTDESK_HTTP__TLS_CERT_FILE, the resolution as GHOSTDESK_SCREEN__WIDTH —
+# so under another prefix every value computed below would land in a variable
+# the server never reads. Including the cert, which is what would silently
+# take the auth gate down with it. One check rather than that.
+[ "${NESTRS_ENV_PREFIX:-}" = "GHOSTDESK" ] || die \
+    "NESTRS_ENV_PREFIX is '${NESTRS_ENV_PREFIX:-unset}', not GHOSTDESK — this \
+image writes GHOSTDESK_* settings the server would not read under another prefix"
+
+# ---- TLS detection + conditional secrets ----
+# Auth ≡ TLS. Two postures keyed off a mounted cert+key at
+# /etc/ghostdesk/tls/server.{crt,key} (or GHOSTDESK_TLS_CERT/KEY):
+#   - Cert present → prod: TLS + auth. AUTH__TOKEN and VNC_PASSWORD
+#     are mandatory.
+#   - No cert      → dev:  plain + no auth. A static token over
+#     cleartext would be theater, so we unset it if supplied.
 TLS_DIR="/etc/ghostdesk/tls"
 TLS_CRT="${GHOSTDESK_TLS_CERT:-${TLS_DIR}/server.crt}"
 TLS_KEY="${GHOSTDESK_TLS_KEY:-${TLS_DIR}/server.key}"
@@ -50,15 +62,15 @@ else
 fi
 
 if [ "${TLS_ENABLED}" = "1" ]; then
-    [ -n "${GHOSTDESK_AUTH_TOKEN:-}" ] \
-        || die "GHOSTDESK_AUTH_TOKEN is required when TLS is enabled"
+    [ -n "${GHOSTDESK_AUTH__TOKEN:-}" ] \
+        || die "GHOSTDESK_AUTH__TOKEN is required when TLS is enabled"
     [ -n "${GHOSTDESK_VNC_PASSWORD:-}" ] \
         || die "GHOSTDESK_VNC_PASSWORD is required when TLS is enabled"
-    export GHOSTDESK_AUTH_TOKEN GHOSTDESK_VNC_PASSWORD
+    export GHOSTDESK_AUTH__TOKEN GHOSTDESK_VNC_PASSWORD
 else
-    if [ -n "${GHOSTDESK_AUTH_TOKEN:-}" ]; then
-        echo "entrypoint: WARN GHOSTDESK_AUTH_TOKEN ignored — TLS is off" >&2
-        unset GHOSTDESK_AUTH_TOKEN
+    if [ -n "${GHOSTDESK_AUTH__TOKEN:-}" ]; then
+        echo "entrypoint: WARN GHOSTDESK_AUTH__TOKEN ignored — TLS is off" >&2
+        unset GHOSTDESK_AUTH__TOKEN
     fi
     if [ -n "${GHOSTDESK_VNC_PASSWORD:-}" ]; then
         echo "entrypoint: WARN GHOSTDESK_VNC_PASSWORD ignored — wayvnc auth is only enabled under TLS" >&2
@@ -66,16 +78,17 @@ else
     fi
 fi
 
-# ---- Operator env → framework env ----
-# GHOSTDESK_* is the deployment's contract (docker-compose.yml, README,
-# SECURITY.md) and does not change. The server reads NestRS-namespaced
-# variables — NESTRS_HTTP__* for the transport, NESTRS_GHOSTDESK__* for
-# GhostDesk's own settings — so the translation happens once, here.
+# ---- Container-shaped defaults ----
+# There is no operator-name → framework-name translation left to do: under
+# NESTRS_ENV_PREFIX the server reads GHOSTDESK_* directly, and the
+# deployment contract *is* the framework's contract. Two underscores means a
+# namespaced framework setting (GHOSTDESK_HTTP__PORT); one means a plain
+# container knob this script consumes itself (GHOSTDESK_VNC_PASSWORD).
 #
-# Each assignment defers to an already-set NESTRS_* value, so an operator
-# who prefers to speak the framework's own names directly can, and wins.
-gd_map() {
-    # gd_map <target> <value>  — set <target> unless it is already non-empty.
+# What is left below is not renaming — it is the handful of values a
+# container knows and a bare `ghostdesk` invocation cannot.
+gd_default() {
+    # gd_default <name> <value>  — set <name> unless it is already non-empty.
     eval "current=\${$1:-}"
     if [ -z "${current}" ] && [ -n "$2" ]; then
         export "$1=$2"
@@ -86,23 +99,14 @@ gd_map() {
 # Docker's port-publishing layer can reach it. A standalone `ghostdesk`
 # invocation stays on 127.0.0.1 per the MCP transports spec — the override
 # here only affects containerized runs.
-gd_map NESTRS_HTTP__HOST "${GHOSTDESK_HOST:-0.0.0.0}"
-gd_map NESTRS_HTTP__PORT "${GHOSTDESK_PORT:-}"
-gd_map NESTRS_HTTP__CORS_ORIGINS "${GHOSTDESK_ALLOWED_ORIGINS:-}"
+gd_default GHOSTDESK_HTTP__HOST "0.0.0.0"
 
+# The cert is discovered by probing the mount above, so only this script
+# knows the path that detection settled on.
 if [ "${TLS_ENABLED}" = "1" ]; then
-    gd_map NESTRS_HTTP__TLS_CERT_FILE "${TLS_CRT}"
-    gd_map NESTRS_HTTP__TLS_KEY_FILE "${TLS_KEY}"
+    gd_default GHOSTDESK_HTTP__TLS_CERT_FILE "${TLS_CRT}"
+    gd_default GHOSTDESK_HTTP__TLS_KEY_FILE "${TLS_KEY}"
 fi
-
-gd_map NESTRS_GHOSTDESK__AUTH_TOKEN "${GHOSTDESK_AUTH_TOKEN:-}"
-gd_map NESTRS_GHOSTDESK__IDLE_TIMEOUT_SECS "${GHOSTDESK_IDLE_TIMEOUT:-}"
-
-# The MCP transport refuses a Host header it does not know, which is what
-# stops a page on an attacker's origin from pointing its own hostname at
-# this container and POSTing to /mcp. The default covers loopback only, so
-# a deployment reached under a real hostname has to name itself.
-gd_map NESTRS_MCP__ALLOWED_HOSTS "${GHOSTDESK_ALLOWED_HOSTS:-}"
 
 # wayvnc is pinned to 127.0.0.1 (see Wayvnc config below). Warn loudly
 # rather than silently ignore operator overrides.
@@ -156,16 +160,17 @@ fi
 
 # ---- Sway config ----
 # The virtual output resolution is the single source of truth for both the
-# compositor (this file) and the coordinate layer the agent sees. The server
-# reads it from GhostdeskConfig, which is why it is mapped into the
-# framework's namespace right beside the substitution — one value in
-# docker-compose.yml, two consumers, no drift.
+# compositor (this file) and the coordinate layer the agent sees. Both now
+# read the *same* variable — `ScreenConfig` takes GHOSTDESK_SCREEN__WIDTH
+# straight from the environment, and envsubst pours it into sway's config.
+# One value in docker-compose.yml, two consumers, nothing to keep in sync.
+#
+# The defaults here must match `ScreenConfig::default()`; they exist so the
+# compositor still gets a resolution when the operator names none.
 SWAY_CFG_DIR="${HOME}/.config/sway"
-export GHOSTDESK_SCREEN_WIDTH="${GHOSTDESK_SCREEN_WIDTH:-1280}"
-export GHOSTDESK_SCREEN_HEIGHT="${GHOSTDESK_SCREEN_HEIGHT:-1024}"
-gd_map NESTRS_GHOSTDESK__SCREEN_WIDTH "${GHOSTDESK_SCREEN_WIDTH}"
-gd_map NESTRS_GHOSTDESK__SCREEN_HEIGHT "${GHOSTDESK_SCREEN_HEIGHT}"
-envsubst '${GHOSTDESK_SCREEN_WIDTH} ${GHOSTDESK_SCREEN_HEIGHT}' \
+export GHOSTDESK_SCREEN__WIDTH="${GHOSTDESK_SCREEN__WIDTH:-1280}"
+export GHOSTDESK_SCREEN__HEIGHT="${GHOSTDESK_SCREEN__HEIGHT:-1024}"
+envsubst '${GHOSTDESK_SCREEN__WIDTH} ${GHOSTDESK_SCREEN__HEIGHT}' \
     < /etc/ghostdesk/sway.config > "${SWAY_CFG_DIR}/config"
 chown "${GHOSTDESK_USER}:${GHOSTDESK_USER}" "${SWAY_CFG_DIR}/config"
 chmod 0644 "${SWAY_CFG_DIR}/config"

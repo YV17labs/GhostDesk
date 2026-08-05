@@ -57,6 +57,13 @@ FROM mcr.microsoft.com/devcontainers/base:ubuntu26.04
 
 ARG TARGETARCH
 
+# Same prefix as prod (docker/base/Dockerfile), and here for the same reason:
+# the framework resolves GHOSTDESK_* only because this names it. The Justfile
+# exports it too, so `nestrs run …` carries it outside the container; this
+# covers the other way into the stack — supervisord, a `docker exec` shell,
+# a debugger launched from VS Code.
+ENV NESTRS_ENV_PREFIX=GHOSTDESK
+
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/Montreal \
     LANG=fr_CA.UTF-8 \
@@ -145,12 +152,12 @@ ENV RUSTUP_HOME=/usr/local/rustup \
 # the devcontainer cannot drift from CI or the prod builder. `rust-src` is the
 # one extra rust-analyzer wants and the toml has no reason to carry.
 COPY rust-toolchain.toml /tmp/rust-toolchain.toml
-RUN install -d -m 0755 "${RUSTUP_HOME}" \
+RUN install -d -m 0755 -o vscode -g vscode "${RUSTUP_HOME}" \
     && install -d -m 0755 -o vscode -g vscode "${CARGO_HOME}" \
     && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh \
     && chmod 0755 /tmp/rustup-init.sh \
     && su vscode -c "/tmp/rustup-init.sh -y --no-modify-path --default-toolchain none" \
-    && su vscode -c "cd /tmp && rustup toolchain install && rustup component add rust-src" \
+    && su vscode -c "cd /tmp && ${CARGO_HOME}/bin/rustup toolchain install && ${CARGO_HOME}/bin/rustup component add rust-src" \
     && rm -f /tmp/rustup-init.sh /tmp/rust-toolchain.toml \
     && chmod -R a+rX "${RUSTUP_HOME}"
 
