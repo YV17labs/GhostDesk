@@ -2,6 +2,11 @@
 /target/
 **/*.rs.bk
 
+# Coverage (cargo-llvm-cov, via `nestrs run test cov`)
+*.profraw
+*.profdata
+/coverage
+
 # Secrets / local state
 .env
 .env.local
