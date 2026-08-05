@@ -11,6 +11,7 @@ use crate::clipboard::ClipboardModule;
 use crate::input::InputModule;
 use crate::screen::ScreenModule;
 use crate::session::SessionModule;
+use crate::telemetry::TelemetryModule;
 
 /// The two `as dyn` bindings are what turn a deny-all endpoint into a
 /// working one: without a `dyn McpOperationGuard` every request answers 401,
@@ -24,6 +25,7 @@ use crate::session::SessionModule;
         AppsModule,
         ClipboardModule,
         SessionModule,
+        TelemetryModule,
     ],
     providers = [
         GhostdeskMcp,

@@ -66,6 +66,7 @@ impl FeedbackService {
             screen_changed,
             reaction_time_ms: start.elapsed().as_millis() as u64,
         };
+
         if !screen_changed {
             tracing::warn!(
                 target: "ghostdesk::input",

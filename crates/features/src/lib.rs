@@ -17,6 +17,7 @@ pub mod input;
 pub mod mcp;
 pub mod screen;
 pub mod session;
+pub mod telemetry;
 
 #[cfg(test)]
 mod testing;
