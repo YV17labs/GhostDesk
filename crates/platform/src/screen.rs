@@ -10,7 +10,7 @@ use image::{ImageFormat as ImageIoFormat, RgbImage};
 
 use crate::coords::{screen_height, screen_width};
 
-/// Max ratio of changed area below which two consecutive captures count as
+/// Max ratio of changed pixels below which two consecutive captures count as
 /// "stable enough" — small enough to ignore a blinking caret or a clock tick,
 /// large enough to catch a popup or a filled row of cells.
 pub const STABILITY_MAX_DIFF_RATIO: f64 = 0.005;
@@ -90,24 +90,27 @@ pub trait ScreenBackend: Send + Sync {
 
 /// Decode PNG bytes to RGB.
 ///
-/// RGB, not RGBA, on purpose: differencing RGBA leaves alpha at 0 (it is a
-/// constant 255 on captures), and a bounding box computed over that reads as
-/// empty — every diff would come back "no change".
+/// RGB, not RGBA, on purpose: alpha is a constant 255 on captures, so a
+/// fourth channel would be a third more bytes to compare for no information.
 pub fn decode_rgb(bytes: &[u8]) -> anyhow::Result<RgbImage> {
     let decoded = image::load_from_memory_with_format(bytes, ImageIoFormat::Png)?;
     Ok(decoded.to_rgb8())
 }
 
-/// Bounding-box-of-difference area over image area, or `None` on a size
+/// Ratio of pixels that differ between two frames, or `None` on a size
 /// mismatch.
-fn bbox_ratio(a: &RgbImage, b: &RgbImage) -> Option<f64> {
+///
+/// Changed *pixels*, not the box around them: the bounding rectangle of two
+/// disjoint changes spans everything between them, and a desktop is never
+/// quiet in only one place. Measured on both OSes: a clock digit plus an app
+/// spinner — 0.04 % of the pixels — box out to half the screen, so under the
+/// old metric every action on a lived-in desktop read as "landed".
+fn changed_ratio(a: &RgbImage, b: &RgbImage) -> Option<f64> {
     if a.dimensions() != b.dimensions() {
         return None;
     }
 
     let (width, height) = a.dimensions();
-    let (mut min_x, mut min_y, mut max_x, mut max_y) = (u32::MAX, u32::MAX, 0u32, 0u32);
-    let mut differs = false;
 
     // Row-at-a-time over the raw buffers. Comparing whole rows first is the
     // point: an unchanged row is one vectorised memcmp instead of `width`
@@ -118,6 +121,7 @@ fn bbox_ratio(a: &RgbImage, b: &RgbImage) -> Option<f64> {
     let stride = width as usize * CHANNELS;
     let (raw_a, raw_b) = (a.as_raw(), b.as_raw());
 
+    let mut changed: u64 = 0;
     for y in 0..height {
         let start = y as usize * stride;
         let row_a = &raw_a[start..start + stride];
@@ -126,33 +130,14 @@ fn bbox_ratio(a: &RgbImage, b: &RgbImage) -> Option<f64> {
             continue;
         }
 
-        let first = row_a
+        changed += row_a
             .chunks_exact(CHANNELS)
             .zip(row_b.chunks_exact(CHANNELS))
-            .position(|(pa, pb)| pa != pb);
-        let last = row_a
-            .chunks_exact(CHANNELS)
-            .zip(row_b.chunks_exact(CHANNELS))
-            .rposition(|(pa, pb)| pa != pb);
-
-        if let (Some(first), Some(last)) = (first, last) {
-            differs = true;
-            min_x = min_x.min(first as u32);
-            max_x = max_x.max(last as u32);
-            min_y = min_y.min(y);
-            max_y = max_y.max(y);
-        }
+            .filter(|(pa, pb)| pa != pb)
+            .count() as u64;
     }
 
-    if !differs {
-        return Some(0.0);
-    }
-
-    // Pillow's `getbbox()` returns a half-open box, so the extent is
-    // (max - min + 1) in each axis.
-    let dw = (max_x - min_x + 1) as f64;
-    let dh = (max_y - min_y + 1) as f64;
-    Some((dw * dh) / (width as f64 * height as f64))
+    Some(changed as f64 / (f64::from(width) * f64::from(height)))
 }
 
 /// True when two decoded frames differ by more than the stability threshold.
@@ -163,7 +148,7 @@ fn bbox_ratio(a: &RgbImage, b: &RgbImage) -> Option<f64> {
 /// So a frame is decoded exactly once no matter how many comparisons it takes
 /// part in.
 pub fn differ_rgb(before: &RgbImage, after: &RgbImage) -> bool {
-    bbox_ratio(before, after).is_none_or(|ratio| ratio >= STABILITY_MAX_DIFF_RATIO)
+    changed_ratio(before, after).is_none_or(|ratio| ratio >= STABILITY_MAX_DIFF_RATIO)
 }
 
 /// Encode a decoded frame as lossy WebP.
@@ -200,13 +185,35 @@ mod tests {
     }
 
     #[test]
-    fn the_difference_box_spans_every_changed_row_and_column() {
-        // Two far-apart pixels: the box is their bounding rectangle, not two
-        // separate specks — 41x41 of 100x100 is 16.8%, well over threshold.
+    fn two_distant_specks_stay_under_the_threshold() {
+        // Two far-apart pixels are 0.02% of the frame — a clock digit and a
+        // spinner, not an action landing. Their union bounding box is 41x41,
+        // 16.8% of the frame: the old box-area metric read exactly this
+        // pattern as a change, which is the false positive this test pins.
         let before = solid(100, 100, [0, 0, 0]);
         let mut after = before.clone();
         after.put_pixel(30, 30, Rgb([255, 255, 255]));
         after.put_pixel(70, 70, Rgb([255, 255, 255]));
+        assert!(!differ_rgb(&before, &after));
+    }
+
+    #[test]
+    fn disjoint_changes_that_are_jointly_large_still_register() {
+        // Two 20x20 blocks in opposite corners: 8% of the pixels, over the
+        // threshold on pixel count alone — disjointness must not hide a
+        // genuinely large change.
+        let before = solid(100, 100, [0, 0, 0]);
+        let mut after = before.clone();
+        for y in 0..20 {
+            for x in 0..20 {
+                after.put_pixel(x, y, Rgb([255, 255, 255]));
+            }
+        }
+        for y in 80..100 {
+            for x in 80..100 {
+                after.put_pixel(x, y, Rgb([255, 255, 255]));
+            }
+        }
         assert!(differ_rgb(&before, &after));
     }
 
@@ -227,7 +234,7 @@ mod tests {
         let before = solid(100, 100, [0, 0, 0]);
         let mut after = before.clone();
         after.put_pixel(50, 50, Rgb([255, 255, 255]));
-        // 1/10000 of the area — a blinking caret, not a real change.
+        // 1/10000 of the pixels — a blinking caret, not a real change.
         assert!(!differ_rgb(&before, &after));
     }
 
