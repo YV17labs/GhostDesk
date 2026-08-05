@@ -4,11 +4,11 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use nest_rs::core::injectable;
 use platform::desktop::{AppCatalog, DesktopApp};
-use platform::window::WindowManager;
+use platform::window::{WindowInfo, WindowManager};
 use tokio::process::Command;
 
 /// Where launched apps' stdout and stderr land.
@@ -41,6 +41,16 @@ const SCRUBBED_PREFIX: &str = "GHOSTDESK_";
 /// Trailing log lines returned by default.
 pub const DEFAULT_TAIL: usize = 50;
 
+/// Bound on the post-launch wait for a first window. Cold starts in a fresh
+/// container (a browser's first run) sit in single-digit seconds; anything
+/// past this is either a UI-less process or a problem `app_status` is better
+/// placed to explain.
+pub const WINDOW_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How often the desktop is re-asked while waiting. A window list is a cheap
+/// compositor round trip, not a capture, so this leans brisk.
+const WINDOW_WAIT_POLL: Duration = Duration::from_millis(150);
+
 /// One open window, as the agent sees it.
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 pub struct RunningApp {
@@ -51,12 +61,43 @@ pub struct RunningApp {
     pub focused: bool,
 }
 
+impl From<WindowInfo> for RunningApp {
+    fn from(window: WindowInfo) -> Self {
+        Self {
+            app: window.app,
+            title: window.title,
+            pid: window.pid,
+            focused: window.focused,
+        }
+    }
+}
+
 /// What `app_launch` answers with.
 #[derive(Debug, Clone, serde::Serialize, schemars::JsonSchema)]
 pub struct Launched {
     pub pid: u32,
     pub log_file: String,
     pub action: String,
+    /// The window the launch produced, when the call waited for one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window: Option<RunningApp>,
+    /// How long that window took to appear.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub window_wait_ms: Option<u64>,
+}
+
+/// How a post-launch window wait ended.
+#[derive(Debug)]
+pub enum WindowWait {
+    /// The desktop mapped a window this launch produced.
+    Appeared { window: RunningApp, waited_ms: u64 },
+    /// The bound expired with the process already gone and nothing mapped —
+    /// a crash (the log tail knows) or a single-instance app that handed
+    /// off to a running peer, whose new window keeps the peer's old PID and
+    /// is indistinguishable from the rest of its windows.
+    ProcessExited,
+    /// The bound expired with the process alive and still windowless.
+    TimedOut,
 }
 
 /// What `app_status` answers with.
@@ -92,13 +133,71 @@ impl AppsService {
             .windows()
             .await?
             .into_iter()
-            .map(|window| RunningApp {
-                app: window.app,
-                title: window.title,
-                pid: window.pid,
-                focused: window.focused,
-            })
+            .map(RunningApp::from)
             .collect())
+    }
+
+    /// Wait, bounded by [`WINDOW_WAIT_TIMEOUT`], for the desktop to show the
+    /// window a launch produced.
+    ///
+    /// This is the composition `app_launch`'s wait is built on: the
+    /// launch → poll-until-a-window dance the agent used to run over two to
+    /// four tool calls, run server-side in one. A window matches when its
+    /// PID is the launched one — the common case — or, failing that, when
+    /// its PID was not on screen before the launch: a `.desktop` `Exec` that
+    /// wraps the real binary puts the window on a child PID, and that window
+    /// is still the one this launch produced.
+    ///
+    /// The spawned process dying does *not* end the wait early: wrapper
+    /// scripts exit the moment their child is running, often seconds before
+    /// the child maps its window, and reporting "exited, no window" in that
+    /// gap would be a fast wrong answer. The full bound is spent looking;
+    /// only then does the verdict distinguish a dead process from a slow or
+    /// UI-less one.
+    pub async fn wait_for_window(
+        &self,
+        pid: u32,
+        seen_before: &HashSet<i64>,
+    ) -> anyhow::Result<WindowWait> {
+        self.wait_for_window_within(pid, seen_before, WINDOW_WAIT_TIMEOUT)
+            .await
+    }
+
+    /// [`wait_for_window`](Self::wait_for_window) with the bound injectable,
+    /// so tests exercise the timeout arms in milliseconds.
+    async fn wait_for_window_within(
+        &self,
+        pid: u32,
+        seen_before: &HashSet<i64>,
+        timeout: Duration,
+    ) -> anyhow::Result<WindowWait> {
+        let start = Instant::now();
+        loop {
+            let mut windows = self.windows.windows().await?;
+            let matched = windows
+                .iter()
+                .position(|window| window.pid == i64::from(pid))
+                .or_else(|| {
+                    windows
+                        .iter()
+                        .position(|window| !seen_before.contains(&window.pid))
+                });
+            if let Some(index) = matched {
+                return Ok(WindowWait::Appeared {
+                    window: windows.swap_remove(index).into(),
+                    waited_ms: start.elapsed().as_millis() as u64,
+                });
+            }
+
+            if start.elapsed() >= timeout {
+                return Ok(if is_running(pid) {
+                    WindowWait::TimedOut
+                } else {
+                    WindowWait::ProcessExited
+                });
+            }
+            tokio::time::sleep(WINDOW_WAIT_POLL).await;
+        }
     }
 
     /// Start a GUI application in the background.
@@ -201,6 +300,8 @@ impl AppsService {
             pid,
             log_file: final_path.to_string_lossy().into_owned(),
             action: format!("Launched: {name}"),
+            window: None,
+            window_wait_ms: None,
         })
     }
 
@@ -271,13 +372,93 @@ fn tail(path: &Path, lines: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::{EmptyCatalog, NoWindows};
+    use crate::testing::{EmptyCatalog, NoWindows, OneWindow};
 
     fn service() -> AppsService {
         AppsService {
             windows: Arc::new(NoWindows),
             catalog: Arc::new(EmptyCatalog),
             launched: Mutex::default(),
+        }
+    }
+
+    fn service_showing(pid: i64) -> AppsService {
+        AppsService {
+            windows: Arc::new(OneWindow(pid)),
+            catalog: Arc::new(EmptyCatalog),
+            launched: Mutex::default(),
+        }
+    }
+
+    /// A PID that has certainly exited: spawn `true(1)` and reap it.
+    fn dead_pid() -> u32 {
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        pid
+    }
+
+    #[tokio::test]
+    async fn a_window_owned_by_the_launched_pid_ends_the_wait() {
+        match service_showing(4242)
+            .wait_for_window(4242, &HashSet::new())
+            .await
+            .unwrap()
+        {
+            WindowWait::Appeared { window, .. } => assert_eq!(window.pid, 4242),
+            other => panic!("expected Appeared, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_window_from_a_pid_unseen_before_the_launch_also_counts() {
+        // The wrapper-script case: the spawned PID is already dead, the
+        // window belongs to its child — a PID the pre-launch snapshot never
+        // saw. That window is the launch's window.
+        match service_showing(7777)
+            .wait_for_window(dead_pid(), &HashSet::new())
+            .await
+            .unwrap()
+        {
+            WindowWait::Appeared { window, .. } => assert_eq!(window.pid, 7777),
+            other => panic!("expected Appeared, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_window_already_there_before_the_launch_does_not_count() {
+        // The only window on screen predates the launch and belongs to
+        // another PID; the launched process is dead. Claiming that window
+        // would hand the agent someone else's UI.
+        match service_showing(7777)
+            .wait_for_window_within(
+                dead_pid(),
+                &HashSet::from([7777]),
+                Duration::from_millis(50),
+            )
+            .await
+            .unwrap()
+        {
+            WindowWait::ProcessExited => {}
+            other => panic!("expected ProcessExited, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_live_windowless_process_times_out_rather_than_reporting_death() {
+        // Our own PID: alive for the whole test, guaranteed windowless in
+        // the fake desktop.
+        match service()
+            .wait_for_window_within(
+                std::process::id(),
+                &HashSet::new(),
+                Duration::from_millis(50),
+            )
+            .await
+            .unwrap()
+        {
+            WindowWait::TimedOut => {}
+            other => panic!("expected TimedOut, got {other:?}"),
         }
     }
 

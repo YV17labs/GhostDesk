@@ -30,10 +30,10 @@ use platform::coords;
 use super::dto::*;
 use super::icons::icons;
 use super::instructions::instructions;
-use crate::apps::{AppStatus, AppsService, Launched, RunningApp};
+use crate::apps::{AppStatus, AppsService, Launched, RunningApp, WINDOW_WAIT_TIMEOUT, WindowWait};
 use crate::clipboard::ClipboardService;
 use crate::input::{Feedback, InputService};
-use crate::screen::ScreenService;
+use crate::screen::{Capture, ScreenService};
 
 const APPS_URI: &str = "ghostdesk://apps";
 const APPS_MIME: &str = "application/json";
@@ -70,6 +70,17 @@ impl GhostdeskMcp {
     /// and retry, where an `internal_error` reads as "stop trying".
     fn invalid(err: impl std::fmt::Display) -> McpError {
         McpError::invalid_params(err.to_string(), None)
+    }
+
+    /// A capture in the form the agent receives it.
+    ///
+    /// Both tools that hand the model a picture — `screen_shot` and
+    /// `app_launch`'s settled frame — come through here, so how a capture is
+    /// encoded and what mime it is announced under is decided in one place.
+    fn image_block(capture: &Capture) -> ContentBlock {
+        use base64::Engine as _;
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&capture.bytes);
+        ContentBlock::image(encoded, capture.format.mime())
     }
 }
 
@@ -110,12 +121,7 @@ impl GhostdeskMcp {
             .await
             .map_err(Self::failed)?;
 
-        use base64::Engine as _;
-        let encoded = base64::engine::general_purpose::STANDARD.encode(&capture.bytes);
-        Ok(CallToolResult::success(vec![ContentBlock::image(
-            encoded,
-            capture.format.mime(),
-        )]))
+        Ok(CallToolResult::success(vec![Self::image_block(&capture)]))
     }
 
     #[tool(
@@ -319,30 +325,124 @@ impl GhostdeskMcp {
     }
 
     #[tool(
-        description = "Start a GUI application in the background.\n\n\
+        description = "Start a GUI application and wait for its window.\n\n\
             Only bare executable names listed by app_list() are accepted (e.g. \
             \"firefox\"). Command-line arguments are not allowed — pass the \
             exec field from app_list() verbatim.\n\n\
+            By default the call waits (up to 10 s) for the app's first window \
+            and returns the settled screen as an image — interact with that \
+            directly, no follow-up screen_shot() needed. If the result says \
+            the process exited without a window, tail its log with \
+            app_status(pid); if it says no window appeared in time, the app \
+            is slow to start or has no UI — set wait_for_window: false for \
+            the latter kind.\n\n\
             The process runs detached; its stdout and stderr are captured to \
             /tmp/ghostdesk/proc-<pid>.log and can be tailed with \
             app_status(pid). Check app_running() first — the target may \
-            already be open. After a successful launch the window usually \
-            needs a second or two to paint, so take a fresh screenshot before \
-            interacting with it.",
+            already be open.",
         annotations(destructive_hint = false),
-        icons = icons()
+        icons = icons(),
+        output_schema = rmcp::handler::server::tool::schema_for_output::<Launched>()
     )]
     async fn app_launch(
         &self,
         Parameters(params): Parameters<LaunchParams>,
-    ) -> Result<Json<Launched>, McpError> {
+    ) -> Result<CallToolResult, McpError> {
+        // The pre-launch window set — what "a window appeared" is measured
+        // against. Taken before the spawn so the launch's own window can
+        // never be in it. Failing *here* is a server failure and refuses the
+        // launch outright, which beats launching and then erroring: the
+        // agent would read the error as "not launched" and spawn a double.
+        let seen_before = if params.wait_for_window {
+            Some(
+                self.apps
+                    .running()
+                    .await
+                    .map_err(Self::failed)?
+                    .into_iter()
+                    .map(|window| window.pid)
+                    .collect(),
+            )
+        } else {
+            None
+        };
+
         // Refusals here are all "you asked for the wrong thing" — arguments
         // supplied, unknown executable, bad quoting.
-        self.apps
+        let mut launched = self
+            .apps
             .launch(&params.command)
             .await
-            .map(Json)
-            .map_err(Self::invalid)
+            .map_err(Self::invalid)?;
+
+        let mut frame = None;
+        if let Some(seen_before) = seen_before {
+            match self
+                .apps
+                .wait_for_window(launched.pid, &seen_before)
+                .await
+                .map_err(Self::failed)?
+            {
+                WindowWait::Appeared { window, waited_ms } => {
+                    launched.action = format!(
+                        "{}; window \"{}\" appeared after {waited_ms} ms",
+                        launched.action, window.title,
+                    );
+                    launched.window = Some(window);
+                    launched.window_wait_ms = Some(waited_ms);
+
+                    // The settled frame replaces the follow-up screen_shot
+                    // the instructions would otherwise demand. A capture
+                    // failure must not fail the tool — the launch already
+                    // happened, and an error would provoke a second one.
+                    match self
+                        .screen
+                        .capture(
+                            None,
+                            platform::screen::ImageFormat::Webp,
+                            true,
+                            platform::screen::DEFAULT_WEBP_QUALITY,
+                        )
+                        .await
+                    {
+                        Ok(capture) => frame = Some(capture),
+                        Err(err) => tracing::warn!(
+                            target: "ghostdesk::mcp",
+                            error = %err,
+                            "window appeared but the settled frame could not be captured",
+                        ),
+                    }
+                }
+                WindowWait::ProcessExited => {
+                    launched.action = format!(
+                        "{}; the process exited and no window appeared within {} s — it \
+                         crashed (check app_status({})) or handed off to an \
+                         already-running instance (check app_running())",
+                        launched.action,
+                        WINDOW_WAIT_TIMEOUT.as_secs(),
+                        launched.pid,
+                    );
+                }
+                WindowWait::TimedOut => {
+                    launched.action = format!(
+                        "{}; still running but no window after {} s — slow to start \
+                         (check app_running() shortly) or running without a UI",
+                        launched.action,
+                        WINDOW_WAIT_TIMEOUT.as_secs(),
+                    );
+                }
+            }
+        }
+
+        // `structured` mirrors what `Json<Launched>` produced — JSON text
+        // block plus structuredContent — so clients that read either keep
+        // working; the frame rides along as an extra image block.
+        let structured = serde_json::to_value(&launched).map_err(Self::failed)?;
+        let mut result = CallToolResult::structured(structured);
+        if let Some(capture) = frame {
+            result.content.push(Self::image_block(&capture));
+        }
+        Ok(result)
     }
 
     #[tool(
@@ -503,5 +603,34 @@ impl ServerHandler for GhostdeskMcp {
         };
 
         Ok(ReadResourceResult::new(vec![contents]).into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_tool_table_builds_and_app_launch_keeps_its_output_schema() {
+        // `output_schema = …` on app_launch runs at table-build time, not at
+        // compile time — this is the only place that executes it before a
+        // client does. The schema must survive the switch away from
+        // `Json<Launched>`, or the published contract silently loses a shape
+        // it has always had.
+        let router = GhostdeskMcp::tool_router();
+        let launch = router
+            .list_all()
+            .into_iter()
+            .find(|tool| tool.name == "app_launch")
+            .expect("app_launch is in the tool table");
+        let schema = launch
+            .output_schema
+            .expect("app_launch publishes an output schema");
+        assert!(
+            serde_json::to_string(&*schema)
+                .unwrap()
+                .contains("log_file"),
+            "the schema still describes Launched",
+        );
     }
 }

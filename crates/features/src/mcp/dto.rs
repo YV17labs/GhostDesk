@@ -194,6 +194,12 @@ pub struct PressParams {
 pub struct LaunchParams {
     /// A bare executable name from `app_list()`. Arguments are refused.
     pub command: String,
+
+    /// Wait (bounded) for the app to open its first window and include the
+    /// settled screen in the result. Turn off only for apps expected to run
+    /// without a UI.
+    #[serde(default = "default_true")]
+    pub wait_for_window: bool,
 }
 
 #[input]
@@ -288,6 +294,12 @@ mod tests {
     fn a_click_without_a_button_defaults_to_left() {
         let click: ClickParams = serde_json::from_str(r#"{"x":10,"y":20}"#).unwrap();
         assert_eq!(click.button, ButtonArg::Left);
+    }
+
+    #[test]
+    fn a_launch_waits_for_its_window_by_default() {
+        let params: LaunchParams = serde_json::from_str(r#"{"command":"firefox"}"#).unwrap();
+        assert!(params.wait_for_window);
     }
 
     #[test]

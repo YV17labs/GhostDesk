@@ -29,6 +29,26 @@ impl WindowManager for NoWindows {
     }
 }
 
+/// A desktop showing exactly one window, owned by the given PID.
+pub struct OneWindow(pub i64);
+
+#[async_trait]
+impl WindowManager for OneWindow {
+    async fn windows(&self) -> anyhow::Result<Vec<WindowInfo>> {
+        Ok(vec![WindowInfo {
+            id: WindowId::new(0u8, "test-window"),
+            app: "test-app".into(),
+            title: "Test Window".into(),
+            pid: self.0,
+            focused: true,
+        }])
+    }
+
+    async fn close(&self, _window: &WindowId) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 /// A machine with nothing installed — so every `app_launch` is refused.
 pub struct EmptyCatalog;
 
