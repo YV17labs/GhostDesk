@@ -1,9 +1,12 @@
 //! Test doubles shared by the domain services' unit tests.
 //!
-//! Every service now injects a backend contract, so a service under test
-//! needs a stand-in for the seams it does not exercise. One copy here rather
-//! than one per test module: with five contracts, a third service would
-//! otherwise arrive with a third hand-written pair.
+//! Every service injects a backend contract, so a service under test needs a
+//! stand-in for the seams it does not exercise. One copy here rather than one
+//! per test module: `programs` and `idle` both need a desktop with no windows,
+//! and a second hand-written pair would be free to disagree with the first.
+//!
+//! Only the two contracts the current tests reach for are doubled. The rest
+//! belong here too, the day a test needs one.
 //!
 //! `platform::host`'s real backends are not a substitute — they talk to the
 //! machine running the tests — and neither is the `Unsupported` stub, whose

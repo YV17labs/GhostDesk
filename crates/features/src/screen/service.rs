@@ -1,3 +1,10 @@
+//! Screen capture, delegated to the host's [`ScreenBackend`].
+//!
+//! The policy is here and the mechanism is not: what "settled" means, when a
+//! capture is worth re-encoding, and what a capture costs the agent. How a
+//! frame is actually grabbed (`grim`, a CoreGraphics display stream) is the
+//! backend's business.
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -7,6 +14,9 @@ use platform::coords;
 use platform::screen::{self, ImageFormat, Region, ScreenBackend};
 
 use super::config::ScreenConfig;
+use super::error::ScreenError;
+
+type Result<T> = std::result::Result<T, ScreenError>;
 
 /// How long to keep waiting for two identical frames before giving up and
 /// returning the latest one. A genuinely animating screen must not block the
@@ -62,7 +72,7 @@ impl ScreenService {
 
         coords::set_screen(width, height);
         tracing::info!(
-            target: "ghostdesk::screen",
+            target: "features::screen",
             width,
             height,
             source,
@@ -72,6 +82,33 @@ impl ScreenService {
 }
 
 impl ScreenService {
+    /// One frame from the backend, as PNG.
+    async fn grab(&self, region: Option<Region>) -> Result<Vec<u8>> {
+        self.backend
+            .capture_png(region, None)
+            .await
+            .map_err(ScreenError::Capture)
+    }
+
+    /// The same frame, decoded. Separate from [`grab`](Self::grab) because
+    /// the PNG is what reaches the wire when the caller asked for PNG, and
+    /// decoding it then would be work nobody reads.
+    fn decode(png: &[u8]) -> Result<RgbImage> {
+        screen::decode_rgb(png).map_err(ScreenError::Decode)
+    }
+
+    /// Capture the screen and encode it for the wire, with this domain's own
+    /// defaults — a settled WebP frame of the whole screen.
+    ///
+    /// The defaults live here rather than at each call site: `screen_shot`
+    /// publishes them through its DTO, and the settled frame `app_launch`
+    /// returns is the same picture by another route. Two call sites spelling
+    /// the encoding independently is two places for it to drift.
+    pub async fn capture_settled(&self) -> Result<Capture> {
+        self.capture(None, ImageFormat::Webp, true, screen::DEFAULT_WEBP_QUALITY)
+            .await
+    }
+
     /// Capture the screen and encode it for the wire.
     pub async fn capture(
         &self,
@@ -79,7 +116,7 @@ impl ScreenService {
         format: ImageFormat,
         stabilize: bool,
         quality: u8,
-    ) -> anyhow::Result<Capture> {
+    ) -> Result<Capture> {
         let region = region.map(Region::clamped);
         let started = Instant::now();
 
@@ -91,7 +128,7 @@ impl ScreenService {
             let (png, rgb, grab) = self.capture_until_stable(region).await?;
             (png, Some(rgb), grab)
         } else {
-            let png = self.backend.capture_png(region, None).await?;
+            let png = self.grab(region).await?;
             (
                 png,
                 None,
@@ -115,7 +152,7 @@ impl ScreenService {
             ImageFormat::Webp => {
                 let rgb = match decoded {
                     Some(rgb) => rgb,
-                    None => screen::decode_rgb(&png)?,
+                    None => Self::decode(&png)?,
                 };
                 let dimensions = rgb.dimensions();
                 (screen::encode_webp(&rgb, quality), Some(dimensions))
@@ -131,7 +168,7 @@ impl ScreenService {
         // whether the encoder setting is right, and `settled` says whether
         // the picture the agent is about to reason over had finished drawing.
         tracing::debug!(
-            target: "ghostdesk::screen",
+            target: "features::screen",
             bytes = bytes.len(),
             width = dimensions.map(|(width, _)| width),
             height = dimensions.map(|(_, height)| height),
@@ -157,15 +194,15 @@ impl ScreenService {
     async fn capture_until_stable(
         &self,
         region: Option<Region>,
-    ) -> anyhow::Result<(Vec<u8>, RgbImage, Grab)> {
-        let mut previous_png = self.backend.capture_png(region, None).await?;
-        let mut previous = screen::decode_rgb(&previous_png)?;
+    ) -> Result<(Vec<u8>, RgbImage, Grab)> {
+        let mut previous_png = self.grab(region).await?;
+        let mut previous = Self::decode(&previous_png)?;
         let mut frames = 1;
         let deadline = Instant::now() + STABILITY_TIMEOUT;
 
         while Instant::now() < deadline {
-            let current_png = self.backend.capture_png(region, None).await?;
-            let current = screen::decode_rgb(&current_png)?;
+            let current_png = self.grab(region).await?;
+            let current = Self::decode(&current_png)?;
             frames += 1;
             if !screen::differ_rgb(&previous, &current) {
                 return Ok((

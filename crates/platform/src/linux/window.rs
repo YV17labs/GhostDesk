@@ -81,7 +81,7 @@ async fn discover() -> Option<String> {
     let candidates = candidate_socks();
     if candidates.is_empty() {
         tracing::warn!(
-            target: "ghostdesk::sway",
+            target: "platform::window",
             dir = %runtime_dir(),
             "no candidate socket with a live sway PID",
         );
@@ -89,12 +89,12 @@ async fn discover() -> Option<String> {
     }
     for sock in &candidates {
         if probe(sock).await {
-            tracing::info!(target: "ghostdesk::sway", socket = %sock, "using IPC socket");
+            tracing::info!(target: "platform::window", socket = %sock, "using IPC socket");
             return Some(sock.clone());
         }
     }
     tracing::warn!(
-        target: "ghostdesk::sway",
+        target: "platform::window",
         candidates = candidates.len(),
         "candidate sockets found but none answered get_version",
     );
@@ -138,14 +138,14 @@ async fn get_tree() -> Option<Value> {
     let raw = match swaymsg(&["-t", "get_tree"], cmd::DEFAULT_TIMEOUT).await {
         Ok(raw) => raw,
         Err(err) => {
-            tracing::error!(target: "ghostdesk::sway", error = %err, "get_tree failed");
+            tracing::error!(target: "platform::window", error = %err, "get_tree failed");
             return None;
         }
     };
     match serde_json::from_str(&raw) {
         Ok(tree) => Some(tree),
         Err(err) => {
-            tracing::error!(target: "ghostdesk::sway", error = %err, "malformed get_tree JSON");
+            tracing::error!(target: "platform::window", error = %err, "malformed get_tree JSON");
             None
         }
     }

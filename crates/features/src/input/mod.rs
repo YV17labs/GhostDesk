@@ -1,9 +1,10 @@
 //! Input domain — mouse and keyboard control.
 
-pub mod feedback;
+mod dtos;
+mod error;
+mod mcp;
 mod module;
-mod service;
+mod services;
 
-pub use feedback::{Feedback, FeedbackService};
-pub use module::InputModule;
-pub use service::InputService;
+pub use mcp::InputMcpModule;
+pub(crate) use module::InputModule;

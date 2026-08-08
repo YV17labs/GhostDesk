@@ -23,15 +23,21 @@ struct QuartzChord {
     keys: Vec<CGKeyCode>,
 }
 
+/// What this desktop calls its shortcuts.
+///
+/// Command, not Control. This one value is the whole reason `Conventions`
+/// exists. A const, and the trait method below returns it, so the value
+/// [`host::conventions`](crate::host::conventions) reads at composition time
+/// and the value the keyboard presses are the same one.
+pub const CONVENTIONS: Conventions = Conventions {
+    desktop: "macOS",
+    primary_modifier: "cmd",
+};
+
 #[async_trait]
 impl InputBackend for Quartz {
     fn conventions(&self) -> Conventions {
-        Conventions {
-            desktop: "macOS",
-            // Command, not Control. This one value is the whole reason
-            // `Conventions` exists.
-            primary_modifier: "cmd",
-        }
+        CONVENTIONS
     }
 
     /// Refuse the boot when the process is not trusted for Accessibility.

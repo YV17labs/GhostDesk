@@ -58,9 +58,11 @@ devcontainer ships it pre-installed along with `mold` for fast links.
 - `cargo fmt --all` and `cargo clippy --all-targets -- -D warnings` both pass;
   CI enforces them
 - Follow the framework's shape: a domain is an `#[injectable]` service in
-  `crates/features/src/<domain>/`, wired by a `#[module]`, and the MCP
-  adapter in `crates/features/src/mcp/` is the only place that knows about
-  the wire
+  `crates/features/src/<domain>/`, wired by a `#[module]`, and its own
+  `<domain>/mcp/` adapter is the only place that knows about the wire. Every
+  adapter declares the same `#[mcp(path = "/mcp")]` and the framework merges
+  them onto one endpoint, so a new domain is a new folder — never a branch in
+  someone else's tool
 - Keep `crates/platform` free of framework types — it is the OS substrate
   (Wayland, Sway IPC, `grim`, `.desktop`) and stays testable on its own
 - Comment the *why*, not the *what*; the surprising constraint is worth a

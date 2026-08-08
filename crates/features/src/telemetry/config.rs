@@ -1,4 +1,4 @@
-//! `GHOSTDESK_TELEMETRY__*` — when a session counts as over.
+//! The `telemetry` namespace — when a session counts as over.
 
 use nest_rs::config::{Config, ConfigService, config};
 
@@ -9,8 +9,8 @@ pub struct TelemetryConfig {
     /// summary is logged.
     ///
     /// There is no verbosity setting here on purpose: how much of this
-    /// reaches the log is `NESTRS_LOG`'s job, like every other target in the
-    /// server. Per-call lines are `debug`, summaries `info`, repeated
+    /// reaches the log is `<PREFIX>_LOG`'s job, like every other target in
+    /// the server. Per-call lines are `debug`, summaries `info`, repeated
     /// futile actions `warn`.
     #[validate(range(min = 5))]
     pub session_idle_secs: u64,

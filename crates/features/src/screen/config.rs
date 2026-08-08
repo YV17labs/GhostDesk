@@ -1,4 +1,4 @@
-//! `GHOSTDESK_SCREEN__*` — the virtual display's geometry.
+//! The `screen` namespace — the virtual display's geometry.
 
 use nest_rs::config::{Config, ConfigService, config};
 

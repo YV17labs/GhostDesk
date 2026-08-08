@@ -35,7 +35,7 @@ impl ScreenBackend for Grim {
         Ok(cmd::run_bytes(&argv, Duration::from_secs(10)).await?)
     }
 
-    /// The compositor's output is sized from `GHOSTDESK_SCREEN__*` by the
+    /// The compositor's output is sized from the server's screen settings by the
     /// container entrypoint, so the operator's setting is the only truth
     /// there is — there is nothing here to discover.
     fn geometry(&self) -> Option<(i64, i64)> {

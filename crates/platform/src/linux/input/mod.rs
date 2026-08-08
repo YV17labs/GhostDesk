@@ -15,4 +15,4 @@ mod keymap;
 mod keysym;
 mod session;
 
-pub use backend::Wayland;
+pub use backend::{CONVENTIONS, Wayland};

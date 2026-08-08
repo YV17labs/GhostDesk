@@ -17,7 +17,7 @@ use nest_rs::schedule::scheduled;
 use serde_json::{Map, Value};
 
 use super::config::TelemetryConfig;
-use super::session::{Call, Friction, Observed, Outcome, SessionState};
+use super::session::{Call, Friction, Observed, Outcome, State};
 
 /// The fallback session name for a transport that does not carry one.
 ///
@@ -26,12 +26,12 @@ use super::session::{Call, Friction, Observed, Outcome, SessionState};
 /// splitting it would make the trajectory unreconstructable.
 const UNSESSIONED: &str = "unsessioned";
 
-const TARGET: &str = "ghostdesk::telemetry";
+const TARGET: &str = "features::telemetry";
 
 tokio::task_local! {
-    /// The session id, installed for every MCP operation by
-    /// `GhostdeskToolContext`. Task-local rather than global for the same
-    /// reason the model space is: two clients' operations interleave.
+    /// The session id, installed for every MCP operation by the endpoint's
+    /// per-call context. Task-local rather than global for the same reason
+    /// the model space is: two clients' operations interleave.
     static SESSION: Arc<str>;
 
     /// The call in flight, installed by [`CallGuard::scope`]. This is what
@@ -97,7 +97,7 @@ impl CallOutcome {
 }
 
 /// The live sessions, keyed by the MCP session id.
-type Sessions = HashMap<Arc<str>, SessionState>;
+type Sessions = HashMap<Arc<str>, State>;
 
 /// A shared handle on the live sessions.
 ///
@@ -182,7 +182,7 @@ impl TelemetryService {
         let mut sessions = lock(&self.state.0);
         let state = sessions
             .entry(Arc::clone(&session))
-            .or_insert_with(|| SessionState::new(started));
+            .or_insert_with(|| State::new(started));
 
         let seq = state.next_seq();
         let gap_ms = state.gap_since_last_call(started);
@@ -209,7 +209,7 @@ impl TelemetryService {
     /// released before the first line is formatted.
     fn summarise(&self, idle_after: Duration) -> usize {
         let now = Instant::now();
-        let closing: Vec<(Arc<str>, SessionState)> = lock(&self.state.0)
+        let closing: Vec<(Arc<str>, State)> = lock(&self.state.0)
             .extract_if(|_, state| {
                 state.has_calls() && now.saturating_duration_since(state.last_seen) >= idle_after
             })

@@ -15,7 +15,9 @@ path = "src/main.rs"
 
 [dependencies]
 features = { path = "../../crates/features" }
+platform = { path = "../../crates/platform" }
 
 anyhow.workspace = true
+base64.workspace = true
 nest-rs.workspace = true
 tokio.workspace = true

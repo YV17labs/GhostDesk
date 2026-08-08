@@ -455,7 +455,7 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
 | `GHOSTDESK_SCREEN__WIDTH` | `1280` | Virtual screen width in pixels |
 | `GHOSTDESK_SCREEN__HEIGHT` | `1024` | Virtual screen height in pixels |
-| `GHOSTDESK_SESSION__IDLE_TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable. |
+| `GHOSTDESK_IDLE__TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 

@@ -1,7 +1,6 @@
 use nest_rs::core::module;
 
-use super::feedback::FeedbackService;
-use super::service::InputService;
+use super::services::{FeedbackService, InputService};
 use crate::host::HostModule;
 
 #[module(

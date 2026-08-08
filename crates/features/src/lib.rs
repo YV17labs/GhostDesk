@@ -1,22 +1,23 @@
-//! GhostDesk's feature crate — one folder per domain, each exposing an
-//! `#[injectable]` service, and a single `mcp/` adapter that publishes all of
-//! them on one endpoint.
+//! GhostDesk's domains, each wrapping one seam of the `platform` substrate.
 //!
-//! The MCP spec namespaces tools *per endpoint*, and every shipped client
-//! config points at one URL, so GhostDesk mounts exactly one `#[mcp]` host.
-//! It plays the part a `#[controller]` plays over HTTP: thin, injecting the
-//! domain services, translating between wire DTOs and domain calls.
+//! No domain here names an OS: the ones that touch the desktop reach it
+//! through one of `platform`'s five backend contracts, and [`auth`] and
+//! [`telemetry`] — which are about the server rather than the desktop —
+//! inject none.
 //!
-//! No domain here names an OS. Each service injects one of `platform`'s
-//! backend contracts, and [`host`] is what binds them into the container.
+//! Every domain publishes its own `/mcp` host, and the framework merges them
+//! onto one endpoint. That is why there is no cross-domain adapter here and
+//! why the app imports edges rather than domains: [`host`] is the substrate
+//! they all sit on, and the endpoint's own identity is declared by the app,
+//! which is the only layer that can see the whole surface.
 
-pub mod apps;
+pub mod auth;
 pub mod clipboard;
-pub mod host;
+pub(crate) mod host;
+pub mod idle;
 pub mod input;
-pub mod mcp;
+pub mod programs;
 pub mod screen;
-pub mod session;
 pub mod telemetry;
 
 #[cfg(test)]

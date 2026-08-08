@@ -5,6 +5,8 @@ use std::sync::Arc;
 use nest_rs::core::injectable;
 use platform::clipboard::Clipboard;
 
+use super::error::ClipboardError;
+
 #[injectable]
 pub struct ClipboardService {
     #[inject]
@@ -20,8 +22,11 @@ impl ClipboardService {
 
     /// Write text to the clipboard. The message is agent-facing prose, so it
     /// belongs to this layer, not to the backend.
-    pub async fn set(&self, text: &str) -> anyhow::Result<String> {
-        self.backend.set(text).await?;
+    pub async fn set(&self, text: &str) -> Result<String, ClipboardError> {
+        self.backend
+            .set(text)
+            .await
+            .map_err(ClipboardError::Write)?;
         Ok(format!(
             "Clipboard set ({} characters)",
             text.chars().count()

@@ -32,13 +32,21 @@ impl Wayland {
     }
 }
 
+/// What this desktop calls its shortcuts.
+///
+/// A const, and the trait method below returns it, so the value
+/// [`host::conventions`](crate::host::conventions) reads at composition time
+/// and the value the keyboard presses are the same one — without a second
+/// backend having to exist to be asked.
+pub const CONVENTIONS: Conventions = Conventions {
+    desktop: "Linux (Wayland)",
+    primary_modifier: "ctrl",
+};
+
 #[async_trait]
 impl InputBackend for Wayland {
     fn conventions(&self) -> Conventions {
-        Conventions {
-            desktop: "Linux (Wayland)",
-            primary_modifier: "ctrl",
-        }
+        CONVENTIONS
     }
 
     async fn warm_up(&self) -> Result<()> {

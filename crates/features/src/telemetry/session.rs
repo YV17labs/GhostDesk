@@ -1,5 +1,9 @@
 //! What one session accumulates, and the two patterns worth a warning.
 //!
+//! A session here is one agent's conversation with the endpoint, keyed by the
+//! MCP session id — not [`idle`](crate::idle)'s notion of a desktop left
+//! untouched.
+//!
 //! Everything here is bookkeeping over calls that already happened: no I/O,
 //! no logging, no clock reads beyond the ones handed in. The service turns
 //! what this produces into log events; keeping the rules separate from the
@@ -157,7 +161,7 @@ impl Run {
     }
 }
 
-pub(super) struct SessionState {
+pub(super) struct State {
     pub(super) started: Instant,
     /// Last MCP traffic of any kind, which is what the idle sweep reads.
     pub(super) last_seen: Instant,
@@ -174,7 +178,7 @@ pub(super) struct SessionState {
     dead_spots: HashMap<String, Run>,
 }
 
-impl SessionState {
+impl State {
     pub(super) fn new(now: Instant) -> Self {
         Self {
             started: now,
@@ -299,12 +303,12 @@ mod tests {
     const CLICK_10: &str = r#"mouse_click{"x":10,"y":10}"#;
     const CLICK_759: &str = r#"mouse_click{"x":759,"y":154}"#;
 
-    fn state() -> SessionState {
-        SessionState::new(Instant::now())
+    fn state() -> State {
+        State::new(Instant::now())
     }
 
     fn input_call(
-        state: &mut SessionState,
+        state: &mut State,
         target: &str,
         action: &str,
         changed: bool,
@@ -326,7 +330,7 @@ mod tests {
         }
     }
 
-    fn plain_call(state: &mut SessionState, tool: &str) -> Call {
+    fn plain_call(state: &mut State, tool: &str) -> Call {
         Call {
             seq: state.next_seq(),
             tool: tool.into(),
@@ -340,7 +344,7 @@ mod tests {
         }
     }
 
-    fn record(state: &mut SessionState, call: &Call) -> Vec<Friction> {
+    fn record(state: &mut State, call: &Call) -> Vec<Friction> {
         state.record(call, Instant::now())
     }
 

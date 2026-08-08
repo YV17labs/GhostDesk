@@ -10,9 +10,9 @@ use std::path::{Path, PathBuf};
 
 /// One launchable entry.
 ///
-/// Deliberately not `Serialize`: the wire shape of the app catalogue belongs
-/// to the MCP adapter (`features::mcp::dto::AppEntry`), so renaming a field
-/// here cannot silently change what clients receive.
+/// Deliberately not `Serialize`: the wire shape of the catalogue belongs to
+/// whichever adapter publishes it, so renaming a field here cannot silently
+/// change what clients receive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DesktopApp {
     /// Human-readable application name.

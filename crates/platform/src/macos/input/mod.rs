@@ -13,4 +13,4 @@ mod chord;
 mod event;
 mod keycode;
 
-pub use backend::Quartz;
+pub use backend::{CONVENTIONS, Quartz};

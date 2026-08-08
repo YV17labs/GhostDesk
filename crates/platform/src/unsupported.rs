@@ -25,13 +25,17 @@ const NO_BACKEND: &str = "GhostDesk has no desktop backend for this OS \
 
 pub struct Unsupported;
 
+/// What this desktop calls its shortcuts — nothing useful, but the endpoint
+/// still has a brief to render.
+pub const CONVENTIONS: Conventions = Conventions {
+    desktop: "an unsupported desktop",
+    primary_modifier: "ctrl",
+};
+
 #[async_trait]
 impl InputBackend for Unsupported {
     fn conventions(&self) -> Conventions {
-        Conventions {
-            desktop: "an unsupported desktop",
-            primary_modifier: "ctrl",
-        }
+        CONVENTIONS
     }
 
     async fn warm_up(&self) -> Result<()> {

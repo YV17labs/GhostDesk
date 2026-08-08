@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use crate::clipboard::Clipboard;
 use crate::desktop::AppCatalog;
-use crate::input::InputBackend;
+use crate::input::{Conventions, InputBackend};
 use crate::screen::ScreenBackend;
 use crate::window::WindowManager;
 
@@ -21,6 +21,23 @@ pub fn input() -> Arc<dyn InputBackend> {
     return Arc::new(crate::macos::input::Quartz);
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     return Arc::new(crate::unsupported::Unsupported);
+}
+
+/// How this OS's desktop spells its standard shortcuts.
+///
+/// The same const the backend's own `conventions()` returns, so the value the
+/// session brief teaches the agent and the value the keyboard actually
+/// presses can never be two different things. Selected here rather than by
+/// building a backend to ask it: the brief is rendered at composition time,
+/// and instantiating a second seam to read a compile-target constant would
+/// put two backends in a process the `Chord` contract says has one.
+pub fn conventions() -> Conventions {
+    #[cfg(target_os = "linux")]
+    return crate::linux::input::CONVENTIONS;
+    #[cfg(target_os = "macos")]
+    return crate::macos::input::CONVENTIONS;
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    return crate::unsupported::CONVENTIONS;
 }
 
 /// The screen-capture backend for this OS.

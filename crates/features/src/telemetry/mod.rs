@@ -15,16 +15,16 @@
 //!   that only exist once the run is over.
 //!
 //! Everything else a call could report is left to whoever already reports
-//! it: `apps` logs its launches, `screen` its captures, `input` its
+//! it: `programs` logs its launches, `screen` its captures, `input` its
 //! verdicts. This module adds a session, a sequence number and a stopwatch,
 //! and gets out of the way.
 //!
 //! # Where it goes
 //!
-//! Into `tracing`, under the `ghostdesk::telemetry` target, so it lands
+//! Into `tracing`, under the `features::telemetry` target, so it lands
 //! wherever the operator's logs land — text in debug builds, JSON in release
 //! — with no second store to collect, rotate or secure. Verbosity is
-//! `NESTRS_LOG`'s job:
+//! `<PREFIX>_LOG`'s job (`RUST_LOG` is the unprefixed fallback):
 //!
 //! | Level | Line | Volume |
 //! |---|---|---|
@@ -37,11 +37,15 @@
 //! dispatch.
 
 mod config;
+mod mcp;
 mod module;
 mod service;
 mod session;
 
-pub use config::TelemetryConfig;
-pub use module::TelemetryModule;
-pub use service::{CallGuard, CallOutcome, TelemetryService, note_action};
-pub use session::Outcome;
+/// Injected by every tool host, which runs its dispatch through it.
+pub(crate) use mcp::CallJournal;
+pub(crate) use mcp::TelemetryMcpModule;
+pub(crate) use module::TelemetryModule;
+/// Injected by the app's per-call MCP context, which is glue over several
+/// modules and therefore lives outside this crate.
+pub use service::TelemetryService;
