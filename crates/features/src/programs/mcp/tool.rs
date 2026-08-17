@@ -1,7 +1,4 @@
 //! The four program tools, plus the read-only counterpart of `app_list`.
-//!
-//! Serves resources, so it stays on rmcp's raw shape: `#[tools]` cannot
-//! generate a second `ServerHandler` beside a hand-written one.
 
 use std::sync::{Arc, LazyLock};
 
@@ -224,13 +221,8 @@ impl ProgramsTool {
     }
 }
 
-/// Built once: `#[tool_handler]`'s default inlines `Self::tool_router()` into
-/// both `call_tool` and `list_tools`, rebuilding every `Tool` on every call.
 static ROUTER: LazyLock<ToolRouter<ProgramsTool>> = LazyLock::new(ProgramsTool::tool_router);
 
-// Parenthesised on purpose: the macro splices this straight into
-// `#router.call(…)`, and unparenthesised the `&*` would bind to the call's
-// result rather than to `ROUTER`.
 #[tool_handler(router = (&*ROUTER))]
 impl ServerHandler for ProgramsTool {
     /// Capabilities only. The endpoint's identity and its session brief are

@@ -45,9 +45,8 @@ mod session;
 /// Injected by every tool host, which runs its dispatch through it.
 pub(crate) use mcp::CallJournal;
 pub(crate) use mcp::TelemetryMcpModule;
-/// Exported with [`TelemetryService`]: the app's per-call MCP context injects
-/// the service, and whoever provides a consumer must import the module that
-/// provides its dependencies.
+/// Imported by the app's per-call MCP context module, which injects
+/// [`TelemetryService`].
 pub use module::TelemetryModule;
 /// Injected by the app's per-call MCP context, which is glue over several
 /// modules and therefore lives outside this crate.

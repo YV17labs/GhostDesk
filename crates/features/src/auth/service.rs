@@ -13,14 +13,6 @@
 //! with TLS and no token, and drops a token supplied without TLS. This service
 //! enforces the same invariant a second time, on every other way the binary
 //! starts.
-//!
-//! Not folded into [`AuthGuard`]: the guard is bound as `dyn
-//! McpOperationGuard`, and a provider reached only through a trait object is
-//! not reachable *as itself* — the framework skips its lifecycle hooks and
-//! says so at boot. The rule has to hang off a plainly-registered provider to
-//! run at all.
-//!
-//! [`AuthGuard`]: super::mcp::guard::AuthGuard
 
 use std::sync::Arc;
 

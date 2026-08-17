@@ -1,5 +1,3 @@
-//! Wire translation only: DTO in, service call, DTO out.
-
 use std::sync::Arc;
 
 use nest_rs::mcp::{CallToolResult, McpError, Parameters, Valid, mcp, tools};

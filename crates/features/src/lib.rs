@@ -11,10 +11,8 @@
 //! they all sit on, and the endpoint's own identity is declared by the app,
 //! which is the only layer that can see the whole surface.
 //!
-//! Two ports are exported anyway — [`idle`] and [`telemetry`] — because the
-//! app's per-call MCP context injects their services, and the access graph
-//! demands that whoever provides a consumer import the modules that provide
-//! its dependencies.
+//! Two ports are exported anyway — [`idle`] and [`telemetry`] — for the
+//! app's per-call MCP context, which injects their services.
 
 pub mod auth;
 pub mod clipboard;

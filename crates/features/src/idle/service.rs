@@ -20,11 +20,8 @@ use tokio::task::JoinSet;
 
 use super::config::IdleConfig;
 
-/// Monotonic origin for the idle clock.
-///
-/// A process-wide `LazyLock` rather than a field: `Instant` has no `Default`,
-/// and the container builds a provider's non-injected fields from one. The
-/// origin is a property of the process anyway, not of the service.
+/// Monotonic origin for the idle clock — a property of the process, not of
+/// the service, which is why it is not a field.
 static ORIGIN: LazyLock<Instant> = LazyLock::new(Instant::now);
 
 #[injectable]

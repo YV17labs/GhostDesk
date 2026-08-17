@@ -15,8 +15,7 @@ use crate::mcp::{DesktopContextModule, icons, instructions};
 
 /// The app's half of the endpoint's identity — the half no feature could
 /// know: the deployment's version, and a session brief describing a surface
-/// no single host can see. It carries no path, and neither does any host, so
-/// the endpoint is wherever the framework's default puts it.
+/// no single host can see.
 fn identity() -> McpIdentity {
     McpIdentity::new("ghostdesk", env!("CARGO_PKG_VERSION"))
         .title("GhostDesk")
@@ -25,9 +24,6 @@ fn identity() -> McpIdentity {
         .instructions(instructions(&platform::host::conventions()))
 }
 
-/// Pure imports, no provider: the root composes, the modules own. The one
-/// piece of app-local wiring — the per-call MCP context — has its own module
-/// beside what it binds, [`DesktopContextModule`].
 #[module(
     imports = [
         ConfigModule::for_root(),

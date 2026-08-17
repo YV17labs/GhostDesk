@@ -1,7 +1,5 @@
-//! The per-operation bearer check on `/mcp`.
-//!
-//! A bare `#[mcp]` endpoint is deny-all, so *something* has to bind here — and
-//! an open posture has to say out loud that it is open, which is
+//! The bearer check on `/mcp` — enforcement only. Deciding the posture, and
+//! saying out loud when it is open, is
 //! [`AuthService`](crate::auth::service::AuthService)'s half of the story.
 
 use std::sync::Arc;

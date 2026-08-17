@@ -9,7 +9,6 @@ use nest_rs::mcp::model::{
     ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
     ResourceContents, ServerCapabilities, ServerInfo,
 };
-// `#[tool]` and `#[tool_handler]` expand to bare `rmcp::` paths.
 use nest_rs::mcp::rmcp;
 use nest_rs::mcp::service::{RequestContext, RoleServer};
 use nest_rs::mcp::{
@@ -81,7 +80,6 @@ impl ClipboardTool {
     }
 }
 
-/// The tool table, built once for the process.
 static ROUTER: LazyLock<ToolRouter<ClipboardTool>> = LazyLock::new(ClipboardTool::tool_router);
 
 #[tool_handler(router = (&*ROUTER))]

@@ -101,12 +101,10 @@ type Sessions = HashMap<Arc<str>, State>;
 
 /// A shared handle on the live sessions.
 ///
-/// A newtype rather than a bare `Arc<…>` field because `#[injectable]`
-/// rejects those on sight — an un-injected `Arc` is nearly always a
-/// dependency someone forgot to wire, and would be silently defaulted. This
-/// one is the service's own interior, not a dependency, and the wrapper is
-/// how that intent is stated to the container. Guards hold a clone of it, so
-/// a cancelled call can still report from its `Drop`.
+/// A newtype rather than a bare `Arc<…>` field: this is the service's own
+/// interior, not a dependency, and the wrapper is how that intent is stated
+/// to the container. Guards hold a clone of it, so a cancelled call can
+/// still report from its `Drop`.
 #[derive(Clone, Default)]
 struct Core(Arc<Mutex<Sessions>>);
 

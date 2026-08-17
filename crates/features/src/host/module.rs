@@ -11,14 +11,10 @@ use platform::window::WindowManager;
 /// Binds `platform::host`'s backends into the container.
 ///
 /// Hand-written rather than `#[module]`: the backends are plain platform
-/// types, not `#[injectable]` providers — `platform` deliberately knows
-/// nothing about NestRS, and wrapping each backend in a delegating provider
-/// would be five structs of pure ceremony. `provide_dyn` is the framework's
-/// documented seam for exactly this, and a hand-written `impl Module` is
-/// visible to the boot-time dependency check through the registered set.
-///
-/// Every domain module that injects an `Arc<dyn …>` backend imports this;
-/// `mark_registered` makes the diamond collapse to one registration.
+/// types — `platform` deliberately knows nothing about NestRS, and wrapping
+/// each backend in a delegating provider would be five structs of pure
+/// ceremony. Every domain module that injects an `Arc<dyn …>` backend
+/// imports this.
 pub struct HostModule;
 
 impl Module for HostModule {

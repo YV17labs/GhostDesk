@@ -11,9 +11,8 @@ mod module;
 mod schedule;
 mod service;
 
-/// Exported with [`IdleService`]: the app's per-call MCP context injects the
-/// service, and whoever provides a consumer must import the module that
-/// provides its dependencies.
+/// Imported by the app's per-call MCP context module, which injects
+/// [`IdleService`].
 pub use module::IdleModule;
 pub use schedule::IdleScheduleModule;
 /// Reset by the app's per-call MCP context on every operation — any traffic

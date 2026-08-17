@@ -6,9 +6,8 @@ use features::telemetry::TelemetryModule;
 
 use super::context::DesktopContext;
 
-/// The per-call binding's own module, so the composition root stays pure
-/// imports. It imports the two ports [`DesktopContext`] injects: the access
-/// graph demands that whoever provides a consumer can reach its dependencies.
+/// The per-call binding: glue over idle, telemetry and the coordinate
+/// space, which no single feature spans.
 #[module(
     imports = [IdleModule, TelemetryModule],
     providers = [DesktopContext as dyn McpToolContext],
