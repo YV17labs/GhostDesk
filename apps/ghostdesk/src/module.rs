@@ -1,7 +1,7 @@
 use nest_rs::config::ConfigModule;
 use nest_rs::core::module;
 use nest_rs::http::{HttpConfig, HttpModule};
-use nest_rs::mcp::{McpIdentity, McpModule, McpOptions, McpToolContext};
+use nest_rs::mcp::{McpIdentity, McpModule, McpOptions};
 use nest_rs::schedule::ScheduleModule;
 
 use features::auth::AuthMcpModule;
@@ -11,7 +11,7 @@ use features::input::InputMcpModule;
 use features::programs::ProgramsMcpModule;
 use features::screen::ScreenMcpModule;
 
-use crate::mcp::{DesktopContext, icons, instructions};
+use crate::mcp::{DesktopContextModule, icons, instructions};
 
 /// The app's half of the endpoint's identity — the half no feature could
 /// know: the deployment's version, and a session brief describing a surface
@@ -25,6 +25,9 @@ fn identity() -> McpIdentity {
         .instructions(instructions(&platform::host::conventions()))
 }
 
+/// Pure imports, no provider: the root composes, the modules own. The one
+/// piece of app-local wiring — the per-call MCP context — has its own module
+/// beside what it binds, [`DesktopContextModule`].
 #[module(
     imports = [
         ConfigModule::for_root(),
@@ -46,7 +49,7 @@ fn identity() -> McpIdentity {
         ProgramsMcpModule,
         ClipboardMcpModule,
         IdleScheduleModule,
+        DesktopContextModule,
     ],
-    providers = [DesktopContext as dyn McpToolContext],
 )]
 pub struct GhostdeskModule;
