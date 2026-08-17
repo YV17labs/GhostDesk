@@ -323,7 +323,8 @@ knowing why it is there. Do not copy these shapes into new code.
 | Where | Rule broken | Status |
 |---|---|---|
 | `programs/service.rs` — `SCRUBBED_PREFIX` spells the env prefix | never a variable name as a literal | **kept, deliberately.** The container's own knobs are set straight on the process without passing through the framework, so following `EnvPrefix::current()` would stop sweeping them the day the two diverged. The scrub is a security boundary; the rule loses to it. |
-| `tests/e2e/` is empty | a suite exists to be run | to fix — needs the supervisord stack, so it is scheduled work, not an oversight. `tests/integration/` now proves the wiring. |
+| `apps/ghostdesk/tests/` — `e2e/` is empty and `integration/` boots the real `GhostdeskModule` | integration = no app boot; wiring proof lives in e2e | **kept until the supervisord stack lands in CI.** The wiring assertions need a boot but no desktop, so they sit in the suite `nestrs run test unit` can run; they move to `e2e/` the day the stack does. |
+| `crates/platform/` contracts return `anyhow::Result` | thiserror in a library | **kept, deliberately.** The backends are opaque OS seams; the typed classification each caller needs happens once, at the feature boundary, in each domain's `error.rs`. Typing the substrate would duplicate that vocabulary one layer down with nothing new to say. |
 
 Everything else that used to be listed here is done: the MCP edge is one
 `<module>/mcp/` adapter per domain merged onto one `/mcp`, the endpoint's
