@@ -117,7 +117,7 @@ impl ScreenService {
         stabilize: bool,
         quality: u8,
     ) -> Result<Capture> {
-        let region = region.map(Region::clamped);
+        let region = region.map(|region| coords::region_to_pixels(region).clamped());
         let started = Instant::now();
 
         // The stabilisation loop already decoded the frame it settled on, so

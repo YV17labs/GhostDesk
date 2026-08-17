@@ -1,24 +1,20 @@
 //! Mouse and keyboard control, delegated to the host's [`InputBackend`].
 //!
-//! This service owns the *policy* — clamping, feedback capture, the message
-//! an agent reads back — and none of the mechanism. How a click actually
-//! happens (a Wayland virtual pointer, a CGEvent) is the backend's business.
+//! This service owns the *policy* — the model-space conversion, feedback
+//! capture, the message an agent reads back — and none of the mechanism. How a
+//! click actually happens (a Wayland virtual pointer, a CGEvent) is the
+//! backend's business. Argument bounds are the DTO's, checked by the pipe.
 
 use std::sync::Arc;
 
 use nest_rs::core::{hooks, injectable};
+use platform::coords;
 use platform::input::{Button, InputBackend, ScrollDirection};
 
 use super::feedback::{Feedback, FeedbackService};
 use crate::input::error::InputError;
 
 type Result<T> = std::result::Result<T, InputError>;
-
-/// Wheel notches allowed in a single call. Long pages are scrolled by
-/// chaining calls, each with its own screenshot — one call that scrolls a
-/// whole page would fly past content the agent never sees.
-const SCROLL_MIN: u32 = 1;
-const SCROLL_MAX: u32 = 5;
 
 #[injectable]
 pub struct InputService {
@@ -48,6 +44,7 @@ impl InputService {
 impl InputService {
     /// Move the cursor without pressing anything — hover-only UI reactions.
     pub async fn mouse_move(&self, x: i64, y: i64) -> Result<Feedback> {
+        let (x, y) = coords::to_pixels(x, y);
         let before = self.feedback.capture_before().await?;
         self.backend
             .move_to(x, y)
@@ -63,6 +60,7 @@ impl InputService {
     /// The baseline is captured *after* the pointer is in place, so the
     /// cursor's own repaint is not what gets reported as a change.
     pub async fn mouse_click(&self, x: i64, y: i64, button: Button) -> Result<Feedback> {
+        let (x, y) = coords::to_pixels(x, y);
         self.backend
             .move_to(x, y)
             .await
@@ -82,6 +80,7 @@ impl InputService {
 
     /// Two clicks in a row — open a file, select a word.
     pub async fn mouse_double_click(&self, x: i64, y: i64, button: Button) -> Result<Feedback> {
+        let (x, y) = coords::to_pixels(x, y);
         self.backend
             .move_to(x, y)
             .await
@@ -110,6 +109,8 @@ impl InputService {
         to: (i64, i64),
         button: Button,
     ) -> Result<Feedback> {
+        let from = coords::to_pixels(from.0, from.1);
+        let to = coords::to_pixels(to.0, to.1);
         let before = self.feedback.capture_before().await?;
         self.backend
             .drag(from, to, button)
@@ -134,7 +135,7 @@ impl InputService {
         direction: ScrollDirection,
         amount: u32,
     ) -> Result<Feedback> {
-        let amount = amount.clamp(SCROLL_MIN, SCROLL_MAX);
+        let (x, y) = coords::to_pixels(x, y);
         self.backend
             .move_to(x, y)
             .await
@@ -186,17 +187,5 @@ impl InputService {
         self.feedback
             .observe(format!("Pressed {keys}"), &before)
             .await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn scroll_amounts_are_clamped_into_the_allowed_band() {
-        assert_eq!(0u32.clamp(SCROLL_MIN, SCROLL_MAX), 1);
-        assert_eq!(3u32.clamp(SCROLL_MIN, SCROLL_MAX), 3);
-        assert_eq!(99u32.clamp(SCROLL_MIN, SCROLL_MAX), 5);
     }
 }
