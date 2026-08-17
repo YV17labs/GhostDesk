@@ -44,10 +44,8 @@ impl ScreenTool {
     #[public]
     async fn screen_shot(
         &self,
-        Parameters(params): Parameters<Valid<ScreenShotDto>>,
+        Parameters(Valid(params)): Parameters<Valid<ScreenShotDto>>,
     ) -> Result<CallToolResult, McpError> {
-        let params = params.into_inner();
-
         let capture = self
             .svc
             .capture(

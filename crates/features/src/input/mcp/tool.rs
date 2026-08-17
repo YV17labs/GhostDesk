@@ -142,9 +142,8 @@ impl InputTool {
     #[public]
     async fn mouse_scroll(
         &self,
-        Parameters(params): Parameters<Valid<ScrollDto>>,
+        Parameters(Valid(params)): Parameters<Valid<ScrollDto>>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        let params = params.into_inner();
         Ok(self.observed(
             self.svc
                 .mouse_scroll(params.x, params.y, params.direction.into(), params.amount)
