@@ -35,8 +35,13 @@ impl InputService {
     /// aborts, and nothing is listening yet.
     #[on_application_bootstrap]
     async fn warm_up(&self) -> anyhow::Result<()> {
+        let started = std::time::Instant::now();
         self.backend.warm_up().await?;
-        tracing::info!(target: "features::input", "input backend ready");
+        tracing::info!(
+            target: "features::input",
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            "input backend ready",
+        );
         Ok(())
     }
 }

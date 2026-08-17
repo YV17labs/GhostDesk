@@ -44,6 +44,19 @@ pub enum Posture {
     Open,
 }
 
+impl Posture {
+    /// The value that goes in the log field. A `&'static str` rather than
+    /// `Debug` so the field is a stable token something can filter on.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Secured => "secured",
+            Self::UnauthenticatedTls => "unauthenticated_tls",
+            Self::CleartextToken => "cleartext_token",
+            Self::Open => "open",
+        }
+    }
+}
+
 #[injectable]
 pub struct AuthService {
     #[inject]
@@ -77,22 +90,26 @@ impl AuthService {
     /// TLS endpoint unauthenticated.
     #[on_module_init]
     async fn announce_posture(&self) -> anyhow::Result<()> {
-        match self.posture() {
+        let posture = self.posture();
+        match posture {
             // The one place `anyhow` is right in this crate: a boot hook is
             // the binary's entry point by another name, and nothing above it
             // can branch on the reason.
             Posture::UnauthenticatedTls => return Err(AuthError::UnauthenticatedTls.into()),
             Posture::Secured => tracing::info!(
                 target: "features::auth",
+                posture = posture.as_str(),
                 "TLS enabled, bearer-token auth required",
             ),
             Posture::CleartextToken => tracing::warn!(
                 target: "features::auth",
+                posture = posture.as_str(),
                 "bearer token configured without TLS — the token crosses the \
                  wire in cleartext; mount a cert or drop the token",
             ),
             Posture::Open => tracing::warn!(
                 target: "features::auth",
+                posture = posture.as_str(),
                 remedy = %format!(
                     "deploy behind a cert plus {} for any non-loopback exposure",
                     var_name("auth", "TOKEN"),
