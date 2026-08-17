@@ -1,8 +1,7 @@
 //! The four program tools, plus the read-only counterpart of `app_list`.
 //!
-//! It plays the part a `#[controller]` plays over HTTP: inject the domain
-//! services, translate wire DTOs into domain calls, and translate the results
-//! back. No desktop logic lives here.
+//! Serves resources, so it stays on rmcp's raw shape: `#[tools]` cannot
+//! generate a second `ServerHandler` beside a hand-written one.
 
 use std::sync::{Arc, LazyLock};
 
@@ -58,12 +57,12 @@ impl From<ProgramsError> for McpError {
 #[derive(Clone)]
 pub struct ProgramsTool {
     #[inject]
-    programs: Arc<ProgramsService>,
+    programs_svc: Arc<ProgramsService>,
     /// The settled frame `app_launch` hands back is a screen capture, so this
     /// tool composes the two domains the way the agent would otherwise have
     /// to over two calls.
     #[inject]
-    screen: Arc<ScreenService>,
+    screen_svc: Arc<ScreenService>,
     #[inject]
     journal: Arc<CallJournal>,
 }
@@ -82,7 +81,7 @@ impl ProgramsTool {
     )]
     async fn app_list(&self) -> Result<Json<ListedDto<ProgramDto>>, McpError> {
         Ok(Json(ListedDto::new(
-            self.programs.list().into_iter().map(ProgramDto::from),
+            self.programs_svc.list().into_iter().map(ProgramDto::from),
         )))
     }
 
@@ -96,7 +95,7 @@ impl ProgramsTool {
         annotations(read_only_hint = true)
     )]
     async fn app_running(&self) -> Result<Json<ListedDto<WindowDto>>, McpError> {
-        let windows = self.programs.running().await?;
+        let windows = self.programs_svc.running().await?;
         Ok(Json(ListedDto::new(
             windows.into_iter().map(WindowDto::from),
         )))
@@ -132,7 +131,7 @@ impl ProgramsTool {
         // as "not launched" and spawn a double.
         let seen_before = if params.wait_for_window {
             Some(
-                self.programs
+                self.programs_svc
                     .running()
                     .await?
                     .into_iter()
@@ -143,13 +142,13 @@ impl ProgramsTool {
             None
         };
 
-        let launched = self.programs.launch(&params.command).await?;
+        let launched = self.programs_svc.launch(&params.command).await?;
         let mut answer = LaunchedDto::from(launched);
 
         let mut frame = None;
         if let Some(seen_before) = seen_before {
             match self
-                .programs
+                .programs_svc
                 .wait_for_window(answer.pid, &seen_before)
                 .await?
             {
@@ -165,7 +164,7 @@ impl ProgramsTool {
                     // the instructions would otherwise demand. A capture
                     // failure must not fail the tool — the launch already
                     // happened, and an error would provoke a second one.
-                    match self.screen.capture_settled().await {
+                    match self.screen_svc.capture_settled().await {
                         Ok(capture) => frame = Some(capture),
                         Err(err) => tracing::warn!(
                             target: "features::programs",
@@ -220,18 +219,13 @@ impl ProgramsTool {
         &self,
         Parameters(params): Parameters<StatusDto>,
     ) -> Result<Json<ProgramStatusDto>, McpError> {
-        let status = self.programs.status(params.pid, params.lines)?;
+        let status = self.programs_svc.status(params.pid, params.lines)?;
         Ok(Json(ProgramStatusDto::from(status)))
     }
 }
 
-/// The tool table, built once for the process.
-///
-/// `#[tool_handler]` defaults to `router = Self::tool_router()`, and that
-/// expression is inlined into the generated `call_tool` *and* `list_tools` —
-/// so every tool invocation would otherwise rebuild every `Tool` struct and
-/// re-run the name validator. The table never changes, so it is built once
-/// and borrowed.
+/// Built once: `#[tool_handler]`'s default inlines `Self::tool_router()` into
+/// both `call_tool` and `list_tools`, rebuilding every `Tool` on every call.
 static ROUTER: LazyLock<ToolRouter<ProgramsTool>> = LazyLock::new(ProgramsTool::tool_router);
 
 // Parenthesised on purpose: the macro splices this straight into
@@ -297,7 +291,7 @@ impl ServerHandler for ProgramsTool {
         // description promises "a JSON array of {name, exec}".
         let body = serde_json::to_string(
             &self
-                .programs
+                .programs_svc
                 .list()
                 .into_iter()
                 .map(ProgramDto::from)

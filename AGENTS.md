@@ -313,7 +313,22 @@ tree now assumes.
    shares the endpoint. `tools/list` is the union, `tools/call` is routed by
    name, and **a tool name claimed by two hosts fails boot naming both** — the
    god-host could hide that collision, the endpoint cannot.
-2. **The app declares who it is**, in `apps/ghostdesk/src/module.rs`:
+2. **`#[mcp]` on the struct, `#[tools]` on the impl, and that is the whole
+   file.** No `rmcp`, no `ServerHandler`, no router, no `get_info` — the
+   framework writes all of it, and capabilities are derived from the operations
+   present so nothing can advertise a surface no method serves. Every `#[tool]`
+   declares a posture: `#[public]` here, because the bearer guard gates the
+   whole endpoint and GhostDesk has no per-caller ability model. **Arguments
+   that carry `#[validate]` are wrapped in `Valid<T>`** — a hand-written
+   `params.validate()` in a tool body is the inline edge conversion the layer
+   rules call drift.
+   **The raw rmcp form is for one thing only.** A host serving *resources*
+   hand-writes `impl ServerHandler` (`list_resources` / `read_resource`), and
+   `#[tools]` cannot generate a second `ServerHandler` beside it — so
+   `programs` and `clipboard` use `#[tool_router]` / `#[tool_handler]`
+   directly. This is the framework's documented way out of the sugar, and
+   serving resources is the only thing that earns it.
+3. **The app declares who it is**, in `apps/ghostdesk/src/module.rs`:
    `McpModule::for_root(McpOptions { server: Some(McpIdentity::new("ghostdesk", …).instructions(…).icons(…)), .. })`.
    The identity carries no path — the endpoint is named by the hosts that join
    it — and `version` is the app's alone, since no shared host knows the
@@ -321,16 +336,23 @@ tree now assumes.
    hosts, so nothing can advertise a tool no host serves. The session brief and
    the product's icons live in `apps/ghostdesk/src/mcp/` for the same reason:
    they describe the whole surface, which no single host can see.
-3. **The per-call binding is app-local.** `DesktopContext` (`dyn
+4. **The per-call binding is app-local.** `DesktopContext` (`dyn
    McpToolContext`) is resolved once per path and is glue over three modules —
    idle, telemetry, the coordinate space — so it sits in
    `apps/ghostdesk/src/mcp/context.rs`, not in a feature.
-4. **Measurement is telemetry's MCP adapter.** A host's whole `call_tool` is
-   `self.journal.dispatch(&ROUTER, self, request, context)` — `CallJournal`
-   owns the span, the sequence number and the cost accounting, and the
-   service itself still knows nothing about a transport. A host never
-   instruments its own tool bodies.
-5. **A resource read is offered to every host in turn.** The endpoint routes
+5. **Measurement reaches as far as the framework has a seam for it, and no
+   further.** `CallJournal::dispatch` owns the span, the sequence number and
+   the cost accounting for a whole `call_tool`, so it only runs on the hosts
+   that write one — `programs` and `clipboard`, the resource pair. A `#[tools]`
+   host has no `call_tool` to lend it, and `McpToolContext::around` cannot
+   stand in: it is handed an `OperationValue`, a `Box<dyn Any>` a wrapper may
+   only test for `Ok`/`Err`, so it never sees a tool's name, arguments or
+   result size. **Per-call cost is therefore partial**, and closing it means a
+   framework seam carrying `McpOperationContext`'s `host`/`kind`/`name` — not a
+   hand-written `call_tool` on a host that has no other reason for one.
+   `note_action` is unaffected: it is a plain call from a tool body into
+   telemetry, and works under either form.
+6. **A resource read is offered to every host in turn.** The endpoint routes
    an addressed operation by trying each host until one does not answer
    not-found, so a host that does not own a URI *must* return
    `resource_not_found` — anything else (an `internal_error`, a panic) aborts

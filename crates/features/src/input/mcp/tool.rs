@@ -1,32 +1,16 @@
-//! The seven input tools.
-//!
-//! Coordinates arriving from the agent are in whatever space the caller's
-//! model-space header declared. Converting them is this layer's job — the
-//! app's per-call context installed the space, and every `x`/`y` below goes
-//! through `coords::to_pixels` before a service sees it.
+//! Wire translation only: DTO in, service call, DTO out.
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
-use nest_rs::mcp::ToolRouter;
-use nest_rs::mcp::model::{
-    CallToolRequestParams, CallToolResponse, ServerCapabilities, ServerInfo,
-};
-// `#[tool]` and `#[tool_handler]` expand to bare `rmcp::` paths.
-use nest_rs::mcp::rmcp;
-use nest_rs::mcp::service::{RequestContext, RoleServer};
-use nest_rs::mcp::{
-    Json, McpError, Parameters, ServerHandler, mcp, tool, tool_handler, tool_router,
-};
-use platform::coords;
+use nest_rs::mcp::{Json, McpError, Parameters, Valid, mcp, tools};
 
 use super::super::dtos::{ClickDto, DragDto, FeedbackDto, MoveDto, PressDto, ScrollDto, TypeDto};
 use super::super::error::InputError;
 use super::super::services::{Feedback, InputService};
 use crate::telemetry::CallJournal;
 
-/// An unresolvable chord is the caller's to fix; a backend that will not
-/// press anything is not. Reporting the second as `invalid_params` would tell
-/// the model to rewrite a chord that was already correct.
+/// An unresolvable chord is the caller's to fix; a backend that will not press
+/// anything is not.
 impl From<InputError> for McpError {
     fn from(err: InputError) -> Self {
         let message = err.to_string();
@@ -44,19 +28,14 @@ impl From<InputError> for McpError {
 #[derive(Clone)]
 pub struct InputTool {
     #[inject]
-    input: Arc<InputService>,
+    svc: Arc<InputService>,
     #[inject]
     journal: Arc<CallJournal>,
 }
 
 impl InputTool {
-    /// Record what the feedback loop saw, then hand the verdict to the
-    /// client.
-    ///
-    /// Here rather than inside `FeedbackService`: a domain service has no
-    /// business naming the telemetry module, and this is the layer that
-    /// already owns the call the observation belongs to. It goes through the
-    /// journal the host is already holding, so measurement has one door.
+    /// Recorded here rather than in `FeedbackService`: a domain service has no
+    /// business naming the telemetry module.
     fn observed(&self, feedback: Feedback) -> Json<FeedbackDto> {
         self.journal
             .note_action(&feedback.action, feedback.screen_changed);
@@ -64,7 +43,7 @@ impl InputTool {
     }
 }
 
-#[tool_router]
+#[tools]
 impl InputTool {
     #[tool(
         description = "Move the cursor to (x, y) without pressing any button.\n\n\
@@ -78,12 +57,12 @@ impl InputTool {
             instead: fall back to mouse_click.",
         annotations(destructive_hint = false)
     )]
+    #[public]
     async fn mouse_move(
         &self,
         Parameters(params): Parameters<MoveDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        let (x, y) = coords::to_pixels(params.x, params.y);
-        Ok(self.observed(self.input.mouse_move(x, y).await?))
+        Ok(self.observed(self.svc.mouse_move(params.x, params.y).await?))
     }
 
     #[tool(
@@ -95,12 +74,16 @@ impl InputTool {
             you thought. Take a new screen_shot() and recompute.",
         annotations(destructive_hint = true)
     )]
+    #[public]
     async fn mouse_click(
         &self,
         Parameters(params): Parameters<ClickDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        let (x, y) = coords::to_pixels(params.x, params.y);
-        Ok(self.observed(self.input.mouse_click(x, y, params.button.into()).await?))
+        Ok(self.observed(
+            self.svc
+                .mouse_click(params.x, params.y, params.button.into())
+                .await?,
+        ))
     }
 
     #[tool(
@@ -109,14 +92,14 @@ impl InputTool {
             editable text.",
         annotations(destructive_hint = true)
     )]
+    #[public]
     async fn mouse_double_click(
         &self,
         Parameters(params): Parameters<ClickDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        let (x, y) = coords::to_pixels(params.x, params.y);
         Ok(self.observed(
-            self.input
-                .mouse_double_click(x, y, params.button.into())
+            self.svc
+                .mouse_double_click(params.x, params.y, params.button.into())
                 .await?,
         ))
     }
@@ -130,15 +113,18 @@ impl InputTool {
             pixel-precise drag.",
         annotations(destructive_hint = true)
     )]
+    #[public]
     async fn mouse_drag(
         &self,
         Parameters(params): Parameters<DragDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        let from = coords::to_pixels(params.from_x, params.from_y);
-        let to = coords::to_pixels(params.to_x, params.to_y);
         Ok(self.observed(
-            self.input
-                .mouse_drag(from, to, params.button.into())
+            self.svc
+                .mouse_drag(
+                    (params.from_x, params.from_y),
+                    (params.to_x, params.to_y),
+                    params.button.into(),
+                )
                 .await?,
         ))
     }
@@ -153,14 +139,15 @@ impl InputTool {
             direction.",
         annotations(destructive_hint = false)
     )]
+    #[public]
     async fn mouse_scroll(
         &self,
-        Parameters(params): Parameters<ScrollDto>,
+        Parameters(params): Parameters<Valid<ScrollDto>>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        let (x, y) = coords::to_pixels(params.x, params.y);
+        let params = params.into_inner();
         Ok(self.observed(
-            self.input
-                .mouse_scroll(x, y, params.direction.into(), params.amount)
+            self.svc
+                .mouse_scroll(params.x, params.y, params.direction.into(), params.amount)
                 .await?,
         ))
     }
@@ -178,11 +165,12 @@ impl InputTool {
             have focus. Click into it first and retry.",
         annotations(destructive_hint = true)
     )]
+    #[public]
     async fn key_type(
         &self,
         Parameters(params): Parameters<TypeDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(self.input.key_type(&params.text).await?))
+        Ok(self.observed(self.svc.key_type(&params.text).await?))
     }
 
     #[tool(
@@ -200,30 +188,11 @@ impl InputTool {
             screenshot.",
         annotations(destructive_hint = true)
     )]
+    #[public]
     async fn key_press(
         &self,
         Parameters(params): Parameters<PressDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(self.input.key_press(&params.keys).await?))
-    }
-}
-
-/// The tool table, built once for the process. See the note on the programs
-/// host: `#[tool_handler]` would otherwise rebuild all seven `Tool` structs on
-/// every single call.
-static ROUTER: LazyLock<ToolRouter<InputTool>> = LazyLock::new(InputTool::tool_router);
-
-#[tool_handler(router = (&*ROUTER))]
-impl ServerHandler for InputTool {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-    }
-
-    async fn call_tool(
-        &self,
-        request: CallToolRequestParams,
-        context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResponse, McpError> {
-        self.journal.dispatch(&ROUTER, self, request, context).await
+        Ok(self.observed(self.svc.key_press(&params.keys).await?))
     }
 }
