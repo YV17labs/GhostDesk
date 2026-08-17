@@ -7,9 +7,8 @@
 *.profdata
 /coverage
 
-# Secrets / local state
-.env
-.env.local
+# Secrets / local state — the `.local` tier of the .env cascade
+.env*.local
 tls/
 
 # Editor / agent
