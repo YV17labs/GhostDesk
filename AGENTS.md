@@ -4,6 +4,13 @@ How this project is laid out and named. Read it before adding a file: the
 conventions below cannot be inferred from the tree, and drifting from them is
 what turns a slice into a folder nobody can navigate.
 
+**The doctrine is the framework's, not this file's.** The reference is the
+official architecture documentation — <https://nestrs.dev/architecture/>
+(fundamentals, all options, configuration). This file is the project-local
+delta: what the tree adds on top, never what it overrides. When this file and
+the framework documentation disagree, **the documentation wins**, and the
+disagreement is a bug here to fix, not a choice to defend.
+
 ## Layout — three crates, three jobs
 
 ```
@@ -95,6 +102,12 @@ decision, not plumbing.
 
 **No `*_module.rs`, ever.** One `#[module]` per file, one `module.rs` per
 folder; two modules in a feature means two folders.
+
+**The composition root lists imports only.** A provider on the root module is
+composition doing a feature's job — the documentation's shape for a root is
+"compose features and framework modules; let adapters own the handlers".
+App-local glue gets its own `module.rs` beside what it binds and joins the
+import list like everything else (see *How the endpoint is composed*, point 4).
 
 ## Providers — three questions, in order
 
@@ -197,6 +210,25 @@ or an enum leaves the count at one, and that is the common case. Reach for
 - Injected service field is `svc` when there is one, `<name>_svc` when there
   are several. Non-service dependencies keep descriptive names (`db`, `queue`,
   `config`).
+
+## Comments
+
+**A comment carries the business, never the framework.** The reader is
+assumed to know NestRS: its mechanics are documented at nestrs.dev, and a
+comment restating them — what `as dyn` binds, when a scheduled method ticks,
+what the access graph checks — is that documentation duplicated: wrong the
+day the framework moves, and tiring every day before. The same goes for a
+header that restates its own path — `//! The screen domain's MCP adapter.`
+above `screen/mcp/` says nothing twice — and for the same sentence repeated
+across sibling modules: it teaches nothing the second time.
+
+A comment earns its place when it states what is *ours* and the code cannot
+show: a product rule, a security boundary, a deliberate trade-off, the why
+behind a shape that would otherwise read as a mistake. One test decides every
+case — **if the sentence would be true in any NestRS project, it belongs to
+the framework's docs, not to this repo.** The `//!` slot on an index exists
+for a header that has something to say; an index whose path already says
+everything keeps none.
 
 ## Reserved vocabulary
 
@@ -319,9 +351,11 @@ tree now assumes.
    present so nothing can advertise a surface no method serves. Every `#[tool]`
    declares a posture: `#[public]` here, because the bearer guard gates the
    whole endpoint and GhostDesk has no per-caller ability model. **Arguments
-   that carry `#[validate]` are wrapped in `Valid<T>`** — a hand-written
-   `params.validate()` in a tool body is the inline edge conversion the layer
-   rules call drift.
+   that carry `#[validate]` are wrapped in `Valid<T>` and destructured in the
+   signature** — `Parameters(Valid(params))`: the framework makes the field
+   public for exactly that, so an `into_inner()` in the body restates what the
+   pattern already did, and a hand-written `params.validate()` is the inline
+   edge conversion the layer rules call drift.
    **The raw rmcp form is for one thing only.** A host serving *resources*
    hand-writes `impl ServerHandler` (`list_resources` / `read_resource`), and
    `#[tools]` cannot generate a second `ServerHandler` beside it — so
@@ -336,10 +370,13 @@ tree now assumes.
    hosts, so nothing can advertise a tool no host serves. The session brief and
    the product's icons live in `apps/ghostdesk/src/mcp/` for the same reason:
    they describe the whole surface, which no single host can see.
-4. **The per-call binding is app-local.** `DesktopContext` (`dyn
-   McpToolContext`) is resolved once per path and is glue over three modules —
-   idle, telemetry, the coordinate space — so it sits in
-   `apps/ghostdesk/src/mcp/context.rs`, not in a feature.
+4. **The per-call binding is app-local, and the root stays pure imports.**
+   `DesktopContext` (`dyn McpToolContext`) is resolved once per path and is
+   glue over three modules — idle, telemetry, the coordinate space — so it
+   sits in `apps/ghostdesk/src/mcp/context.rs`, not in a feature. It is
+   provided by `DesktopContextModule` (`mcp/module.rs`), which imports the two
+   ports it injects; `features` exports those two ports for exactly this
+   consumer, and the root module composes imports and declares nothing.
 5. **Measurement reaches as far as the framework has a seam for it, and no
    further.** `CallJournal::dispatch` owns the span, the sequence number and
    the cost accounting for a whole `call_tool`, so it only runs on the hosts
