@@ -41,7 +41,7 @@ impl From<ClipboardError> for McpError {
 #[derive(Clone)]
 pub struct ClipboardTool {
     #[inject]
-    clipboard: Arc<ClipboardService>,
+    svc: Arc<ClipboardService>,
     #[inject]
     journal: Arc<CallJournal>,
 }
@@ -59,7 +59,7 @@ impl ClipboardTool {
     )]
     async fn clipboard_get(&self) -> Result<CallToolResult, McpError> {
         Ok(CallToolResult::success(vec![ContentBlock::text(
-            self.clipboard.get().await,
+            self.svc.get().await,
         )]))
     }
 
@@ -76,7 +76,7 @@ impl ClipboardTool {
         &self,
         Parameters(params): Parameters<ClipboardSetDto>,
     ) -> Result<CallToolResult, McpError> {
-        let message = self.clipboard.set(&params.text).await?;
+        let message = self.svc.set(&params.text).await?;
         Ok(CallToolResult::success(vec![ContentBlock::text(message)]))
     }
 }
@@ -135,7 +135,7 @@ impl ServerHandler for ClipboardTool {
             ));
         }
 
-        let contents = ResourceContents::text(self.clipboard.get().await, &request.uri)
+        let contents = ResourceContents::text(self.svc.get().await, &request.uri)
             .with_mime_type(CLIPBOARD_MIME);
         Ok(ReadResourceResult::new(vec![contents]).into())
     }
