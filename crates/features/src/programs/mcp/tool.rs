@@ -54,7 +54,7 @@ impl From<ProgramsError> for McpError {
     }
 }
 
-#[mcp(path = "/mcp")]
+#[mcp]
 #[derive(Clone)]
 pub struct ProgramsTool {
     #[inject]

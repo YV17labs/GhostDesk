@@ -39,7 +39,7 @@ impl From<ScreenError> for McpError {
     }
 }
 
-#[mcp(path = "/mcp")]
+#[mcp]
 #[derive(Clone)]
 pub struct ScreenTool {
     #[inject]

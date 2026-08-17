@@ -37,7 +37,7 @@ impl From<ClipboardError> for McpError {
     }
 }
 
-#[mcp(path = "/mcp")]
+#[mcp]
 #[derive(Clone)]
 pub struct ClipboardTool {
     #[inject]

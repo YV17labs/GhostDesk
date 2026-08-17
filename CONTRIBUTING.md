@@ -60,9 +60,9 @@ devcontainer ships it pre-installed along with `mold` for fast links.
 - Follow the framework's shape: a domain is an `#[injectable]` service in
   `crates/features/src/<domain>/`, wired by a `#[module]`, and its own
   `<domain>/mcp/` adapter is the only place that knows about the wire. Every
-  adapter declares the same `#[mcp(path = "/mcp")]` and the framework merges
-  them onto one endpoint, so a new domain is a new folder — never a branch in
-  someone else's tool
+  adapter is a bare `#[mcp]` and the framework merges them onto one endpoint,
+  so a new domain is a new folder — never a branch in someone else's tool.
+  `AGENTS.md` carries these rules in full, and is the copy that binds
 - Keep `crates/platform` free of framework types — it is the OS substrate
   (Wayland, Sway IPC, `grim`, `.desktop`) and stays testable on its own
 - Comment the *why*, not the *what*; the surprising constraint is worth a

@@ -40,7 +40,7 @@ impl From<InputError> for McpError {
     }
 }
 
-#[mcp(path = "/mcp")]
+#[mcp]
 #[derive(Clone)]
 pub struct InputTool {
     #[inject]

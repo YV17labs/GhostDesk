@@ -36,10 +36,9 @@ crates/features/src/<module>/
 `<Module><Edge>Module`, every time. Never invert it into a single top-level edge
 folder that injects every domain service: that trades the module gate — an app
 importing exactly the edges it serves — for an adapter no app can subset.
-Several modules may declare the **same** `#[mcp(path)]`: the framework merges
-them onto one endpoint, so a single client URL is no reason to fold domains
-together. That is how `/mcp` is served here — see *How the endpoint is
-composed*.
+Several modules may join the **same** MCP endpoint: the framework merges them
+onto one, so a single client URL is no reason to fold domains together. That is
+how `/mcp` is served here — see *How the endpoint is composed*.
 
 ## Names — four levels, and none overflows into the next
 
@@ -301,23 +300,27 @@ identity is declared by the app, `apps/` is `programs/`, `host.rs` is
 is `auth/mcp/guard.rs`, every service returns a domain enum from `error.rs`,
 and span targets are rooted at `features::`.
 
-### How the endpoint is composed
+## How the endpoint is composed
 
 Read this before adding a domain or a tool — it is the shape the rest of the
 tree now assumes.
 
 1. **One `mcp/` adapter per module.** `<module>/mcp/tool.rs` + `<Module>Tool` +
-   `<Module>McpModule`, each declaring the **same** `#[mcp(path = "/mcp")]`.
+   `<Module>McpModule`, each a bare `#[mcp]` — the decorator's default path is
+   `/mcp`, so writing it would restate a framework constant, and a host that
+   ever needed to stand apart is the only one that spells a path.
    Each keeps its own `#[inject]` dependencies; none of them learns that it
    shares the endpoint. `tools/list` is the union, `tools/call` is routed by
    name, and **a tool name claimed by two hosts fails boot naming both** — the
    god-host could hide that collision, the endpoint cannot.
-2. **The app declares the endpoint**, in `apps/ghostdesk/src/module.rs`:
-   `McpModule::for_root(None).endpoint(McpEndpoint::new("/mcp", …).instructions(…).icons(…))`.
-   Identity is declared, capabilities stay *observed* from the hosts, so
-   nothing can advertise a tool no host serves. The session brief and the
-   product's icons live in `apps/ghostdesk/src/mcp/` for the same reason: they
-   describe the whole surface, which no single host can see.
+2. **The app declares who it is**, in `apps/ghostdesk/src/module.rs`:
+   `McpModule::for_root(McpOptions { server: Some(McpIdentity::new("ghostdesk", …).instructions(…).icons(…)), .. })`.
+   The identity carries no path — the endpoint is named by the hosts that join
+   it — and `version` is the app's alone, since no shared host knows the
+   deployment's. Identity is declared, capabilities stay *observed* from the
+   hosts, so nothing can advertise a tool no host serves. The session brief and
+   the product's icons live in `apps/ghostdesk/src/mcp/` for the same reason:
+   they describe the whole surface, which no single host can see.
 3. **The per-call binding is app-local.** `DesktopContext` (`dyn
    McpToolContext`) is resolved once per path and is glue over three modules —
    idle, telemetry, the coordinate space — so it sits in

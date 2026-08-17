@@ -1,7 +1,12 @@
 use ghostdesk::GhostdeskModule;
 use nest_rs::core::App;
-use nest_rs::mcp::{declared_endpoint, hosts_on};
+use nest_rs::mcp::{endpoint_identity, hosts_on};
 
+/// Spelled out rather than read from `nest_rs::mcp::DEFAULT_PATH`, now that no
+/// host spells it either: this is the URL the README and SECURITY.md publish to
+/// clients, so the assertion has to fail if the framework's default ever moves
+/// off it. Taking the constant would only assert the hosts are wherever the
+/// framework put them, which is not the promise being kept.
 const PATH: &str = "/mcp";
 
 const TOOLS: &[&str] = &[
@@ -63,18 +68,20 @@ async fn the_hosts_publish_the_whole_tool_surface_and_no_name_twice() {
 #[tokio::test]
 async fn the_app_names_the_endpoint_rather_than_leaving_it_to_a_host() {
     let app = app().await;
-    let endpoint = declared_endpoint(app.container(), PATH)
-        .expect("the app declares an identity for the endpoint it composes");
+    let identity = endpoint_identity(app.container(), PATH);
 
-    assert_eq!(endpoint.implementation().name, "ghostdesk");
+    let info = identity
+        .implementation()
+        .expect("the app declares an identity for the endpoint it composes");
+    assert_eq!(info.name, "ghostdesk");
     assert_eq!(
-        endpoint.implementation().version,
+        info.version,
         env!("CARGO_PKG_VERSION"),
         "the app's version, never the SDK's",
     );
 
-    let brief = endpoint
-        .declared_instructions()
+    let brief = identity
+        .instructions()
         .expect("the session brief is declared, not left to be joined from four hosts");
     assert!(brief.contains("Copy is"), "the brief names the shortcuts");
 }
