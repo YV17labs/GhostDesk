@@ -19,7 +19,7 @@ type Result<T> = std::result::Result<T, InputError>;
 #[injectable]
 pub struct InputService {
     #[inject]
-    feedback: Arc<FeedbackService>,
+    svc: Arc<FeedbackService>,
     #[inject]
     backend: Arc<dyn InputBackend>,
 }
@@ -45,12 +45,12 @@ impl InputService {
     /// Move the cursor without pressing anything — hover-only UI reactions.
     pub async fn mouse_move(&self, x: i64, y: i64) -> Result<Feedback> {
         let (x, y) = coords::to_pixels(x, y);
-        let before = self.feedback.capture_before().await?;
+        let before = self.svc.capture_before().await?;
         self.backend
             .move_to(x, y)
             .await
             .map_err(InputError::Backend)?;
-        self.feedback
+        self.svc
             .observe(format!("Moved cursor to ({x}, {y})"), &before)
             .await
     }
@@ -65,12 +65,12 @@ impl InputService {
             .move_to(x, y)
             .await
             .map_err(InputError::Backend)?;
-        let before = self.feedback.capture_before().await?;
+        let before = self.svc.capture_before().await?;
         self.backend
             .click(button)
             .await
             .map_err(InputError::Backend)?;
-        self.feedback
+        self.svc
             .observe(
                 format!("Clicked {} at ({x}, {y})", button.as_str()),
                 &before,
@@ -85,7 +85,7 @@ impl InputService {
             .move_to(x, y)
             .await
             .map_err(InputError::Backend)?;
-        let before = self.feedback.capture_before().await?;
+        let before = self.svc.capture_before().await?;
         self.backend
             .click(button)
             .await
@@ -94,7 +94,7 @@ impl InputService {
             .click(button)
             .await
             .map_err(InputError::Backend)?;
-        self.feedback
+        self.svc
             .observe(
                 format!("Double-clicked {} at ({x}, {y})", button.as_str()),
                 &before,
@@ -111,12 +111,12 @@ impl InputService {
     ) -> Result<Feedback> {
         let from = coords::to_pixels(from.0, from.1);
         let to = coords::to_pixels(to.0, to.1);
-        let before = self.feedback.capture_before().await?;
+        let before = self.svc.capture_before().await?;
         self.backend
             .drag(from, to, button)
             .await
             .map_err(InputError::Backend)?;
-        self.feedback
+        self.svc
             .observe(
                 format!(
                     "Dragged from ({}, {}) to ({}, {})",
@@ -140,12 +140,12 @@ impl InputService {
             .move_to(x, y)
             .await
             .map_err(InputError::Backend)?;
-        let before = self.feedback.capture_before().await?;
+        let before = self.svc.capture_before().await?;
         self.backend
             .scroll(direction, amount)
             .await
             .map_err(InputError::Backend)?;
-        self.feedback
+        self.svc
             .observe(
                 format!(
                     "Scrolled {} {amount} clicks at ({x}, {y})",
@@ -158,12 +158,12 @@ impl InputService {
 
     /// Type text at the current keyboard focus.
     pub async fn key_type(&self, text: &str) -> Result<Feedback> {
-        let before = self.feedback.capture_before().await?;
+        let before = self.svc.capture_before().await?;
         self.backend
             .type_text(text)
             .await
             .map_err(InputError::Backend)?;
-        self.feedback
+        self.svc
             .observe(
                 format!("Typed {} characters", text.chars().count()),
                 &before,
@@ -179,13 +179,11 @@ impl InputService {
             .backend
             .resolve_chord(keys)
             .map_err(InputError::Chord)?;
-        let before = self.feedback.capture_before().await?;
+        let before = self.svc.capture_before().await?;
         self.backend
             .press_chord(chord)
             .await
             .map_err(InputError::Backend)?;
-        self.feedback
-            .observe(format!("Pressed {keys}"), &before)
-            .await
+        self.svc.observe(format!("Pressed {keys}"), &before).await
     }
 }

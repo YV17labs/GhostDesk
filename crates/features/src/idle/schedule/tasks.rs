@@ -12,14 +12,14 @@ use crate::idle::service::IdleService;
 #[injectable]
 pub struct IdleTasks {
     #[inject]
-    idle: Arc<IdleService>,
+    svc: Arc<IdleService>,
 }
 
 #[hooks]
 impl IdleTasks {
     #[on_application_bootstrap]
     async fn announce(&self) {
-        match self.idle.timeout_secs() {
+        match self.svc.timeout_secs() {
             0 => tracing::info!(
                 target: "features::idle",
                 timeout_secs = 0,
@@ -33,7 +33,7 @@ impl IdleTasks {
         }
         // Reset the clock at boot: a slow startup must not read as an idle
         // session and close the desktop before the agent's first request.
-        self.idle.mark_activity();
+        self.svc.mark_activity();
     }
 }
 
@@ -47,23 +47,23 @@ impl IdleTasks {
     /// A failed run is logged and the schedule keeps ticking.
     #[every("5s")]
     async fn close_idle_views(&self) -> anyhow::Result<()> {
-        if !self.idle.is_expired() {
+        if !self.svc.is_expired() {
             return Ok(());
         }
 
         tracing::info!(
             target: "features::idle",
-            idle_secs = self.idle.idle_secs(),
-            threshold_secs = self.idle.timeout_secs(),
+            idle_secs = self.svc.idle_secs(),
+            threshold_secs = self.svc.timeout_secs(),
             "idle threshold reached — closing all views",
         );
 
-        let closed = self.idle.cleanup_views().await;
+        let closed = self.svc.cleanup_views().await;
 
         tracing::info!(target: "features::idle", closed, "cleanup done");
         // Restart the clock so the next sweep is a full timeout away rather
         // than every tick from here on.
-        self.idle.mark_activity();
+        self.svc.mark_activity();
         Ok(())
     }
 }

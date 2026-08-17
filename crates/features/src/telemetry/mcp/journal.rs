@@ -22,7 +22,7 @@ use crate::telemetry::session::Outcome;
 #[injectable]
 pub struct CallJournal {
     #[inject]
-    telemetry: Arc<TelemetryService>,
+    svc: Arc<TelemetryService>,
 }
 
 impl CallJournal {
@@ -45,9 +45,7 @@ impl CallJournal {
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, McpError> {
         // Read before `request` is moved into the dispatch.
-        let call = self
-            .telemetry
-            .begin(&request.name, request.arguments.as_ref());
+        let call = self.svc.begin(&request.name, request.arguments.as_ref());
         let span = tracing::info_span!("mcp.tool", tool = %request.name, seq = call.seq());
 
         let dispatch = router.call(ToolCallContext::new(host, request, context));

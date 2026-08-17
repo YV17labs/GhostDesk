@@ -20,9 +20,9 @@ struct Ambient {
 #[injectable]
 pub struct DesktopContext {
     #[inject]
-    idle: Arc<IdleService>,
+    idle_svc: Arc<IdleService>,
     #[inject]
-    telemetry: Arc<TelemetryService>,
+    telemetry_svc: Arc<TelemetryService>,
 }
 
 impl McpToolContext for DesktopContext {
@@ -50,14 +50,14 @@ impl McpToolContext for DesktopContext {
         captured: &'a Captured,
         inner: BoxFuture<'a, OperationOutcome>,
     ) -> BoxFuture<'a, OperationOutcome> {
-        self.idle.mark_activity();
+        self.idle_svc.mark_activity();
 
         let ambient = captured.downcast_ref::<Ambient>();
         let space = ambient.map_or(0, |ambient| ambient.space);
         let session = ambient.map_or("", |ambient| ambient.session.as_str());
 
         Box::pin(
-            self.telemetry
+            self.telemetry_svc
                 .with_session(session, coords::with_model_space(space, inner)),
         )
     }
