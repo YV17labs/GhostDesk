@@ -5,6 +5,7 @@
   "workspaceFolder": "/workspaces/ghostdesk",
   "remoteUser": "vscode",
   "forwardPorts": [3000, 5900, 6080],
+  "postCreateCommand": "cargo build -p ghostdesk",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -16,10 +17,7 @@
       "settings": {
         "rust-analyzer.check.command": "clippy",
         "rust-analyzer.cargo.allTargets": true,
-        "editor.formatOnSave": true,
-        "[rust]": {
-          "editor.defaultFormatter": "rust-lang.rust-analyzer"
-        }
+        "editor.formatOnSave": true
       }
     }
   }

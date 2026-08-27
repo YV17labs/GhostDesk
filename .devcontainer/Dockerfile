@@ -13,9 +13,7 @@ ARG WAYVNC_REF=v0.10.1
 ARG NEATVNC_REF=v1.0.1
 ARG AML_REF=v1.0.0
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git \
         meson ninja-build pkg-config gcc dpkg-dev \
         libdrm-dev libxkbcommon-dev libwayland-dev \
@@ -85,9 +83,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # Note what is *not* here: no libwayland-dev, and no Python at all.
 # `wayland-client` speaks the protocol from pure Rust, so the compositor is
 # driven over a socket with no C library in the link line.
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update \
+RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         sway mako-notifier \
         grim wl-clipboard \
