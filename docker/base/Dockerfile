@@ -190,8 +190,9 @@ COPY docker/supervisor/conf.d/          /etc/supervisor/conf.d/
 COPY docker/services/sway/config        /etc/ghostdesk/sway.config
 COPY --chmod=0755 docker/init/entrypoint.sh         /usr/local/bin/entrypoint
 COPY --chmod=0755 docker/init/healthcheck.sh        /usr/local/bin/health
+COPY --chmod=0755 docker/init/wait-for-wayland.sh   /usr/local/bin/wait-for-wayland
+COPY --chmod=0755 docker/services/sway/run.sh       /usr/local/bin/sway-run
 COPY --chmod=0755 docker/services/mcp/run.sh        /usr/local/bin/mcp-run
-COPY --chmod=0755 docker/services/mako/run.sh       /usr/local/bin/mako-run
 COPY --chmod=0755 docker/services/websockify/run.sh /usr/local/bin/websockify-run
 COPY --chmod=0644 docker/shell/sway-env.sh          /etc/profile.d/sway-env.sh
 
