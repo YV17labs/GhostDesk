@@ -21,3 +21,8 @@ anyhow.workspace = true
 base64.workspace = true
 nest-rs.workspace = true
 tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+nest-rs = { workspace = true, features = ["testing"] }
+serde_json.workspace = true

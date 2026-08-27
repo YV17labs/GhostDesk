@@ -1,18 +1,6 @@
-//! The four program tools, plus the read-only counterpart of `app_list`.
+use std::sync::Arc;
 
-use std::sync::{Arc, LazyLock};
-
-use nest_rs::mcp::ToolRouter;
-use nest_rs::mcp::model::{
-    CallToolRequestParams, CallToolResponse, ListResourcesResult, PaginatedRequestParams,
-    ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, Resource,
-    ResourceContents, ServerCapabilities, ServerInfo,
-};
-use nest_rs::mcp::rmcp;
-use nest_rs::mcp::service::{RequestContext, RoleServer};
-use nest_rs::mcp::{
-    CallToolResult, Json, McpError, Parameters, ServerHandler, mcp, tool, tool_handler, tool_router,
-};
+use nest_rs::mcp::{CallToolResult, Json, McpError, Opaque, Parameters, mcp, tools};
 
 use super::super::dtos::{
     LaunchDto, LaunchedDto, ListedDto, ProgramDto, ProgramStatusDto, StatusDto, WindowDto,
@@ -20,32 +8,18 @@ use super::super::dtos::{
 use super::super::error::ProgramsError;
 use super::super::service::{ProgramsService, WindowWait};
 use crate::screen::{CaptureDto, ScreenService};
-use crate::telemetry::CallJournal;
 
-/// The catalogue, fetchable without costing the agent a turn.
-const CATALOGUE_URI: &str = "ghostdesk://apps";
-const CATALOGUE_MIME: &str = "application/json";
+trait Answered<T> {
+    fn answered(self) -> Result<T, McpError>;
+}
 
-/// Whose mistake it was, spelled once.
-///
-/// The match is exhaustive on purpose: a new variant is a compile error here,
-/// not a refusal silently reported as a server crash. `invalid_params` is
-/// what lets the model correct itself and retry, where `internal_error` reads
-/// as "stop trying".
-impl From<ProgramsError> for McpError {
-    fn from(err: ProgramsError) -> Self {
-        let message = err.to_string();
-        match err {
-            ProgramsError::Syntax(_)
-            | ProgramsError::Empty
-            | ProgramsError::Arguments(_)
-            | ProgramsError::Unknown(_)
-            | ProgramsError::Untracked(_)
-            | ProgramsError::Spawn { .. } => Self::invalid_params(message, None),
-            ProgramsError::Vanished | ProgramsError::Log(_) | ProgramsError::Desktop(_) => {
-                tracing::error!(target: "features::programs", error = %message, "tool failed");
-                Self::internal_error(message, None)
+impl<T> Answered<T> for Result<T, ProgramsError> {
+    fn answered(self) -> Result<T, McpError> {
+        match self {
+            Err(err) if err.blames_the_caller() => {
+                Err(McpError::invalid_params(err.to_string(), None))
             }
+            other => other.opaque(),
         }
     }
 }
@@ -55,16 +29,11 @@ impl From<ProgramsError> for McpError {
 pub struct ProgramsTool {
     #[inject]
     programs_svc: Arc<ProgramsService>,
-    /// The settled frame `app_launch` hands back is a screen capture, so this
-    /// tool composes the two domains the way the agent would otherwise have
-    /// to over two calls.
     #[inject]
     screen_svc: Arc<ScreenService>,
-    #[inject]
-    journal: Arc<CallJournal>,
 }
 
-#[tool_router]
+#[tools]
 impl ProgramsTool {
     #[tool(
         description = "Return the catalogue of installed GUI applications, \
@@ -74,8 +43,9 @@ impl ProgramsTool {
             application, and again after installing software during the \
             session. Each entry has a name and an exec; exec is the string to \
             pass to app_launch().",
-        annotations(read_only_hint = true, idempotent_hint = true)
+        annotations(read_only_hint = true, open_world_hint = false)
     )]
+    #[public]
     async fn app_list(&self) -> Result<Json<ListedDto<ProgramDto>>, McpError> {
         Ok(Json(ListedDto::new(
             self.programs_svc.list().into_iter().map(ProgramDto::from),
@@ -89,10 +59,11 @@ impl ProgramsTool {
             Call this before app_launch(): if the app is already in the list, \
             switch to its window instead of launching a second instance and \
             doubling memory use.",
-        annotations(read_only_hint = true)
+        annotations(read_only_hint = true, open_world_hint = false)
     )]
+    #[public]
     async fn app_running(&self) -> Result<Json<ListedDto<WindowDto>>, McpError> {
-        let windows = self.programs_svc.running().await?;
+        let windows = self.programs_svc.running().await.answered()?;
         Ok(Json(ListedDto::new(
             windows.into_iter().map(WindowDto::from),
         )))
@@ -114,23 +85,20 @@ impl ProgramsTool {
             /tmp/ghostdesk/proc-<pid>.log and can be tailed with \
             app_status(pid). Check app_running() first — the target may \
             already be open.",
-        annotations(destructive_hint = false),
+        annotations(destructive_hint = false, open_world_hint = false),
         output_schema = rmcp::handler::server::tool::schema_for_output::<LaunchedDto>()
     )]
+    #[public]
     async fn app_launch(
         &self,
         Parameters(params): Parameters<LaunchDto>,
     ) -> Result<CallToolResult, McpError> {
-        // The pre-launch window set — what "a window appeared" is measured
-        // against. Taken before the spawn so the launch's own window can
-        // never be in it. Failing *here* refuses the launch outright, which
-        // beats launching and then erroring: the agent would read the error
-        // as "not launched" and spawn a double.
         let seen_before = if params.wait_for_window {
             Some(
                 self.programs_svc
                     .running()
-                    .await?
+                    .await
+                    .answered()?
                     .into_iter()
                     .map(|window| window.pid)
                     .collect(),
@@ -139,7 +107,7 @@ impl ProgramsTool {
             None
         };
 
-        let launched = self.programs_svc.launch(&params.command).await?;
+        let launched = self.programs_svc.launch(&params.command).await.answered()?;
         let mut answer = LaunchedDto::from(launched);
 
         let mut frame = None;
@@ -147,7 +115,8 @@ impl ProgramsTool {
             match self
                 .programs_svc
                 .wait_for_window(answer.pid, &seen_before)
-                .await?
+                .await
+                .answered()?
             {
                 WindowWait::Appeared { window, waited_ms } => {
                     answer.action = format!(
@@ -157,10 +126,6 @@ impl ProgramsTool {
                     answer.window = Some(WindowDto::from(window));
                     answer.window_wait_ms = Some(waited_ms);
 
-                    // The settled frame replaces the follow-up screen_shot
-                    // the instructions would otherwise demand. A capture
-                    // failure must not fail the tool — the launch already
-                    // happened, and an error would provoke a second one.
                     match self.screen_svc.capture_settled().await {
                         Ok(capture) => frame = Some(capture),
                         Err(err) => tracing::warn!(
@@ -191,11 +156,7 @@ impl ProgramsTool {
             }
         }
 
-        // `structured` mirrors what `Json<LaunchedDto>` would produce — JSON
-        // text block plus structuredContent — so clients that read either keep
-        // working; the frame rides along as an extra image block.
-        let structured = serde_json::to_value(&answer)
-            .map_err(|err| McpError::internal_error(err.to_string(), None))?;
+        let structured = serde_json::to_value(&answer).opaque()?;
         let mut result = CallToolResult::structured(structured);
         if let Some(capture) = frame {
             result.content.push(CaptureDto::from(&capture).block());
@@ -210,92 +171,18 @@ impl ProgramsTool {
             Only PIDs returned by app_launch() are accepted. Use this to \
             confirm an app crashed (tail the log for a traceback) or to watch \
             a long-running app write progress to its output.",
-        annotations(read_only_hint = true)
+        annotations(read_only_hint = true, open_world_hint = false)
     )]
+    #[public]
     async fn app_status(
         &self,
         Parameters(params): Parameters<StatusDto>,
     ) -> Result<Json<ProgramStatusDto>, McpError> {
-        let status = self.programs_svc.status(params.pid, params.lines)?;
+        let status = self
+            .programs_svc
+            .status(params.pid, params.lines)
+            .answered()?;
         Ok(Json(ProgramStatusDto::from(status)))
-    }
-}
-
-static ROUTER: LazyLock<ToolRouter<ProgramsTool>> = LazyLock::new(ProgramsTool::tool_router);
-
-#[tool_handler(router = (&*ROUTER))]
-impl ServerHandler for ProgramsTool {
-    /// Capabilities only. The endpoint's identity and its session brief are
-    /// the app's to declare — this host serves one feature of several and
-    /// cannot speak for the whole surface.
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(
-            ServerCapabilities::builder()
-                .enable_tools()
-                .enable_resources()
-                .build(),
-        )
-    }
-
-    async fn call_tool(
-        &self,
-        request: CallToolRequestParams,
-        context: RequestContext<RoleServer>,
-    ) -> Result<CallToolResponse, McpError> {
-        self.journal.dispatch(&ROUTER, self, request, context).await
-    }
-
-    async fn list_resources(
-        &self,
-        _request: Option<PaginatedRequestParams>,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ListResourcesResult, McpError> {
-        Ok(ListResourcesResult {
-            resources: vec![
-                Resource::new(CATALOGUE_URI, "apps")
-                    .with_description(
-                        "Installed GUI applications as a JSON array of {name, exec}. \
-                         Same data as the app_list tool.",
-                    )
-                    .with_mime_type(CATALOGUE_MIME),
-            ],
-            ..ListResourcesResult::default()
-        })
-    }
-
-    async fn read_resource(
-        &self,
-        request: ReadResourceRequestParams,
-        _context: RequestContext<RoleServer>,
-    ) -> Result<ReadResourceResponse, McpError> {
-        if request.uri != CATALOGUE_URI {
-            // Not this host's URI. The endpoint offers the read to each host
-            // in turn until one does not answer not-found, so this is how a
-            // sibling's resource gets its chance.
-            return Err(McpError::resource_not_found(
-                format!("unknown resource `{}`", request.uri),
-                None,
-            ));
-        }
-
-        // A plain array here, not the `ListedDto` wrapper: a resource is a
-        // document, not a `structuredContent` object, and the published
-        // description promises "a JSON array of {name, exec}".
-        let body = serde_json::to_string(
-            &self
-                .programs_svc
-                .list()
-                .into_iter()
-                .map(ProgramDto::from)
-                .collect::<Vec<_>>(),
-        )
-        .map_err(|err| McpError::internal_error(err.to_string(), None))?;
-
-        // `ResourceContents::text` defaults to text/plain; without this the
-        // contents would contradict the `application/json` the listing
-        // advertises for this URI.
-        let contents = ResourceContents::text(body, &request.uri).with_mime_type(CATALOGUE_MIME);
-        Ok(ReadResourceResult::new(vec![contents]).into())
     }
 }
 
@@ -304,12 +191,66 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_server_failure_leaves_as_the_shared_opaque_message() {
+        let err = Err::<(), _>(ProgramsError::Desktop(anyhow::anyhow!(
+            "wayland socket /run/user/1000/wayland-1 refused"
+        )))
+        .answered()
+        .unwrap_err();
+
+        assert_eq!(err.message, nest_rs::core::OPAQUE_CLIENT_MESSAGE);
+    }
+
+    #[test]
+    fn a_permission_denied_spawn_leaves_as_the_shared_opaque_message() {
+        let err = Err::<(), _>(ProgramsError::Spawn {
+            program: "/usr/lib/firefox-esr/firefox".into(),
+            source: std::io::Error::from(std::io::ErrorKind::PermissionDenied),
+        })
+        .answered()
+        .unwrap_err();
+
+        assert_eq!(err.message, nest_rs::core::OPAQUE_CLIENT_MESSAGE);
+    }
+
+    #[test]
+    fn a_missing_executable_names_what_the_caller_asked_for() {
+        let err = Err::<(), _>(ProgramsError::Missing("firefox".into()))
+            .answered()
+            .unwrap_err();
+
+        assert!(err.message.contains("firefox"), "{}", err.message);
+        assert!(
+            !err.message.contains('/'),
+            "no host path reaches the model: {}",
+            err.message,
+        );
+    }
+
+    #[test]
+    fn a_refusal_the_caller_can_act_on_names_what_to_change() {
+        let err = Err::<(), _>(ProgramsError::Unknown("gimp".into()))
+            .answered()
+            .unwrap_err();
+
+        assert!(err.message.contains("gimp"), "{}", err.message);
+        assert!(err.message.contains("app_list()"), "{}", err.message);
+    }
+
+    #[test]
+    fn every_tool_closes_its_world() {
+        for tool in ProgramsTool::tool_router().list_all() {
+            assert_eq!(
+                tool.annotations.and_then(|hints| hints.open_world_hint),
+                Some(false),
+                "{} declares a closed world",
+                tool.name,
+            );
+        }
+    }
+
+    #[test]
     fn the_tool_table_builds_and_app_launch_keeps_its_output_schema() {
-        // `output_schema = …` on app_launch runs at table-build time, not at
-        // compile time — this is the only place that executes it before a
-        // client does. The schema must survive the switch away from
-        // `Json<LaunchedDto>`, or the published contract silently loses a
-        // shape it has always had.
         let router = ProgramsTool::tool_router();
         let launch = router
             .list_all()

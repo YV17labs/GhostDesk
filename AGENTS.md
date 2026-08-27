@@ -270,6 +270,15 @@ Domain errors are an enum in `error.rs` — never scattered through
 `service.rs` — and they propagate as `Result` all the way to the transport
 boundary, which maps them to a status code.
 
+**The enum also says whose mistake each variant is** (`blames_the_caller`),
+because that is the one thing the adapter cannot read off a message. A refusal
+the caller can act on reaches the model verbatim, so it can correct itself and
+call again; everything else leaves through the framework's `opaque`, which
+keeps the real error for the operator and hands the model a constant. A tool
+that renders a server failure itself is re-implementing that posture — the
+adapter's `Answered` trait is where the two answers are chosen, and nowhere
+else.
+
 ## Configuration
 
 Every module's config is settable **both** ways: from the environment and
@@ -300,6 +309,29 @@ target per concern per crate: `features::users` here. A crate whose name is
 not the product's keeps its own root anyway — the target's one job is to say
 where the event came from.
 
+**An act performed on the desktop is `info`, in the service that performs
+it** — a key pressed, a pointer moved, a screen captured, the clipboard read
+or written, a program launched. This is the one exception to services logging
+`debug`, and it is not about diagnostics: the server acts on someone's real
+machine, so the trail of what it did is a security record, and a record that
+exists only when an operator thought to raise the log level is not one. It
+belongs in the service because that is where the act happens — an adapter can
+only report what it passed on, and a second transport would have to remember
+to report it again.
+
+**Such a line spells the act in fields, never in a sentence.** `action="click"
+button="left" x=612 y=335`, not `action="Clicked left at (612, 335)"`. The
+questions asked of this trail are "every click below this line" and "how much
+text was typed this session", and a phrase answers neither. A field that does
+not apply to the act is absent rather than empty — `x` on a keypress would be a
+coordinate the act never had. The agent-facing prose is a separate concern and
+belongs to the wire type, phrased from the same value so the two cannot drift.
+
+**Such a line counts secrets, never quotes them.** Typed text, clipboard
+contents, anything a human put there: the field is a character count. An audit
+trail that leaks what it audits is worse than none, and this is the rule that
+makes the level above affordable.
+
 ## Testing
 
 A test target is always a directory — `tests/<suite>/main.rs`, even for one
@@ -323,15 +355,20 @@ knowing why it is there. Do not copy these shapes into new code.
 | Where | Rule broken | Status |
 |---|---|---|
 | `programs/service.rs` — `SCRUBBED_PREFIX` spells the env prefix | never a variable name as a literal | **kept, deliberately.** The container's own knobs are set straight on the process without passing through the framework, so following `EnvPrefix::current()` would stop sweeping them the day the two diverged. The scrub is a security boundary; the rule loses to it. |
-| `apps/ghostdesk/tests/` — `e2e/` is empty and `integration/` boots the real `GhostdeskModule` | integration = no app boot; wiring proof lives in e2e | **kept until the supervisord stack lands in CI.** The wiring assertions need a boot but no desktop, so they sit in the suite `nestrs run test unit` can run; they move to `e2e/` the day the stack does. |
+| `apps/ghostdesk/tests/` — `e2e/` is empty and `integration/` boots the real `GhostdeskModule` | integration = no app boot; wiring proof lives in e2e | **kept, and now true of the whole suite.** The wiring assertions need a boot but no desktop — `InputService::warm_up` reports an unbound compositor rather than aborting, so `TestApp` boots on a runner with no display. What still belongs in `e2e/` is anything that drives the desk. |
+| `apps/ghostdesk/src/mcp/guard.rs` — `CallTrail` is a guard that only observes | a guard decides access | **kept until the framework offers an observation seam.** The endpoint now files its own line per operation, but it names the JSON-RPC method — one word for all fourteen tools. The per-operation chain stays the one place `host`/`kind`/`name` reach an application; the alternative was the same line hand-written in every tool body. It never refuses, and every host is written with `#[tools]`, so it covers all four. |
 | `crates/platform/` contracts return `anyhow::Result` | thiserror in a library | **kept, deliberately.** The backends are opaque OS seams; the typed classification each caller needs happens once, at the feature boundary, in each domain's `error.rs`. Typing the substrate would duplicate that vocabulary one layer down with nothing new to say. |
 
 Everything else that used to be listed here is done: the MCP edge is one
 `<module>/mcp/` adapter per domain merged onto one `/mcp`, the endpoint's
 identity is declared by the app, `apps/` is `programs/`, `host.rs` is
 `host/module.rs`, `idle/tasks.rs` is `idle/schedule/tasks.rs`, `auth/guard.rs`
-is `auth/mcp/guard.rs`, every service returns a domain enum from `error.rs`,
-and span targets are rooted at `features::`.
+is a `Strategy` behind the framework's `AuthnGuard`, every service returns a
+domain enum from `error.rs`,
+and span targets are rooted at `features::`. The framework carries the request
+span across rmcp's spawn and opens the operation span itself, so nothing here
+propagates one by hand; every line carries its own trace ids and every edge
+files its own access line, with no observability stack mounted.
 
 ## How the endpoint is composed
 
@@ -350,19 +387,20 @@ tree now assumes.
    file.** No `rmcp`, no `ServerHandler`, no router, no `get_info` — the
    framework writes all of it, and capabilities are derived from the operations
    present so nothing can advertise a surface no method serves. Every `#[tool]`
-   declares a posture: `#[public]` here, because the bearer guard gates the
+   declares a posture: `#[public]` here, because the authentication guard gates the
    whole endpoint and GhostDesk has no per-caller ability model. **Arguments
    that carry `#[validate]` are wrapped in `Valid<T>` and destructured in the
    signature** — `Parameters(Valid(params))`: the framework makes the field
    public for exactly that, so an `into_inner()` in the body restates what the
    pattern already did, and a hand-written `params.validate()` is the inline
    edge conversion the layer rules call drift.
-   **The raw rmcp form is for one thing only.** A host serving *resources*
-   hand-writes `impl ServerHandler` (`list_resources` / `read_resource`), and
-   `#[tools]` cannot generate a second `ServerHandler` beside it — so
-   `programs` and `clipboard` use `#[tool_router]` / `#[tool_handler]`
-   directly. This is the framework's documented way out of the sugar, and
-   serving resources is the only thing that earns it.
+   **No host drops out of the sugar.** rmcp's `#[tool_router]` /
+   `#[tool_handler]` are the way out, and the one thing that used to earn them
+   here — a hand-written `ServerHandler` serving `list_resources` /
+   `read_resource`, which `#[tools]` cannot generate a second of — is gone:
+   `ghostdesk://apps` and `ghostdesk://clipboard` duplicated `app_list` and
+   `clipboard_get` under a second addressing scheme, and no client read them.
+   Four hosts, four `#[tools]`, one shape.
 3. **The app declares who it is**, in `apps/ghostdesk/src/module.rs`:
    `McpModule::for_root(McpOptions { server: Some(McpIdentity::new("ghostdesk", …).instructions(…).icons(…)), .. })`.
    The identity carries no path — the endpoint is named by the hosts that join
@@ -373,27 +411,44 @@ tree now assumes.
    they describe the whole surface, which no single host can see.
 4. **The per-call binding is app-local, and the root stays pure imports.**
    `DesktopContext` (`dyn McpToolContext`) is resolved once per path and is
-   glue over three modules — idle, telemetry, the coordinate space — so it
-   sits in `apps/ghostdesk/src/mcp/context.rs`, not in a feature. It is
-   provided by `DesktopContextModule` (`mcp/module.rs`), which imports the two
-   ports it injects; `features` exports those two ports for exactly this
-   consumer, and the root module composes imports and declares nothing.
-5. **Measurement reaches as far as the framework has a seam for it, and no
-   further.** `CallJournal::dispatch` owns the span, the sequence number and
-   the cost accounting for a whole `call_tool`, so it only runs on the hosts
-   that write one — `programs` and `clipboard`, the resource pair. A `#[tools]`
-   host has no `call_tool` to lend it, and `McpToolContext::around` cannot
-   stand in: it is handed an `OperationValue`, a `Box<dyn Any>` a wrapper may
-   only test for `Ok`/`Err`, so it never sees a tool's name, arguments or
-   result size. **Per-call cost is therefore partial**, and closing it means a
-   framework seam carrying `McpOperationContext`'s `host`/`kind`/`name` — not a
-   hand-written `call_tool` on a host that has no other reason for one.
-   `note_action` is unaffected: it is a plain call from a tool body into
-   telemetry, and works under either form.
-6. **A resource read is offered to every host in turn.** The endpoint routes
-   an addressed operation by trying each host until one does not answer
-   not-found, so a host that does not own a URI *must* return
-   `resource_not_found` — anything else (an `internal_error`, a panic) aborts
-   its siblings' turn and the URI becomes unreachable. The deeper fix is a
-   framework-side URI index, the way tool names already are; until then this
-   contract is the hosts' to keep.
+   glue over idle, the coordinate space and the caller's identity — so it sits
+   in `apps/ghostdesk/src/mcp/context.rs`, not in a feature. It is provided by
+   `DesktopContextModule` (`mcp/module.rs`), which imports the port it
+   injects; `features` exports that port for exactly this consumer, and the
+   root module composes imports and declares nothing.
+5. **Who called is the transport's answer, not a feature's.** The HTTP edge
+   resolves the caller once — the peer, or a forwarding header only from a
+   proxy named in `GHOSTDESK_HTTP__TRUSTED_PROXIES` — and files it on the
+   request's own line with the ids everything else is grouped under.
+   `DesktopContext` deliberately does not read it a second time: two
+   resolutions are two chances to disagree, and a trail whose address does not
+   match the one the throttler bucketed is unauditable. It also opens no span
+   of its own: a span is a unit of work an operator asks about, and neither
+   arming the watchdog nor reading the screen's geometry is one. What `around`
+   keeps is what no layer above can know: the idle watchdog, and the agent's
+   coordinate space.
+
+   **Four lines make one record, joined by `trace_id`.** What the desktop did
+   (`features::*`, from the service that did it — see *Observability*), which
+   tool was addressed (`ghostdesk::mcp`), what the endpoint served and whether
+   it succeeded, and what the request cost (both `nest_rs::operation`). The
+   endpoint is stateless, so one request is one operation and they line up
+   exactly. Each line carries the ids itself: none of them is read by being
+   nested under another, and a line quoted out of a console keeps its trace.
+
+   **Which tool was addressed comes from a guard, and that is a trade.** The
+   endpoint files the operation's own line, but it names the JSON-RPC method a
+   client called — `operation="tools/call"`, the same word for all fourteen
+   tools. `host`/`kind`/`name` reach an application in exactly one place — the
+   per-operation guard chain `#[tools]` emits — so `CallTrail` overrides
+   `check_mcp`, logs, and always returns `Ok`. Everything else on this path is
+   blind by construction: `around` is handed an `OperationValue` a wrapper may
+   only test for `Ok`/`Err`, and `#[tools]` rejects a per-operation interceptor
+   with a named compile error. **It covers all four hosts**, since every one of
+   them is written with `#[tools]` and so runs the chain.
+6. **The endpoint serves tools and nothing else.** No host publishes a
+   resource or a prompt, so the capabilities the framework observes are tools
+   alone. A host that ever needs a resource would have to hand-write
+   `ServerHandler` and leave `#[tools]` behind — and with it the per-operation
+   guard chain that names the tool in the trail. That is the trade to weigh
+   before adding one, not a formality.

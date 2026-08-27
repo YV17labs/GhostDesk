@@ -45,8 +45,8 @@ Screenshots are cheap. Use them as freely as the reasoning demands.
 
 ## Before the first click
 
-Know what's installed. Call `app_list()` (or read `ghostdesk://apps`)
-the first time a task names an application — its `exec` field is the
+Know what's installed. Call `app_list()` the first time a task names
+an application — its `exec` field is the
 only string `app_launch()` will accept. Re-call it after installing
 software during the session.
 

@@ -2,7 +2,6 @@ use nest_rs::core::input;
 
 use super::ButtonDto;
 
-/// What `mouse_drag` accepts.
 #[input]
 #[derive(Debug)]
 pub struct DragDto {

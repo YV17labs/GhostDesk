@@ -6,45 +6,51 @@ use nest_rs::mcp::{BoxFuture, Captured, McpToolContext, OperationOutcome};
 use platform::coords;
 
 use features::idle::IdleService;
-use features::telemetry::TelemetryService;
 
 const MODEL_SPACE_HEADER: &str = "ghostdesk-model-space";
 
-const SESSION_HEADER: &str = "mcp-session-id";
-
 struct Ambient {
     space: i64,
-    session: String,
 }
 
 #[injectable]
 pub struct DesktopContext {
     #[inject]
     idle_svc: Arc<IdleService>,
-    #[inject]
-    telemetry_svc: Arc<TelemetryService>,
 }
 
 impl McpToolContext for DesktopContext {
     fn capture(&self, req: &Request) -> Captured {
-        let header = |name: &str| {
-            req.headers()
-                .get(name)
-                .and_then(|value| value.to_str().ok())
-                .map(str::trim)
-        };
-
-        let space: i64 = header(MODEL_SPACE_HEADER)
+        let space: i64 = req
+            .headers()
+            .get(MODEL_SPACE_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .map(str::trim)
             .and_then(|value| value.parse().ok())
             .filter(|value| *value > 0)
             .unwrap_or(0);
 
-        Arc::new(Ambient {
-            space,
-            session: header(SESSION_HEADER).unwrap_or_default().to_string(),
-        })
+        Arc::new(Ambient { space })
     }
 
+    /// The caller is deliberately **not** captured here.
+    ///
+    /// This used to read the peer address and `x-forwarded-for` itself and hang
+    /// them on a span, because nothing else answered "who did this". Two things
+    /// now do, and both answer better: the transport resolves the caller once —
+    /// the peer, or a forwarding header only from a proxy the deployment named
+    /// — and files it on the request's own line, and the operation every event
+    /// below inherits already carries the ids that tie the two together.
+    ///
+    /// Re-reading it here would be a second resolution to keep in agreement
+    /// with the first, which is the disagreement that makes a trail
+    /// unauditable. Nor is a span of our own the place to put it: a span names
+    /// a unit of work an operator asks about, and neither pushing the watchdog
+    /// back nor installing a coordinate space is one.
+    ///
+    /// What stays is what no layer above can know: the desktop is being
+    /// touched, so the idle watchdog is pushed back, and the agent's coordinate
+    /// space is installed for the tools that convert against it.
     fn around<'a>(
         &'a self,
         captured: &'a Captured,
@@ -52,13 +58,10 @@ impl McpToolContext for DesktopContext {
     ) -> BoxFuture<'a, OperationOutcome> {
         self.idle_svc.mark_activity();
 
-        let ambient = captured.downcast_ref::<Ambient>();
-        let space = ambient.map_or(0, |ambient| ambient.space);
-        let session = ambient.map_or("", |ambient| ambient.session.as_str());
+        let space = captured
+            .downcast_ref::<Ambient>()
+            .map_or(0, |ambient| ambient.space);
 
-        Box::pin(
-            self.telemetry_svc
-                .with_session(session, coords::with_model_space(space, inner)),
-        )
+        Box::pin(coords::with_model_space(space, inner))
     }
 }

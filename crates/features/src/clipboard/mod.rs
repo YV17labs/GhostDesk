@@ -1,5 +1,3 @@
-//! Clipboard domain — read and write the system clipboard.
-
 mod dtos;
 mod error;
 mod mcp;

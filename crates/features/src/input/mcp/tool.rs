@@ -1,23 +1,22 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{Json, McpError, Parameters, Valid, mcp, tools};
+use nest_rs::mcp::{Json, McpError, Opaque, Parameters, Valid, mcp, tools};
 
 use super::super::dtos::{ClickDto, DragDto, FeedbackDto, MoveDto, PressDto, ScrollDto, TypeDto};
 use super::super::error::InputError;
-use super::super::services::{Feedback, InputService};
-use crate::telemetry::CallJournal;
+use super::super::services::InputService;
 
-/// An unresolvable chord is the caller's to fix; a backend that will not press
-/// anything is not.
-impl From<InputError> for McpError {
-    fn from(err: InputError) -> Self {
-        let message = err.to_string();
-        match err {
-            InputError::Chord(_) => Self::invalid_params(message, None),
-            InputError::Backend(_) | InputError::Feedback(_) => {
-                tracing::error!(target: "features::input", error = %message, "tool failed");
-                Self::internal_error(message, None)
+trait Answered<T> {
+    fn answered(self) -> Result<T, McpError>;
+}
+
+impl<T> Answered<T> for Result<T, InputError> {
+    fn answered(self) -> Result<T, McpError> {
+        match self {
+            Err(err) if err.blames_the_caller() => {
+                Err(McpError::invalid_params(err.to_string(), None))
             }
+            other => other.opaque(),
         }
     }
 }
@@ -27,18 +26,6 @@ impl From<InputError> for McpError {
 pub struct InputTool {
     #[inject]
     svc: Arc<InputService>,
-    #[inject]
-    journal: Arc<CallJournal>,
-}
-
-impl InputTool {
-    /// Recorded here rather than in `FeedbackService`: a domain service has no
-    /// business naming the telemetry module.
-    fn observed(&self, feedback: Feedback) -> Json<FeedbackDto> {
-        self.journal
-            .note_action(&feedback.action, feedback.screen_changed);
-        Json(FeedbackDto::from(feedback))
-    }
 }
 
 #[tools]
@@ -53,14 +40,16 @@ impl InputTool {
             hover effect — it is not an error. If the menu or tooltip you \
             wanted does not appear, the element probably needs a click \
             instead: fall back to mouse_click.",
-        annotations(destructive_hint = false)
+        annotations(destructive_hint = false, open_world_hint = false)
     )]
     #[public]
     async fn mouse_move(
         &self,
         Parameters(params): Parameters<MoveDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(self.svc.mouse_move(params.x, params.y).await?))
+        Ok(Json(FeedbackDto::from(
+            self.svc.mouse_move(params.x, params.y).await.answered()?,
+        )))
     }
 
     #[tool(
@@ -70,36 +59,38 @@ impl InputTool {
             anywhere on screen. Do not retry the same coordinates — the target \
             probably moved (page scrolled, dialog opened) or was never where \
             you thought. Take a new screen_shot() and recompute.",
-        annotations(destructive_hint = true)
+        annotations(destructive_hint = true, open_world_hint = false)
     )]
     #[public]
     async fn mouse_click(
         &self,
         Parameters(params): Parameters<ClickDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(
+        Ok(Json(FeedbackDto::from(
             self.svc
                 .mouse_click(params.x, params.y, params.button.into())
-                .await?,
-        ))
+                .await
+                .answered()?,
+        )))
     }
 
     #[tool(
         description = "Double-click at screen coordinates. Standard use cases: \
             open a file or folder in a file manager, select an entire word in \
             editable text.",
-        annotations(destructive_hint = true)
+        annotations(destructive_hint = true, open_world_hint = false)
     )]
     #[public]
     async fn mouse_double_click(
         &self,
         Parameters(params): Parameters<ClickDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(
+        Ok(Json(FeedbackDto::from(
             self.svc
                 .mouse_double_click(params.x, params.y, params.button.into())
-                .await?,
-        ))
+                .await
+                .answered()?,
+        )))
     }
 
     #[tool(
@@ -109,22 +100,23 @@ impl InputTool {
             For selecting text, mouse_click(start) plus key_press(\"shift+end\") \
             (or any shift+navigation) is often more reliable than a \
             pixel-precise drag.",
-        annotations(destructive_hint = true)
+        annotations(destructive_hint = true, open_world_hint = false)
     )]
     #[public]
     async fn mouse_drag(
         &self,
         Parameters(params): Parameters<DragDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(
+        Ok(Json(FeedbackDto::from(
             self.svc
                 .mouse_drag(
                     (params.from_x, params.from_y),
                     (params.to_x, params.to_y),
                     params.button.into(),
                 )
-                .await?,
-        ))
+                .await
+                .answered()?,
+        )))
     }
 
     #[tool(
@@ -135,18 +127,19 @@ impl InputTool {
             A screen_changed of false typically means the page is already at \
             the scroll boundary — there is nothing more to reveal in that \
             direction.",
-        annotations(destructive_hint = false)
+        annotations(destructive_hint = false, open_world_hint = false)
     )]
     #[public]
     async fn mouse_scroll(
         &self,
         Parameters(Valid(params)): Parameters<Valid<ScrollDto>>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(
+        Ok(Json(FeedbackDto::from(
             self.svc
                 .mouse_scroll(params.x, params.y, params.direction.into(), params.amount)
-                .await?,
-        ))
+                .await
+                .answered()?,
+        )))
     }
 
     #[tool(
@@ -160,14 +153,16 @@ impl InputTool {
             is not the same on every OS.\n\n\
             A screen_changed of false almost always means the field did not \
             have focus. Click into it first and retry.",
-        annotations(destructive_hint = true)
+        annotations(destructive_hint = true, open_world_hint = false)
     )]
     #[public]
     async fn key_type(
         &self,
         Parameters(params): Parameters<TypeDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(self.svc.key_type(&params.text).await?))
+        Ok(Json(FeedbackDto::from(
+            self.svc.key_type(&params.text).await.answered()?,
+        )))
     }
 
     #[tool(
@@ -183,13 +178,52 @@ impl InputTool {
             A screen_changed of false usually means the keystroke went to a \
             window or field that did not care about it — check focus with a \
             screenshot.",
-        annotations(destructive_hint = true)
+        annotations(destructive_hint = true, open_world_hint = false)
     )]
     #[public]
     async fn key_press(
         &self,
         Parameters(params): Parameters<PressDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
-        Ok(self.observed(self.svc.key_press(&params.keys).await?))
+        Ok(Json(FeedbackDto::from(
+            self.svc.key_press(&params.keys).await.answered()?,
+        )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_backend_failure_leaves_as_the_shared_opaque_message() {
+        let err = Err::<(), _>(InputError::Backend(anyhow::anyhow!(
+            "zwp_virtual_keyboard_v1 is missing on this compositor"
+        )))
+        .answered()
+        .unwrap_err();
+
+        assert_eq!(err.message, nest_rs::core::OPAQUE_CLIENT_MESSAGE);
+    }
+
+    #[test]
+    fn a_mis_spelled_chord_is_returned_to_the_caller_verbatim() {
+        let err = Err::<(), _>(InputError::Chord(anyhow::anyhow!("unknown key: ctrl+zz")))
+            .answered()
+            .unwrap_err();
+
+        assert!(err.message.contains("ctrl+zz"), "{}", err.message);
+    }
+
+    #[test]
+    fn every_tool_closes_its_world() {
+        for tool in InputTool::tool_router().list_all() {
+            assert_eq!(
+                tool.annotations.and_then(|hints| hints.open_world_hint),
+                Some(false),
+                "{} declares a closed world",
+                tool.name,
+            );
+        }
     }
 }

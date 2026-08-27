@@ -15,7 +15,7 @@ use crate::coords::{screen_height, screen_width};
 /// large enough to catch a popup or a filled row of cells.
 pub const STABILITY_MAX_DIFF_RATIO: f64 = 0.005;
 
-/// Agent-facing default: WebP, for compact payloads.
+/// The default WebP quality, chosen for compact payloads.
 pub const DEFAULT_WEBP_QUALITY: u8 = 50;
 
 /// Capture scale used while polling for post-action feedback. Smaller is a

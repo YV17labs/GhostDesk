@@ -80,8 +80,6 @@ impl Chord {
     }
 }
 
-// --- drag pacing ---------------------------------------------------------
-
 /// How a drag is paced, shared by every backend.
 ///
 /// The numbers are not arbitrary and they are not per-OS. A gesture
@@ -117,13 +115,11 @@ pub mod drag {
     }
 }
 
-// --- chord grammar -------------------------------------------------------
-
 /// Split a `+`-separated chord into normalised tokens, applying `aliases`.
 ///
-/// The grammar is published to the agent in the `key_press` tool description,
-/// so it is one definition rather than a convention two backends happen to
-/// agree on. The alias *tables* are deliberately not shared: `cmd` means
+/// One definition rather than a convention two backends happen to agree on:
+/// the grammar is published to callers, so it cannot be per-OS. The alias
+/// *tables* are deliberately not shared: `cmd` means
 /// Super on Linux and Command on macOS, and merging them would reintroduce
 /// exactly the bug [`Conventions`] exists to prevent.
 pub fn normalize_chord(keys: &str, aliases: &[(&str, &str)]) -> Vec<String> {
@@ -164,17 +160,32 @@ impl Conventions {
 
 /// Mouse and keyboard control, one implementation per OS.
 ///
-/// Coordinates are physical screen pixels — the model-space conversion has
-/// already happened in the MCP adapter by the time a backend sees them.
+/// Coordinates are physical screen pixels: the model-space conversion has
+/// already happened by the time a backend sees them.
 #[async_trait]
 pub trait InputBackend: Send + Sync {
     /// How this desktop spells its standard shortcuts.
     fn conventions(&self) -> Conventions;
 
-    /// Open whatever the backend needs to open, once. Called from the boot
-    /// hook so a missing protocol or permission fails the boot with a clear
-    /// message instead of failing the agent's first click.
+    /// Open whatever the backend needs to open, once, and report whether it
+    /// worked. Idempotent: a caller may bind eagerly at start-up so a missing
+    /// protocol or permission is known before an agent's first click, and what
+    /// it does with a refusal is its own decision — this seam states the fact,
+    /// never the policy.
     async fn warm_up(&self) -> Result<()>;
+
+    /// Is what [`warm_up`](Self::warm_up) established *still* true?
+    ///
+    /// Separate from `warm_up` because that one only has to succeed once and
+    /// answers from what it opened: a desktop can revoke underneath a bound
+    /// backend — a compositor restarts and leaves the connection dead, a
+    /// permission is withdrawn — and nothing in the command path notices
+    /// until an agent's click is swallowed. Neither condition can be repaired
+    /// in place, so this is what a liveness probe calls to have the process
+    /// replaced instead. It must not move the cursor, press a key, or open
+    /// what was never opened: a probe reports the state, it does not create
+    /// it.
+    async fn ping(&self) -> Result<()>;
 
     /// Move the cursor without pressing anything.
     async fn move_to(&self, x: i64, y: i64) -> Result<()>;

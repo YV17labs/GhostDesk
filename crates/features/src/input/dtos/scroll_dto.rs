@@ -6,7 +6,6 @@ fn default_amount() -> u32 {
     3
 }
 
-/// What `mouse_scroll` accepts.
 #[input]
 #[derive(Debug)]
 pub struct ScrollDto {
@@ -14,9 +13,6 @@ pub struct ScrollDto {
     pub y: i64,
     #[serde(default)]
     pub direction: ScrollDirectionDto,
-    /// Wheel notches. Bounded to 1-5 so one call cannot fly past content the
-    /// agent never sees; long pages are scrolled by chaining calls, each with
-    /// its own screenshot.
     #[serde(default = "default_amount")]
     #[validate(range(min = 1, max = 5))]
     pub amount: u32,
@@ -33,8 +29,6 @@ mod tests {
         assert_eq!(scroll.amount, 3, "the default notch count");
     }
 
-    /// The band the tool advertises is refused by the pipe, not clamped in
-    /// silence: a model that asked for 20 notches has to be told it got 5.
     #[test]
     fn a_notch_count_outside_the_band_is_refused() {
         use nest_rs::core::validator::Validate;

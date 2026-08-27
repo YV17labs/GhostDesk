@@ -1,6 +1,3 @@
-//! What a client sends for the seven input tools, and the verdict all seven
-//! answer with.
-
 mod button_dto;
 mod click_dto;
 mod drag_dto;

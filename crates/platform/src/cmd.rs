@@ -10,7 +10,7 @@ use tokio::time::timeout;
 
 /// Everything that can go wrong running a helper binary. Kept as a typed
 /// error rather than `anyhow` because callers branch on the variants:
-/// `sway::swaymsg` retries a dead socket on any failure, and `clipboard_get`
+/// `sway::swaymsg` retries a dead socket on any failure, and the clipboard read
 /// turns a non-zero exit into an empty string.
 #[derive(Debug, thiserror::Error)]
 pub enum CmdError {

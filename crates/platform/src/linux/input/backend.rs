@@ -1,6 +1,6 @@
 //! The trait answer: [`Wayland`], the Linux [`InputBackend`].
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use tokio::sync::OnceCell;
 
@@ -52,6 +52,16 @@ impl InputBackend for Wayland {
     async fn warm_up(&self) -> Result<()> {
         self.connection().await?;
         Ok(())
+    }
+
+    /// Reports on the connection as it stands; never opens one. A probe that
+    /// connected would answer "up" for a server whose boot never bound
+    /// anything, which is the one state worth hearing about.
+    async fn ping(&self) -> Result<()> {
+        match self.connection.get() {
+            Some(connection) => connection.ping().await,
+            None => bail!("the input backend is not bound to a compositor"),
+        }
     }
 
     async fn move_to(&self, x: i64, y: i64) -> Result<()> {

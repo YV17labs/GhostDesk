@@ -1,5 +1,4 @@
-//! Input domain — mouse and keyboard control.
-
+mod action;
 mod dtos;
 mod error;
 mod mcp;

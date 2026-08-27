@@ -141,6 +141,9 @@ Open `http://localhost:6080/` in your browser to see the virtual desktop in real
 |---------|-----|
 | MCP server | `http://localhost:3000/mcp` |
 | noVNC (browser) | `http://localhost:6080/` |
+| Health probes | `http://localhost:3000/health/{live,ready,startup}` |
+
+The probes are what the container's `HEALTHCHECK` reads, and they answer about the desktop rather than about the processes: `ready` goes down when the compositor stops answering the window seam, `live` when the connection behind the virtual pointer and keyboard is gone — a state in which every tool still replies and none of them does anything.
 
 Give your agent a first prompt to confirm the wiring is right:
 

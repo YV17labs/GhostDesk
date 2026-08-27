@@ -1,11 +1,3 @@
-//! What a client sends and reads for the four program tools.
-//!
-//! Every output shape here is a DTO over a type that already exists in
-//! [`service`](super::service), and that duplication is the point: a field
-//! renamed in the domain is a refactor, while the same rename on the wire is
-//! a breaking change for every client. Keeping the two apart is what makes
-//! the compiler ask which one you meant.
-
 mod launch_dto;
 mod launched_dto;
 mod listed_dto;

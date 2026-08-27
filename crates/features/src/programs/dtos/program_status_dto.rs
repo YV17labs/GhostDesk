@@ -3,7 +3,6 @@ use serde::Serialize;
 
 use crate::programs::service::ProgramStatus;
 
-/// What `app_status` answers with.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ProgramStatusDto {
     pub pid: u32,

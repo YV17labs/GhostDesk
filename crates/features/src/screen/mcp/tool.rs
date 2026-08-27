@@ -1,22 +1,9 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{CallToolResult, McpError, Parameters, Valid, mcp, tools};
+use nest_rs::mcp::{CallToolResult, McpError, Opaque, Parameters, Valid, mcp, tools};
 
 use super::super::dtos::{CaptureDto, ScreenShotDto};
-use super::super::error::ScreenError;
 use super::super::service::ScreenService;
-
-impl From<ScreenError> for McpError {
-    fn from(err: ScreenError) -> Self {
-        let message = err.to_string();
-        match err {
-            ScreenError::Capture(_) | ScreenError::Decode(_) => {
-                tracing::error!(target: "features::screen", error = %message, "tool failed");
-                Self::internal_error(message, None)
-            }
-        }
-    }
-}
 
 #[mcp]
 #[derive(Clone)]
@@ -37,7 +24,7 @@ impl ScreenTool {
             Cheap. Use liberally: before a click to locate the target, after \
             an action to verify the effect, and once more before reporting a \
             mission complete.",
-        annotations(read_only_hint = true, idempotent_hint = true)
+        annotations(read_only_hint = true, open_world_hint = false)
     )]
     #[public]
     async fn screen_shot(
@@ -52,10 +39,28 @@ impl ScreenTool {
                 params.stabilize,
                 params.quality,
             )
-            .await?;
+            .await
+            .opaque()?;
 
         Ok(CallToolResult::success(vec![
             CaptureDto::from(&capture).block(),
         ]))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_tool_closes_its_world() {
+        for tool in ScreenTool::tool_router().list_all() {
+            assert_eq!(
+                tool.annotations.and_then(|hints| hints.open_world_hint),
+                Some(false),
+                "{} declares a closed world",
+                tool.name,
+            );
+        }
     }
 }

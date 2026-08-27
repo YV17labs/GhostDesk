@@ -19,8 +19,8 @@ use crate::desktop::{self, AppCatalog, DesktopApp};
 
 /// Where macOS installs GUI applications. `~/Applications` is included
 /// because a per-user install is still an app the agent can be asked to
-/// drive; everything else on the system is out of the catalogue and
-/// therefore refused by `app_launch`.
+/// drive; everything else on the system is out of the catalogue, and a
+/// caller refuses what the catalogue does not list.
 const BUNDLE_DIRS: &[&str] = &[
     "/Applications",
     "/Applications/Utilities",
@@ -99,9 +99,9 @@ fn read_bundle(bundle: &Path) -> Option<DesktopApp> {
     let name = bundle_name(bundle)?;
     executable_in(bundle)?;
     Some(DesktopApp {
-        // The bundle stem is both the name a user says and the handle
-        // `app_launch` takes, so the agent never has to learn that the binary
-        // inside is called something else (`Firefox` → `firefox`).
+        // The bundle stem is both the name a user says and the handle a
+        // caller launches by, so nobody has to learn that the binary inside is
+        // called something else (`Firefox` → `firefox`).
         exec: name.clone(),
         name,
     })

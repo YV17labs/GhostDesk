@@ -41,6 +41,9 @@ impl InputBackend for Unsupported {
     async fn warm_up(&self) -> Result<()> {
         bail!("{NO_BACKEND}")
     }
+    async fn ping(&self) -> Result<()> {
+        bail!("{NO_BACKEND}")
+    }
     async fn move_to(&self, _x: i64, _y: i64) -> Result<()> {
         bail!("{NO_BACKEND}")
     }

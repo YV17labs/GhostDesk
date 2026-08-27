@@ -1,10 +1,3 @@
-//! Screen capture, delegated to the host's [`ScreenBackend`].
-//!
-//! The policy is here and the mechanism is not: what "settled" means, when a
-//! capture is worth re-encoding, and what a capture costs the agent. How a
-//! frame is actually grabbed (`grim`, a CoreGraphics display stream) is the
-//! backend's business.
-
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -18,24 +11,16 @@ use super::error::ScreenError;
 
 type Result<T> = std::result::Result<T, ScreenError>;
 
-/// How long to keep waiting for two identical frames before giving up and
-/// returning the latest one. A genuinely animating screen must not block the
-/// agent forever.
 const STABILITY_TIMEOUT: Duration = Duration::from_millis(2500);
 const STABILITY_POLL: Duration = Duration::from_millis(150);
 
-/// One encoded capture, ready for the wire.
 pub struct Capture {
     pub bytes: Vec<u8>,
     pub format: ImageFormat,
 }
 
-/// What the acquisition step did, for the log line.
 struct Grab {
     frames: u32,
-    /// Whether the stabiliser saw two identical frames before its ceiling.
-    /// `None` when stabilisation was not asked for, where the question has no
-    /// answer.
     settled: Option<bool>,
 }
 
@@ -49,22 +34,8 @@ pub struct ScreenService {
 
 #[hooks]
 impl ScreenService {
-    /// Publish the screen size to the platform layer.
-    ///
-    /// The backend wins when it has real hardware to report: the agent's
-    /// coordinates are offsets into the image it was shown, so a configured
-    /// size that disagrees with the panel would put every click in the wrong
-    /// place. A headless virtual display answers `None`, and there the
-    /// operator's setting is the only truth there is.
-    ///
-    /// Runs in `on_module_init`, the earlier of the two init phases, so the
-    /// size is in place before `InputService` warms the input backend up in
-    /// `on_application_bootstrap` — Wayland's virtual pointer reports
-    /// absolute motion against exactly these extents.
     #[on_module_init]
     async fn install_screen_size(&self) {
-        // Remembered, not re-derived: comparing the two afterwards would
-        // report "config" for a panel that merely happens to match it.
         let ((width, height), source) = match self.backend.geometry() {
             Some(geometry) => (geometry, "display"),
             None => ((self.config.width, self.config.height), "config"),
@@ -82,7 +53,6 @@ impl ScreenService {
 }
 
 impl ScreenService {
-    /// One frame from the backend, as PNG.
     async fn grab(&self, region: Option<Region>) -> Result<Vec<u8>> {
         self.backend
             .capture_png(region, None)
@@ -90,26 +60,15 @@ impl ScreenService {
             .map_err(ScreenError::Capture)
     }
 
-    /// The same frame, decoded. Separate from [`grab`](Self::grab) because
-    /// the PNG is what reaches the wire when the caller asked for PNG, and
-    /// decoding it then would be work nobody reads.
     fn decode(png: &[u8]) -> Result<RgbImage> {
         screen::decode_rgb(png).map_err(ScreenError::Decode)
     }
 
-    /// Capture the screen and encode it for the wire, with this domain's own
-    /// defaults — a settled WebP frame of the whole screen.
-    ///
-    /// The defaults live here rather than at each call site: `screen_shot`
-    /// publishes them through its DTO, and the settled frame `app_launch`
-    /// returns is the same picture by another route. Two call sites spelling
-    /// the encoding independently is two places for it to drift.
     pub async fn capture_settled(&self) -> Result<Capture> {
         self.capture(None, ImageFormat::Webp, true, screen::DEFAULT_WEBP_QUALITY)
             .await
     }
 
-    /// Capture the screen and encode it for the wire.
     pub async fn capture(
         &self,
         region: Option<Region>,
@@ -120,10 +79,6 @@ impl ScreenService {
         let region = region.map(|region| coords::region_to_pixels(region).clamped());
         let started = Instant::now();
 
-        // The stabilisation loop already decoded the frame it settled on, so
-        // the WebP encode below reuses it rather than decoding a third time
-        // (capture PNG → compare → encode used to decode the same bytes
-        // twice per tick plus once at the end).
         let (png, decoded, grab) = if stabilize {
             let (png, rgb, grab) = self.capture_until_stable(region).await?;
             (png, Some(rgb), grab)
@@ -142,9 +97,6 @@ impl ScreenService {
 
         let encode_started = Instant::now();
         let (bytes, dimensions) = match format {
-            // The backend already hands us PNG; re-encoding lossless to
-            // lossless would cost a decode and an encode to produce the same
-            // picture.
             ImageFormat::Png => {
                 let dimensions = decoded.map(|rgb| rgb.dimensions());
                 (png, dimensions)
@@ -159,15 +111,7 @@ impl ScreenService {
             }
         };
 
-        // Screenshots are the most-called tool and the largest thing this
-        // server returns, so one capture is simultaneously the agent's
-        // latency, the operator's bandwidth and the model's context budget. A
-        // single duration hides which of the three is the problem, so each
-        // term is its own field: `grab_ms` against `frames` says whether the
-        // stabiliser is earning its keep, `bytes` against `quality` says
-        // whether the encoder setting is right, and `settled` says whether
-        // the picture the agent is about to reason over had finished drawing.
-        tracing::debug!(
+        tracing::info!(
             target: "features::screen",
             bytes = bytes.len(),
             width = dimensions.map(|(width, _)| width),
@@ -186,11 +130,6 @@ impl ScreenService {
         Ok(Capture { bytes, format })
     }
 
-    /// Poll the backend until two consecutive frames are pixel-stable — this
-    /// is what catches a page still animating after a click or a navigation.
-    ///
-    /// Returns the settled frame both encoded and decoded; the decoded half
-    /// is what the caller re-uses instead of decoding it again.
     async fn capture_until_stable(
         &self,
         region: Option<Region>,
@@ -219,11 +158,6 @@ impl ScreenService {
             previous = current;
         }
 
-        // Out of time with the screen still moving. The frame is returned
-        // anyway — a moving screen must not block the agent forever — but the
-        // journal records that it was never still, which is the difference
-        // between "the agent misread the UI" and "the agent was shown a UI
-        // mid-repaint".
         Ok((
             previous_png,
             previous,

@@ -1,5 +1,3 @@
-//! Clipboard access, delegated to the host's [`Clipboard`] backend.
-
 use std::sync::Arc;
 
 use nest_rs::core::injectable;
@@ -14,19 +12,26 @@ pub struct ClipboardService {
 }
 
 impl ClipboardService {
-    /// The current clipboard as text — empty when the clipboard is empty or
-    /// holds non-text content, neither of which is worth an agent turn.
     pub async fn get(&self) -> String {
-        self.backend.get().await
+        let text = self.backend.get().await;
+        tracing::info!(
+            target: "features::clipboard",
+            chars = text.chars().count(),
+            "clipboard read",
+        );
+        text
     }
 
-    /// Write text to the clipboard. The message is agent-facing prose, so it
-    /// belongs to this layer, not to the backend.
     pub async fn set(&self, text: &str) -> Result<String, ClipboardError> {
         self.backend
             .set(text)
             .await
             .map_err(ClipboardError::Write)?;
+        tracing::info!(
+            target: "features::clipboard",
+            chars = text.chars().count(),
+            "clipboard written",
+        );
         Ok(format!(
             "Clipboard set ({} characters)",
             text.chars().count()

@@ -60,6 +60,22 @@ impl InputBackend for Quartz {
         Ok(())
     }
 
+    /// The same trust check, for the same reason it was worth a boot failure:
+    /// the grant is revocable from System Settings at any moment, and the
+    /// desktop gives no sign when it goes — every event keeps being accepted
+    /// and discarded. So a backend that warmed up successfully hours ago can
+    /// be inert now, and only asking again says so.
+    async fn ping(&self) -> Result<()> {
+        if !event::is_trusted() {
+            bail!(
+                "GhostDesk is no longer trusted for Accessibility — every mouse \
+                 and keyboard event it posts is being silently discarded. The \
+                 grant is tied to this exact binary, so replacing it revokes it."
+            );
+        }
+        Ok(())
+    }
+
     async fn move_to(&self, x: i64, y: i64) -> Result<()> {
         event::move_to(x, y)
     }

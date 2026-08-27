@@ -7,7 +7,7 @@
 //! `$XDG_RUNTIME_DIR` is often a persistent volume in container deploys, so
 //! dead `sway-ipc.<uid>.<pid>.sock` files from previous boots stick around
 //! beside the live one. `$SWAYSOCK` cannot be trusted either (it is captured
-//! when the MCP server starts and goes stale when Sway restarts), and neither
+//! when this process starts and goes stale when Sway restarts), and neither
 //! filename ordering nor mtime is authoritative. The only real test is "does
 //! this socket answer Sway IPC *right now*?".
 //!

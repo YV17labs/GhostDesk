@@ -1,7 +1,6 @@
 use nest_rs::core::input;
 use platform::screen::Region;
 
-/// An area of the screen to capture.
 #[input]
 #[derive(Debug, Clone, Copy)]
 pub struct RegionDto {

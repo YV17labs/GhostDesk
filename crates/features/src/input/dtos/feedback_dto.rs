@@ -3,25 +3,17 @@ use serde::Serialize;
 
 use crate::input::services::Feedback;
 
-/// What every input tool answers with.
-///
-/// `screen_changed: false` is the single most useful signal the agent gets,
-/// and the endpoint's session brief teaches it by name — which is exactly why
-/// the field belongs to a type the wire owns rather than to the service.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct FeedbackDto {
-    /// What was performed, in words.
     pub action: String,
-    /// Whether the screen visibly changed within the feedback window.
     pub screen_changed: bool,
-    /// How quickly the change was detected.
     pub reaction_time_ms: u64,
 }
 
 impl From<Feedback> for FeedbackDto {
     fn from(feedback: Feedback) -> Self {
         Self {
-            action: feedback.action,
+            action: feedback.action.to_string(),
             screen_changed: feedback.screen_changed,
             reaction_time_ms: feedback.reaction_time_ms,
         }
@@ -30,12 +22,19 @@ impl From<Feedback> for FeedbackDto {
 
 #[cfg(test)]
 mod tests {
+    use platform::input::Button;
+
     use super::*;
+    use crate::input::action::Action;
 
     #[test]
     fn the_published_verdict_shape_is_what_clients_already_read() {
         let feedback = FeedbackDto::from(Feedback {
-            action: "Clicked left at (200, 830)".into(),
+            action: Action::Click {
+                button: Button::Left,
+                x: 200,
+                y: 830,
+            },
             screen_changed: false,
             reaction_time_ms: 2000,
         });

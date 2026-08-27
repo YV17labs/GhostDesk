@@ -20,6 +20,8 @@ use crate::input::{Button, ScrollDirection, drag};
 /// round-trip, so the compositor has seen everything by the time the reply
 /// comes back.
 pub(super) enum Command {
+    /// A round-trip that carries no input.
+    Ping,
     Motion {
         x: i64,
         y: i64,
@@ -72,6 +74,15 @@ impl Connection {
             .map_err(|_| anyhow!("the Wayland input thread exited before it was ready"))??;
 
         Ok(Self { tx })
+    }
+
+    /// Round-trip the connection without pressing anything.
+    ///
+    /// A compositor that went away takes the socket with it, and the thread
+    /// answers the failed round-trip instead of the compositor. That is the
+    /// only way to learn it from outside a real click.
+    pub(super) async fn ping(&self) -> Result<()> {
+        self.send(Command::Ping).await
     }
 
     async fn send(&self, command: Command) -> Result<()> {

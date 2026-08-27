@@ -5,16 +5,22 @@ members = ["apps/*", "crates/*"]
 [workspace.package]
 version = "8.0.0"
 edition = "2024"
-rust-version = "1.96"
+rust-version = "1.97"
 license = "LicenseRef-FSL-1.1-ALv2"
 authors = ["Yoann Vanitou <yvanitou@gmail.com>"]
 repository = "https://github.com/YV17labs/ghostdesk"
 
 [workspace.dependencies]
 # The framework. `mcp` pulls the HTTP transport the endpoint self-mounts on
-# plus the guard surface that gates it; `schedule` is what makes the idle
-# watchdog a decorated method instead of a hand-rolled task.
-nest-rs = { version = "4.0", features = ["mcp", "schedule"] }
+# plus the guard surface that gates it; `authn` carries the `Strategy` seam
+# the bearer check is written against, so the shared secret is checked by the
+# framework's guard rather than beside it; `schedule` is what makes the idle
+# watchdog a decorated method instead of a hand-rolled task; `health` is what
+# lets the container ask *this server* whether the desktop is still there,
+# rather than asking the supervisor whether the processes exist — which is a
+# different question, and the one that answered "healthy" through a desktop
+# nobody could drive.
+nest-rs = { version = "6.0", features = ["authn", "health", "mcp", "schedule"] }
 
 # `rmcp`'s `#[tool_router]` / `#[tool_handler]` expand to bare `rmcp::` paths.
 # They are relative, so `use nest_rs::mcp::rmcp;` resolves them at the exact

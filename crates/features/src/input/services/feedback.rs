@@ -1,15 +1,10 @@
-//! Post-action visual feedback — poll the screen until it changes.
-//!
-//! Every input tool answers with the same three fields. `screen_changed:
-//! false` is the single most useful signal the agent gets: it means the input
-//! landed nowhere, and the correct next call is a screenshot, not a retry.
-
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use nest_rs::core::injectable;
 use platform::screen::{self, FEEDBACK_SCALE, ScreenBackend};
 
+use crate::input::action::Action;
 use crate::input::error::InputError;
 
 type Result<T> = std::result::Result<T, InputError>;
@@ -17,18 +12,10 @@ type Result<T> = std::result::Result<T, InputError>;
 pub const POLL_INTERVAL: Duration = Duration::from_millis(100);
 pub const POLL_TIMEOUT: Duration = Duration::from_secs(2);
 
-/// What one observed action came back with.
-///
-/// Not the wire shape — [`FeedbackDto`](crate::input::dtos::FeedbackDto) is,
-/// and converts from this. Both `telemetry` and the adapter read these three
-/// fields, and only one of them publishes them.
 #[derive(Debug, Clone)]
 pub struct Feedback {
-    /// What was performed, in words.
-    pub action: String,
-    /// Whether the screen visibly changed within [`POLL_TIMEOUT`].
+    pub action: Action,
     pub screen_changed: bool,
-    /// How quickly the change was detected.
     pub reaction_time_ms: u64,
 }
 
@@ -39,11 +26,6 @@ pub struct FeedbackService {
 }
 
 impl FeedbackService {
-    /// Capture the full screen at reduced resolution, before an action.
-    ///
-    /// The downsample is both a faster capture encode and a filter: at a
-    /// quarter scale a blinking caret or a ticking clock digit stops
-    /// registering.
     pub async fn capture_before(&self) -> Result<Vec<u8>> {
         self.screen
             .capture_png(None, Some(FEEDBACK_SCALE))
@@ -51,10 +33,7 @@ impl FeedbackService {
             .map_err(InputError::Feedback)
     }
 
-    /// Poll until the screen differs from `before`, or the timeout expires.
-    pub async fn observe(&self, action: impl Into<String>, before: &[u8]) -> Result<Feedback> {
-        // Decode the baseline once — the loop would otherwise re-decode the
-        // same bytes on every tick.
+    pub async fn observe(&self, action: Action, before: &[u8]) -> Result<Feedback> {
         let baseline = screen::decode_rgb(before).map_err(InputError::Feedback)?;
         let start = Instant::now();
 
@@ -73,19 +52,29 @@ impl FeedbackService {
         }
 
         let feedback = Feedback {
-            action: action.into(),
+            action,
             screen_changed,
             reaction_time_ms: start.elapsed().as_millis() as u64,
         };
 
-        if !screen_changed {
-            tracing::warn!(
-                target: "features::input",
-                action = %feedback.action,
-                timeout_ms = POLL_TIMEOUT.as_millis() as u64,
-                "no visible screen change",
-            );
-        }
+        let act = &feedback.action;
+        tracing::info!(
+            target: "features::input",
+            action = act.kind(),
+            button = act.button(),
+            x = act.x(),
+            y = act.y(),
+            to_x = act.to_x(),
+            to_y = act.to_y(),
+            direction = act.direction(),
+            amount = act.amount(),
+            chars = act.chars(),
+            keys = act.keys(),
+            screen_changed,
+            reaction_time_ms = feedback.reaction_time_ms,
+            timeout_ms = POLL_TIMEOUT.as_millis() as u64,
+            "input action",
+        );
         Ok(feedback)
     }
 }

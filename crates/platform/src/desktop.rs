@@ -1,10 +1,10 @@
 //! The application-catalogue contract — the source of truth for "what is a
 //! GUI app here".
 //!
-//! `app_launch` refuses any executable the catalogue does not list, so this
-//! is a security control, not just a convenience. Where the catalogue comes
-//! from is per-OS (freedesktop `.desktop` entries on Linux, `.app` bundles on
-//! macOS); *that it is the whitelist* is the contract.
+//! A caller is expected to refuse any executable the catalogue does not list,
+//! so this is a security control and not just a convenience. Where the
+//! catalogue comes from is per-OS (freedesktop `.desktop` entries on Linux,
+//! `.app` bundles on macOS); *that it is the whitelist* is the contract.
 
 use std::path::{Path, PathBuf};
 
@@ -17,7 +17,7 @@ use std::path::{Path, PathBuf};
 pub struct DesktopApp {
     /// Human-readable application name.
     pub name: String,
-    /// The string to pass to `app_launch` — the executable's basename.
+    /// The executable's basename — what a caller launches it by.
     pub exec: String,
 }
 

@@ -25,9 +25,9 @@ pub fn input() -> Arc<dyn InputBackend> {
 
 /// How this OS's desktop spells its standard shortcuts.
 ///
-/// The same const the backend's own `conventions()` returns, so the value the
-/// session brief teaches the agent and the value the keyboard actually
-/// presses can never be two different things. Selected here rather than by
+/// The same const the backend's own `conventions()` returns, so the value a
+/// caller publishes and the value the keyboard actually presses can never be
+/// two different things. Selected here rather than by
 /// building a backend to ask it: the brief is rendered at composition time,
 /// and instantiating a second seam to read a compile-target constant would
 /// put two backends in a process the `Chord` contract says has one.

@@ -1,11 +1,10 @@
 //! Coordinate conversion between the LLM's normalised space and real pixels.
 //!
-//! The active model space is **per operation**: the MCP endpoint reads the
-//! `GhostDesk-Model-Space` header on the HTTP request and the feature crate's
-//! `McpToolContext` re-installs it inside rmcp's spawned dispatch, where the
-//! request no longer exists. `0` (the default) means pass-through native
-//! pixels; `1000` selects Qwen-VL's 0-1000 space; any positive integer is a
-//! custom normalised space.
+//! The active model space is **per operation** and installed by the caller for
+//! the duration of one: this crate holds the conversion, never the decision of
+//! which space is in force. `0` (the default) means pass-through native pixels;
+//! `1000` selects Qwen-VL's 0-1000 space; any positive integer is a custom
+//! normalised space.
 
 use std::future::Future;
 use std::sync::OnceLock;
@@ -21,10 +20,10 @@ static SCREEN: OnceLock<(i64, i64)> = OnceLock::new();
 
 /// Install the screen size for the process.
 ///
-/// The value belongs to `ScreenConfig`, which is loaded and validated by
-/// the framework at boot; this crate deliberately reads no environment of its
-/// own, so there is exactly one place the size can come from. Idempotent —
-/// a second call is ignored, which keeps concurrent tests honest.
+/// This crate reads no environment of its own, so the size arrives from the
+/// one caller that resolved it and there is exactly one place it can come
+/// from. Idempotent — a second call is ignored, which keeps concurrent tests
+/// honest.
 pub fn set_screen(width: i64, height: i64) {
     let _ = SCREEN.set((width, height));
 }
@@ -44,9 +43,9 @@ pub fn screen_height() -> i64 {
 }
 
 tokio::task_local! {
-    /// Set by the MCP tool context for the duration of one operation. A
-    /// task-local (not a global) is what keeps concurrent calls carrying
-    /// different headers from reading each other's space.
+    /// Installed by the caller for the duration of one operation. A
+    /// task-local (not a global) is what keeps concurrent operations asking
+    /// for different spaces from reading each other's.
     static MODEL_SPACE: i64;
 }
 

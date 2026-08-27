@@ -8,11 +8,11 @@
 //! - `zwp_virtual_keyboard_manager_v1` — the same set, plus a few others.
 //!
 //! Either one missing is a hard error at connect time, so the server fails
-//! loudly at boot instead of on the first `mouse_click`.
+//! loudly at boot instead of on the first click.
 
 use std::io::Write as _;
 use std::os::fd::AsFd;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow};
 use tokio::sync::{mpsc, oneshot};
@@ -41,6 +41,24 @@ const KEY_RELEASED: u32 = 0;
 const KEY_PRESSED: u32 = 1;
 
 const KEYMAP_FORMAT_XKB_V1: u32 = 1;
+
+/// How long a compositor that is not there *yet* is given to appear.
+///
+/// A supervisor starts the compositor and this server in the same breath, so
+/// the boot hook can reach its connect while the display socket is still
+/// being bound — the same tenth of a second, on a cold desktop. Without this
+/// window that ordering detail is a crashed boot, and the supervisor's answer
+/// to a crashed boot is to start the whole process again: the wait costs one
+/// retry loop, its absence costs a restart cycle.
+///
+/// Only the connect is retried. Everything past it stays fatal on the first
+/// attempt — a compositor that answers without carrying the virtual-input
+/// protocols is a misdeployment, and no amount of waiting turns it into a
+/// desktop this server can drive.
+const CONNECT_DEADLINE: Duration = Duration::from_secs(30);
+
+/// Gap between two connect attempts.
+const CONNECT_RETRY: Duration = Duration::from_millis(250);
 
 /// One wheel notch. wayland-rs converts `wl_fixed` to `f64` at the binding
 /// boundary, so this is the notch count itself — not the 1/256 raw units the
@@ -128,10 +146,56 @@ pub(super) fn run(mut rx: mpsc::UnboundedReceiver<Job>, ready: oneshot::Sender<R
     }
 }
 
+/// Connect to the compositor, retrying while the display is merely absent.
+///
+/// The retry is deliberately blind to *why* the connect failed: the client
+/// library reports "no compositor" for a socket that does not exist yet and
+/// for one that will never exist, and guessing which from the message would
+/// be reading a string the library is free to change. So the first failure is
+/// logged with its reason — an operator watching a boot sees immediately
+/// whether the display name is wrong — and the deadline is what decides.
+fn connect_within(deadline: Duration) -> Result<Connection> {
+    let started = Instant::now();
+    let mut attempts: u32 = 0;
+
+    loop {
+        attempts += 1;
+        match Connection::connect_to_env() {
+            Ok(connection) => {
+                if attempts > 1 {
+                    tracing::info!(
+                        target: "platform::input",
+                        attempts,
+                        waited_ms = started.elapsed().as_millis() as u64,
+                        "Wayland display appeared",
+                    );
+                }
+                return Ok(connection);
+            }
+            Err(err) if started.elapsed() + CONNECT_RETRY < deadline => {
+                if attempts == 1 {
+                    tracing::info!(
+                        target: "platform::input",
+                        deadline_secs = deadline.as_secs(),
+                        error = %err,
+                        "waiting for the Wayland display",
+                    );
+                }
+                std::thread::sleep(CONNECT_RETRY);
+            }
+            Err(err) => {
+                return Err(anyhow::Error::new(err).context(format!(
+                    "no Wayland display answered within {}s",
+                    deadline.as_secs(),
+                )));
+            }
+        }
+    }
+}
+
 impl Session {
     fn open() -> Result<Self> {
-        let connection =
-            Connection::connect_to_env().context("connecting to the Wayland display")?;
+        let connection = connect_within(CONNECT_DEADLINE)?;
         let (globals, mut queue) =
             registry_queue_init::<State>(&connection).context("initialising the registry")?;
         let qh = queue.handle();
@@ -158,7 +222,7 @@ impl Session {
         };
 
         // Upload an empty keymap so the virtual keyboard is in a valid state
-        // before the first `key_type`; real keymaps are pushed lazily, once
+        // before the first keystroke; real keymaps are pushed lazily, once
         // we know which keysyms the session actually needs.
         session.upload_keymap()?;
         Ok(session)
@@ -229,6 +293,10 @@ impl Session {
 
     fn execute(&mut self, command: Command) -> Result<()> {
         match command {
+            // Nothing to send: the round-trip every command ends on *is* the
+            // check, and it is the only one that touches the socket without
+            // touching the desktop.
+            Command::Ping => {}
             Command::Motion { x, y } => self.motion(x, y),
             Command::Button { button, pressed } => self.button(
                 button,
@@ -285,4 +353,54 @@ fn missing(interface: &str, err: impl std::fmt::Display) -> anyhow::Error {
          Sway, Hyprland, Wayfire, labwc, river) and \
          zwp_virtual_keyboard_manager_v1."
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::os::unix::net::UnixListener;
+
+    use super::*;
+
+    /// Both halves of the wait, in one test on purpose: `connect_to_env` reads
+    /// the process environment, so pointing it at a fake display means writing
+    /// to that environment, and two tests doing it concurrently would each see
+    /// the other's directory. One test, one writer.
+    #[test]
+    fn the_wait_ends_when_a_display_appears_and_not_before() {
+        let dir = std::env::temp_dir().join(format!("ghostdesk-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a directory for the fake display");
+        let socket = dir.join("wayland-probe");
+        let _ = std::fs::remove_file(&socket);
+
+        // SAFETY: single-threaded test, and the only writer of these two.
+        unsafe {
+            std::env::set_var("XDG_RUNTIME_DIR", &dir);
+            std::env::set_var("WAYLAND_DISPLAY", "wayland-probe");
+        }
+
+        // Nothing there: the deadline is what ends it, not the first failure.
+        // A boot that gave up on attempt one is the bug this exists to close.
+        let started = Instant::now();
+        let err = connect_within(Duration::from_millis(600)).expect_err("no display to find");
+        let waited = started.elapsed();
+        assert!(
+            waited >= CONNECT_RETRY,
+            "gave up before retrying once, after {waited:?}",
+        );
+        assert!(
+            format!("{err:#}").contains("no Wayland display answered"),
+            "the failure names the deadline it spent: {err:#}",
+        );
+
+        // Present: the loop stops at the connect. A listener is not a
+        // compositor and the bind that follows will fail — deliberately not
+        // this function's business, which is the split the retry rests on.
+        let _listener = UnixListener::bind(&socket).expect("bind the fake display");
+        assert!(
+            connect_within(Duration::from_millis(200)).is_ok(),
+            "a display that accepts a connection has to end the wait",
+        );
+
+        let _ = std::fs::remove_file(&socket);
+    }
 }

@@ -4,20 +4,13 @@ use serde::Serialize;
 use super::WindowDto;
 use crate::programs::service::Launched;
 
-/// What `app_launch` answers with.
-///
-/// `window` and `window_wait_ms` are filled in by the tool, not by the
-/// service: waiting for a window is a composition of two domain calls, and
-/// the shape that carries both back is the wire's, not the domain's.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct LaunchedDto {
     pub pid: u32,
     pub log_file: String,
     pub action: String,
-    /// The window the launch produced, when the call waited for one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window: Option<WindowDto>,
-    /// How long that window took to appear.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window_wait_ms: Option<u64>,
 }

@@ -3,10 +3,8 @@ use serde::Serialize;
 
 use crate::programs::service::RunningWindow;
 
-/// One open program window, as `app_running` reports it.
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct WindowDto {
-    /// Stable application identity, as this desktop reports it.
     pub app: String,
     pub title: String,
     pub pid: i64,
@@ -28,10 +26,6 @@ impl From<RunningWindow> for WindowDto {
 mod tests {
     use super::*;
 
-    /// The published shape, spelled out. It used to be whatever the domain
-    /// struct happened to derive, so a rename inside the service was a silent
-    /// breaking change. Now it is a compile error in the `From` impl, and
-    /// this is the second lock.
     #[test]
     fn the_published_window_shape_is_what_clients_already_read() {
         let window = WindowDto::from(RunningWindow {

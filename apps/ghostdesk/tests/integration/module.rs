@@ -2,12 +2,7 @@ use ghostdesk::GhostdeskModule;
 use nest_rs::core::App;
 use nest_rs::mcp::{endpoint_identity, hosts_on};
 
-/// Spelled out rather than read from `nest_rs::mcp::DEFAULT_PATH`, now that no
-/// host spells it either: this is the URL the README and SECURITY.md publish to
-/// clients, so the assertion has to fail if the framework's default ever moves
-/// off it. Taking the constant would only assert the hosts are wherever the
-/// framework put them, which is not the promise being kept.
-const PATH: &str = "/mcp";
+use crate::PATH;
 
 const TOOLS: &[&str] = &[
     "app_launch",

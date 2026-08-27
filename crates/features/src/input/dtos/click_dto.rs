@@ -2,7 +2,6 @@ use nest_rs::core::input;
 
 use super::ButtonDto;
 
-/// What `mouse_click` and `mouse_double_click` accept.
 #[input]
 #[derive(Debug)]
 pub struct ClickDto {

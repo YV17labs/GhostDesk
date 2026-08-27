@@ -1,19 +1,4 @@
-//! What the endpoint demands of a caller, decided once at boot.
-//!
-//! Auth ≡ TLS, exactly as in the Python original:
-//!
-//! * **Token configured** — every operation must carry
-//!   `Authorization: Bearer <token>`, which is the MCP adapter's guard's job.
-//! * **No token** — the endpoint is open. Shipping a static bearer token over
-//!   cleartext would be security theatre (no rotation, no per-user identity),
-//!   so the surface is deliberately left open and the operator is expected to
-//!   either mount a cert or keep the port on a trusted loopback.
-//!
-//! The container entrypoint is what ties the two together: it refuses to boot
-//! with TLS and no token, and drops a token supplied without TLS. This service
-//! enforces the same invariant a second time, on every other way the binary
-//! starts.
-
+use std::net::IpAddr;
 use std::sync::Arc;
 
 use nest_rs::config::var_name;
@@ -23,30 +8,31 @@ use nest_rs::http::HttpConfig;
 use super::config::AuthConfig;
 use super::error::AuthError;
 
-/// The security posture the endpoint is about to serve.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Posture {
-    /// TLS and a bearer token. The only posture fit for a non-loopback port.
     Secured,
-    /// TLS with no token — an open desktop over HTTPS. Refused.
     UnauthenticatedTls,
-    /// A token that would cross the wire in cleartext. Served, loudly.
     CleartextToken,
-    /// Plain HTTP, no auth. The intended dev posture.
-    Open,
+    LoopbackOpen,
+    ExposedOpen,
 }
 
 impl Posture {
-    /// The value that goes in the log field. A `&'static str` rather than
-    /// `Debug` so the field is a stable token something can filter on.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Secured => "secured",
             Self::UnauthenticatedTls => "unauthenticated_tls",
             Self::CleartextToken => "cleartext_token",
-            Self::Open => "open",
+            Self::LoopbackOpen => "loopback_open",
+            Self::ExposedOpen => "exposed_open",
         }
     }
+}
+
+fn is_loopback(host: &str) -> bool {
+    host.parse::<IpAddr>()
+        .map(|address| address.is_loopback())
+        .unwrap_or_else(|_| host.eq_ignore_ascii_case("localhost"))
 }
 
 #[injectable]
@@ -58,36 +44,35 @@ pub struct AuthService {
 }
 
 impl AuthService {
-    /// Read the posture from the two settings that decide it.
-    ///
-    /// A plain function over `(tls, token)` so the four cases are reachable
-    /// from a test. They used to exist only inside a boot hook, which made the
-    /// one security rule the server enforces about *itself* the one thing
-    /// nothing could exercise.
     pub fn posture(&self) -> Posture {
         match (self.http.tls.is_some(), self.config.token.is_some()) {
             (true, true) => Posture::Secured,
             (true, false) => Posture::UnauthenticatedTls,
             (false, true) => Posture::CleartextToken,
-            (false, false) => Posture::Open,
+            (false, false) if is_loopback(&self.http.host) => Posture::LoopbackOpen,
+            (false, false) => Posture::ExposedOpen,
         }
     }
 }
 
 #[hooks]
 impl AuthService {
-    /// Refuse to serve a half-configured security posture.
-    ///
-    /// Init hooks are strict, so this aborts the boot rather than leaving a
-    /// TLS endpoint unauthenticated.
     #[on_module_init]
     async fn announce_posture(&self) -> anyhow::Result<()> {
         let posture = self.posture();
         match posture {
-            // The one place `anyhow` is right in this crate: a boot hook is
-            // the binary's entry point by another name, and nothing above it
-            // can branch on the reason.
             Posture::UnauthenticatedTls => return Err(AuthError::UnauthenticatedTls.into()),
+            Posture::ExposedOpen => tracing::warn!(
+                target: "features::auth",
+                posture = posture.as_str(),
+                address = %self.http.host,
+                remedy = %format!(
+                    "set {} before publishing this port anywhere",
+                    var_name("auth", "TOKEN"),
+                ),
+                "serving a routable address with NO authentication — anything \
+                 that can reach this port can drive the desktop",
+            ),
             Posture::Secured => tracing::info!(
                 target: "features::auth",
                 posture = posture.as_str(),
@@ -97,17 +82,18 @@ impl AuthService {
                 target: "features::auth",
                 posture = posture.as_str(),
                 "bearer token configured without TLS — the token crosses the \
-                 wire in cleartext; mount a cert or drop the token",
+                 wire in cleartext; mount a cert, or terminate TLS in front",
             ),
-            Posture::Open => tracing::warn!(
+            Posture::LoopbackOpen => tracing::warn!(
                 target: "features::auth",
                 posture = posture.as_str(),
+                address = %self.http.host,
                 remedy = %format!(
-                    "deploy behind a cert plus {} for any non-loopback exposure",
+                    "set {} before binding anything but loopback",
                     var_name("auth", "TOKEN"),
                 ),
-                "no TLS cert — serving plain HTTP with NO authentication. This \
-                 is the intended dev posture.",
+                "loopback only, NO authentication. This is the intended dev \
+                 posture; a routable bind without a token is refused at boot.",
             ),
         }
         Ok(())
@@ -120,13 +106,14 @@ mod tests {
 
     use super::*;
 
-    fn service(tls: bool, token: bool) -> AuthService {
+    fn service(tls: bool, token: bool, host: &str) -> AuthService {
         AuthService {
             config: Arc::new(AuthConfig {
                 token: token.then(|| "s3cret".to_string()),
             }),
             http: Arc::new(HttpConfig {
                 tls: tls.then(|| TlsConfig::new("cert-pem", "key-pem")),
+                host: host.to_string(),
                 ..Default::default()
             }),
         }
@@ -134,13 +121,54 @@ mod tests {
 
     #[test]
     fn tls_without_a_token_is_the_one_posture_that_is_refused() {
-        assert_eq!(service(true, false).posture(), Posture::UnauthenticatedTls);
+        assert_eq!(
+            service(true, false, "127.0.0.1").posture(),
+            Posture::UnauthenticatedTls,
+        );
     }
 
     #[test]
-    fn the_other_three_postures_are_served() {
-        assert_eq!(service(true, true).posture(), Posture::Secured);
-        assert_eq!(service(false, true).posture(), Posture::CleartextToken);
-        assert_eq!(service(false, false).posture(), Posture::Open);
+    fn a_routable_bind_without_a_token_is_served_and_named() {
+        assert_eq!(
+            service(false, false, "0.0.0.0").posture(),
+            Posture::ExposedOpen
+        );
+    }
+
+    #[test]
+    fn the_served_postures() {
+        assert_eq!(service(true, true, "0.0.0.0").posture(), Posture::Secured);
+        assert_eq!(
+            service(false, true, "0.0.0.0").posture(),
+            Posture::CleartextToken,
+        );
+        assert_eq!(
+            service(false, false, "127.0.0.1").posture(),
+            Posture::LoopbackOpen,
+        );
+    }
+
+    #[test]
+    fn a_token_makes_a_routable_bind_servable() {
+        assert_ne!(
+            service(false, true, "0.0.0.0").posture(),
+            Posture::ExposedOpen
+        );
+    }
+
+    #[test]
+    fn loopback_is_recognised_by_address_and_by_name_and_nothing_else_is() {
+        assert!(is_loopback("127.0.0.1"));
+        assert!(is_loopback("127.0.0.7"));
+        assert!(is_loopback("::1"));
+        assert!(is_loopback("localhost"));
+        assert!(is_loopback("LOCALHOST"));
+        assert!(!is_loopback("0.0.0.0"));
+        assert!(!is_loopback("192.168.1.10"));
+        assert!(!is_loopback("::"));
+        assert!(
+            !is_loopback("desktop.internal"),
+            "a name this process cannot resolve is routable until proven otherwise",
+        );
     }
 }

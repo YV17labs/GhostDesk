@@ -1,6 +1,3 @@
-//! What a client sends for `screen_shot`, and the form a capture reaches it
-//! in.
-
 mod capture_dto;
 mod image_format_dto;
 mod region_dto;

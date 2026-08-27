@@ -62,8 +62,8 @@ impl fmt::Debug for WindowId {
 /// One open application window, as the platform layer sees it.
 ///
 /// Deliberately not `Serialize` — same doctrine as `DesktopApp`: the wire
-/// shape belongs to the MCP adapter, so renaming a field here cannot silently
-/// change what clients receive.
+/// shape belongs to whoever publishes it, so renaming a field here cannot
+/// silently change what a client receives.
 #[derive(Debug, Clone)]
 pub struct WindowInfo {
     pub id: WindowId,

@@ -8,13 +8,6 @@ use platform::input::InputBackend;
 use platform::screen::ScreenBackend;
 use platform::window::WindowManager;
 
-/// Binds `platform::host`'s backends into the container.
-///
-/// Hand-written rather than `#[module]`: the backends are plain platform
-/// types — `platform` deliberately knows nothing about NestRS, and wrapping
-/// each backend in a delegating provider would be five structs of pure
-/// ceremony. Every domain module that injects an `Arc<dyn …>` backend
-/// imports this.
 pub struct HostModule;
 
 impl Module for HostModule {
