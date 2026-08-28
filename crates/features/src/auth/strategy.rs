@@ -6,7 +6,7 @@ use nest_rs::http::poem::Request;
 use subtle::ConstantTimeEq;
 
 use super::config::AuthConfig;
-use super::principal::DeskOperator;
+use super::desk_operator::DeskOperator;
 
 #[injectable]
 pub struct TokenStrategy {

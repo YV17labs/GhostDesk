@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nest_rs::mcp::{CallToolResult, ContentBlock, McpError, Parameters, mcp, tools};
 
 use crate::blame::Answered;
-use crate::clipboard::dtos::ClipboardSetDto;
+use crate::clipboard::dto::ClipboardSetDto;
 use crate::clipboard::service::ClipboardService;
 
 #[mcp]

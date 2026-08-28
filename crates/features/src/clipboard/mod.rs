@@ -1,4 +1,4 @@
-mod dtos;
+mod dto;
 mod error;
 mod mcp;
 mod module;

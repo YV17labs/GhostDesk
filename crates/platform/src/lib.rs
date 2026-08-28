@@ -7,6 +7,10 @@
 //! third OS is a new sibling module, since nothing outside this crate names
 //! an OS.
 //!
+//! `unsupported` is the stand-in that keeps every other target compiling, so a
+//! backend type leaking into the neutral layer breaks the build immediately
+//! rather than the day someone tries the port.
+//!
 //! Four more modules are neutral too, and are not contracts: [`chord`] is the
 //! chord grammar both backends serve, [`frame`] the pixel work on what a
 //! capture returns, [`cmd`] the runner for the helper binaries a backend

@@ -14,3 +14,6 @@ tls/
 # Editor / agent
 .claude/
 .DS_Store
+
+# `scripts/layout.py` byte-cache — the lint runs from source, never from it.
+__pycache__/

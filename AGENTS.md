@@ -194,8 +194,43 @@ A recognised word beats an invented one: `Factory`, `Client`, `Store`,
 
 **Vocabulary.** Not registered anywhere: an enum, a struct, a type alias, a set
 of constants. Named for *what it declares* — a role suffix on vocabulary is
-noise. Shared test doubles are the one crate-root file: `testing.rs`, behind
-`#[cfg(test)]`, doubles only — one per platform seam. **Reading a logged act
+noise, and *what it declares* is not a matter of taste:
+
+**The file and its folder, read together, spell the type.** One of the two
+names the *kind*, never both and never neither. `services/input.rs` is
+`InputService` because the folder said the kind; `registry.rs` is
+`LaunchRegistry` because the file did; `capture.rs` is `Capture` because the
+kind *is* the subject. Which of the two words the file supplies follows from
+what the module already supplies — `screen.rs` names the subject and
+`ScreenBackend` appends the kind, `registry.rs` names the kind and
+`LaunchRegistry` prepends the subject. As a check: **`snake_case` of the type
+has the stem as its first or last word**, and `scripts/layout.py` runs it over
+every file. A stem that appears nowhere in what the file declares is the one
+shape refused, because it is the shape a bucket takes.
+
+**A file that declares no type is a namespace instead, and owes nothing
+above.** Its items are reached *through* it — `frame::encode_webp`,
+`coords::to_pixels`, `host::input` — so the stem names the subject they operate
+on and the call site reads it as part of the name. A file that declares a type
+owes the pairing.
+
+**Vocabulary sits flat at the module root.** It is never gathered into
+`types/`, `model/`, `common/` or `shared/`: a folder named for who uses it has
+no admission test, so nothing can ever be refused from it. A module root that
+feels crowded is a module to split, not vocabulary to bury — and the same
+applies one level up, which is why there is no `crates/shared` here. A crate
+exists when what it holds has a name that is not "shared": `platform` holds the
+OS substrate and is shared *because* of that, never the other way round.
+
+**A crate's root holds a closed list, and `lib.rs` says why.** Two files sit
+outside a module in `features`: `blame.rs`, the posture every adapter has to
+render identically, and `testing.rs` below. The `//!` on `lib.rs` names both
+with the reason, and `layout.py` fails a root file the header does not mention
+— the index already says which files exist, so making it carry the reason puts
+the rule where it is read rather than in a document consulted once.
+
+Shared test doubles are the one such file every crate may have:
+`testing.rs`, behind `#[cfg(test)]`, doubles only — one per platform seam. **Reading a logged act
 back is `nest_rs::testing::LogCapture`**, never a subscriber written here: an
 act on the desktop is a security record, so *whether the line was written* has
 to be a question a test can ask, and the framework already answers it in
@@ -211,7 +246,11 @@ health indicator: a lifecycle hook or a scheduled tick never renames a service.
 
 ## Several of the same role
 
-Pluralized sub-folder; the singular trait file stays at the parent.
+Pluralized sub-folder; the singular trait file stays at the parent. **The
+folder exists to carry *several*, so one of a kind is a file**: `dtos/` holds
+`login_dto.rs` beside `signup_dto.rs`, while a module with a single transfer
+object writes `dto.rs` at its root. A plural folder holding one file names a
+collection that is not there.
 
 | Folder | File | Type |
 |---|---|---|
@@ -279,6 +318,7 @@ structure   apps  crates  features  src  tests
 roles       mod  module  service  controller  resolver  gateway  tool
             processor  tasks  listener  guard  strategy  pipe  config
             interceptor  filter  entity  error  constants  testing
+singulars   dto  command  event
 plurals     services  entities  dtos  commands  events  strategies  pipes
 edges       http  graphql  ws  queue  schedule  mcp  events
 ```
