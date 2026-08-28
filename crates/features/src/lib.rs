@@ -1,4 +1,5 @@
 pub mod auth;
+pub(crate) mod blame;
 pub mod clipboard;
 pub(crate) mod host;
 pub mod idle;

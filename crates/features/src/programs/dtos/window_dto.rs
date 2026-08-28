@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::programs::service::RunningWindow;
+use crate::programs::running_window::RunningWindow;
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct WindowDto {

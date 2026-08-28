@@ -13,4 +13,4 @@ use super::guard::CallTrail;
     imports = [IdleModule],
     providers = [DesktopContext as dyn McpToolContext, CallTrail],
 )]
-pub struct DesktopContextModule;
+pub struct McpModule;

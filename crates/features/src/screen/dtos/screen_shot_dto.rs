@@ -7,7 +7,7 @@ fn default_true() -> bool {
 }
 
 fn default_quality() -> u8 {
-    platform::screen::DEFAULT_WEBP_QUALITY
+    platform::frame::DEFAULT_WEBP_QUALITY
 }
 
 #[input]

@@ -98,3 +98,32 @@ base64 = "0.23"
 # derive produces a different trait than `Parameters<T>` expects — hence the
 # same `major.minor` nest-rs builds against.
 schemars = "1.2"
+
+# The product's own crates. `features` holds the domains and the MCP edge each
+# one publishes; `platform` is the OS substrate they drive, and the only crate
+# in the tree that names an operating system.
+features = { path = "crates/features" }
+platform = { path = "crates/platform" }
+
+# `deny`, not `forbid`: the OS seams bind Quartz, the Accessibility API and
+# `memfd_create`, and each of those files lifts the lint at its top with the
+# SAFETY note that earns it. `forbid` would have to be lifted for a whole crate,
+# which is the opposite of saying where unsafe is allowed to live.
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+# Config literals always close with `..Default::default()` so an import site
+# stays forward-compatible as the options struct gains fields.
+[workspace.lints.clippy]
+needless_update = "allow"
+
+# Release: the binary the image ships. Compile time is not the constraint here.
+[profile.release]
+opt-level = 3       # maximum runtime performance
+lto = "fat"         # whole-program optimisation across every crate
+codegen-units = 1   # give the optimiser the whole program at once
+strip = true        # drop symbols from the shipped binary
+
+# Dev: fastest rebuilds, keeping file:line in backtraces.
+[profile.dev]
+debug = "line-tables-only"

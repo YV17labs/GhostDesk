@@ -8,6 +8,10 @@
 //!
 //! Free text does not come through here at all: `type_text` injects Unicode
 //! directly, so nothing in this table has to describe a character.
+//!
+//! The named half covers exactly [`chord::KEYS`](crate::chord::KEYS) and
+//! nothing more: a key only this desktop answers to is a chord the Linux host
+//! refuses, which the published grammar has no way to express.
 
 use anyhow::{Result, bail};
 use objc2_core_graphics::CGKeyCode;
@@ -23,7 +27,6 @@ const NAMED: &[(&str, CGKeyCode)] = &[
     ("backspace", 51),
     ("delete", 117),
     ("esc", 53),
-    ("capslock", 57),
     ("f1", 122),
     ("f2", 120),
     ("f3", 99),

@@ -14,9 +14,10 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 
+use crate::chord::Chord;
 use crate::clipboard::Clipboard;
 use crate::desktop::{AppCatalog, DesktopApp};
-use crate::input::{Button, Chord, Conventions, InputBackend, ScrollDirection};
+use crate::input::{Button, Conventions, InputBackend, ScrollDirection};
 use crate::screen::{Region, ScreenBackend};
 use crate::window::{WindowId, WindowInfo, WindowManager};
 
@@ -34,10 +35,6 @@ pub const CONVENTIONS: Conventions = Conventions {
 
 #[async_trait]
 impl InputBackend for Unsupported {
-    fn conventions(&self) -> Conventions {
-        CONVENTIONS
-    }
-
     async fn warm_up(&self) -> Result<()> {
         bail!("{NO_BACKEND}")
     }

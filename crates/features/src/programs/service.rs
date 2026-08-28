@@ -1,20 +1,23 @@
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Stdio;
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use nest_rs::core::{EnvPrefix, injectable};
 use nest_rs::health::indicators;
 use platform::desktop::{AppCatalog, DesktopApp};
-use platform::window::{WindowInfo, WindowManager};
+use platform::window::WindowManager;
 use tokio::process::Command;
 
 use super::error::ProgramsError;
+use super::launched::Launched;
+use super::program_status::ProgramStatus;
+use super::registry::{LaunchRegistry, tail};
+use super::running_window::RunningWindow;
+use super::window_wait::WindowWait;
 
 type Result<T> = std::result::Result<T, ProgramsError>;
-
-const LOG_DIR: &str = "/tmp/ghostdesk";
 
 const EXTRA_PATH: &str = "/usr/games:/usr/local/games";
 
@@ -24,61 +27,14 @@ const WINDOW_WAIT_TIMEOUT: Duration = Duration::from_secs(10);
 
 const WINDOW_WAIT_POLL: Duration = Duration::from_millis(150);
 
-#[derive(Debug, Clone)]
-pub struct RunningWindow {
-    pub app: String,
-    pub title: String,
-    pub pid: i64,
-    pub focused: bool,
-}
-
-impl From<WindowInfo> for RunningWindow {
-    fn from(window: WindowInfo) -> Self {
-        Self {
-            app: window.app,
-            title: window.title,
-            pid: window.pid,
-            focused: window.focused,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Launched {
-    pub pid: u32,
-    pub log_file: String,
-    pub action: String,
-}
-
-#[derive(Debug)]
-pub enum WindowWait {
-    Appeared {
-        window: RunningWindow,
-        waited_ms: u64,
-    },
-    ProcessExited {
-        waited_ms: u64,
-    },
-    TimedOut {
-        waited_ms: u64,
-    },
-}
-
-#[derive(Debug, Clone)]
-pub struct ProgramStatus {
-    pub pid: u32,
-    pub running: bool,
-    pub log_file: String,
-    pub tail: String,
-}
-
 #[injectable]
 pub struct ProgramsService {
     #[inject]
     windows: Arc<dyn WindowManager>,
     #[inject]
     catalog: Arc<dyn AppCatalog>,
-    launched: Mutex<HashSet<u32>>,
+    #[inject]
+    registry: Arc<LaunchRegistry>,
 }
 
 #[indicators]
@@ -144,7 +100,7 @@ impl ProgramsService {
 
             if start.elapsed() >= timeout {
                 let waited_ms = start.elapsed().as_millis() as u64;
-                return Ok(if is_running(pid) {
+                return Ok(if self.registry.is_running(pid) {
                     WindowWait::TimedOut { waited_ms }
                 } else {
                     WindowWait::ProcessExited { waited_ms }
@@ -174,24 +130,13 @@ impl ProgramsService {
             return Err(ProgramsError::Unknown(name));
         };
 
-        std::fs::create_dir_all(LOG_DIR).map_err(ProgramsError::Log)?;
-
-        let staging = PathBuf::from(LOG_DIR).join(format!(
-            "proc-{}-{}.log",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_nanos())
-                .unwrap_or(0),
-        ));
-        let log = std::fs::File::create(&staging).map_err(ProgramsError::Log)?;
-        let log_err = log.try_clone().map_err(ProgramsError::Log)?;
+        let (staged, out, errors) = self.registry.stage_log()?;
 
         let mut command_builder = Command::new(&program);
         command_builder
             .stdin(Stdio::null())
-            .stdout(Stdio::from(log))
-            .stderr(Stdio::from(log_err))
+            .stdout(out)
+            .stderr(errors)
             .env_clear()
             .envs(launch_env())
             .process_group(0);
@@ -199,7 +144,7 @@ impl ProgramsService {
         let child = match command_builder.spawn() {
             Ok(child) => child,
             Err(source) => {
-                std::fs::remove_file(&staging).ok();
+                self.registry.discard(&staged);
                 return Err(if source.kind() == std::io::ErrorKind::NotFound {
                     ProgramsError::Missing(name)
                 } else {
@@ -209,14 +154,7 @@ impl ProgramsService {
         };
 
         let pid = child.id().ok_or(ProgramsError::Vanished)?;
-
-        let final_path = PathBuf::from(LOG_DIR).join(format!("proc-{pid}.log"));
-        std::fs::rename(&staging, &final_path).map_err(ProgramsError::Log)?;
-
-        self.launched
-            .lock()
-            .expect("launched-pid registry poisoned")
-            .insert(pid);
+        let log_file = self.registry.adopt(pid, &staged)?;
 
         tokio::spawn(async move {
             let mut child = child;
@@ -227,31 +165,27 @@ impl ProgramsService {
             target: "features::programs",
             program = %name,
             pid,
-            log = %final_path.display(),
+            log = %log_file.display(),
             "launched",
         );
 
         Ok(Launched {
             pid,
-            log_file: final_path.to_string_lossy().into_owned(),
+            log_file: log_file.to_string_lossy().into_owned(),
             action: format!("Launched: {name}"),
         })
     }
 
     pub fn status(&self, pid: u32, lines: usize) -> Result<ProgramStatus> {
-        if !self
-            .launched
-            .lock()
-            .expect("launched-pid registry poisoned")
-            .contains(&pid)
-        {
+        if !self.registry.tracked(pid) {
             return Err(ProgramsError::Untracked(pid));
         }
 
-        let log_file = PathBuf::from(LOG_DIR).join(format!("proc-{pid}.log"));
+        let log_file = self.registry.log_path(pid);
+
         Ok(ProgramStatus {
             pid,
-            running: is_running(pid),
+            running: self.registry.is_running(pid),
             tail: tail(&log_file, lines),
             log_file: log_file.to_string_lossy().into_owned(),
         })
@@ -259,9 +193,19 @@ impl ProgramsService {
 }
 
 fn launch_env() -> Vec<(String, String)> {
-    let active = format!("{}_", EnvPrefix::current());
-    std::env::vars()
-        .filter(|(key, _)| !key.starts_with(SCRUBBED_PREFIX) && !key.starts_with(&active))
+    scrub(std::env::vars(), EnvPrefix::current())
+}
+
+/// The scrub itself, over the variables it is handed rather than over the
+/// process that runs it.
+///
+/// A secret this iterator never carried cannot be shown to have been removed,
+/// so the boundary is only really guarded by a caller that supplies the
+/// secret — which is what the tests do, and what reading the live environment
+/// would have made impossible to guarantee.
+fn scrub(vars: impl Iterator<Item = (String, String)>, prefix: &str) -> Vec<(String, String)> {
+    let active = format!("{prefix}_");
+    vars.filter(|(key, _)| !key.starts_with(SCRUBBED_PREFIX) && !key.starts_with(&active))
         .map(|(key, value)| {
             if key == "PATH" {
                 (key, format!("{value}:{EXTRA_PATH}"))
@@ -270,28 +214,6 @@ fn launch_env() -> Vec<(String, String)> {
             }
         })
         .collect()
-}
-
-fn is_running(pid: u32) -> bool {
-    let Some(pid) = i32::try_from(pid)
-        .ok()
-        .and_then(rustix::process::Pid::from_raw)
-    else {
-        return false;
-    };
-    !matches!(
-        rustix::process::test_kill_process(pid),
-        Err(rustix::io::Errno::SRCH)
-    )
-}
-
-fn tail(path: &Path, lines: usize) -> String {
-    let Ok(body) = std::fs::read(path) else {
-        return String::new();
-    };
-    let text = String::from_utf8_lossy(&body);
-    let all: Vec<&str> = text.lines().collect();
-    all[all.len().saturating_sub(lines)..].join("\n")
 }
 
 #[cfg(test)]
@@ -303,7 +225,7 @@ mod tests {
         ProgramsService {
             windows: Arc::new(NoWindows),
             catalog: Arc::new(EmptyCatalog),
-            launched: Mutex::default(),
+            registry: Arc::new(LaunchRegistry::default()),
         }
     }
 
@@ -311,7 +233,7 @@ mod tests {
         ProgramsService {
             windows: Arc::new(OneWindow(pid)),
             catalog: Arc::new(EmptyCatalog),
-            launched: Mutex::default(),
+            registry: Arc::new(LaunchRegistry::default()),
         }
     }
 
@@ -378,31 +300,59 @@ mod tests {
         }
     }
 
+    /// The environment a launched program is handed, spelled out here rather
+    /// than read from the process: these three tests are the one place the
+    /// scrub is proved, and a secret that was never in the input proves
+    /// nothing about the filter that did not remove it.
+    fn desk_environment() -> Vec<(String, String)> {
+        [
+            ("GHOSTDESK_AUTH__TOKEN", "super-secret"),
+            ("GHOSTDESK_VNC_PASSWORD", "hunter2"),
+            ("GHOSTDESK_SCREEN__WIDTH", "1280"),
+            ("XDG_RUNTIME_DIR", "/run/user/1000"),
+            ("PATH", "/usr/bin"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect()
+    }
+
     #[test]
     fn a_renamed_prefix_still_loses_the_token() {
-        unsafe {
-            std::env::set_var("NESTRS_ENV_PREFIX", "ACME");
-            std::env::set_var("ACME_AUTH__TOKEN", "super-secret");
-        }
-        assert_eq!(EnvPrefix::current(), "ACME", "the rename took effect");
+        // `NESTRS_ENV_PREFIX` renames every framework variable at once, and the
+        // literal `GHOSTDESK_` scrub cannot follow it — so the active prefix is
+        // swept as well, and this is what proves the second half runs.
+        let renamed = [
+            ("ACME_AUTH__TOKEN", "super-secret"),
+            // The container's own knobs are set straight on the process, so
+            // they do not follow the framework's rename — which is why the
+            // scrub carries a literal prefix as well as the active one.
+            ("GHOSTDESK_VNC_PASSWORD", "hunter2"),
+            ("XDG_RUNTIME_DIR", "/run/user/1000"),
+        ]
+        .map(|(key, value)| (key.to_owned(), value.to_owned()));
+        let keys: Vec<String> = scrub(renamed.into_iter(), "ACME")
+            .into_iter()
+            .map(|(key, _)| key)
+            .collect();
 
-        let keys: Vec<String> = launch_env().into_iter().map(|(k, _)| k).collect();
         assert!(
             !keys.iter().any(|key| key == "ACME_AUTH__TOKEN"),
             "the desk's own secret must not reach a launched program: {keys:?}",
+        );
+        assert!(
+            !keys.iter().any(|key| key == "GHOSTDESK_VNC_PASSWORD"),
+            "a rename must not strand the container's own knobs: {keys:?}",
+        );
+        assert!(
+            keys.iter().any(|key| key == "XDG_RUNTIME_DIR"),
+            "only the desk's namespace goes: {keys:?}",
         );
     }
 
     #[test]
     fn server_secrets_never_reach_a_launched_program() {
-        unsafe {
-            std::env::set_var("GHOSTDESK_AUTH__TOKEN", "super-secret");
-            std::env::set_var("GHOSTDESK_VNC_PASSWORD", "hunter2");
-            std::env::set_var("GHOSTDESK_SCREEN__WIDTH", "1280");
-            std::env::set_var("XDG_RUNTIME_DIR", "/run/user/1000");
-        }
-
-        let env = launch_env();
+        let env = scrub(desk_environment().into_iter(), "GHOSTDESK");
         let keys: Vec<&str> = env.iter().map(|(k, _)| k.as_str()).collect();
 
         assert!(!keys.contains(&"GHOSTDESK_AUTH__TOKEN"));
@@ -419,13 +369,17 @@ mod tests {
 
     #[test]
     fn the_launch_path_reaches_debians_games_directory() {
-        unsafe { std::env::set_var("PATH", "/usr/bin") }
-        let env = launch_env();
+        let env = scrub(desk_environment().into_iter(), "GHOSTDESK");
         let path = env
             .iter()
             .find(|(k, _)| k == "PATH")
             .map(|(_, v)| v.as_str())
-            .unwrap();
+            .expect("PATH survives the scrub");
+
+        assert!(
+            path.starts_with("/usr/bin"),
+            "the inherited PATH leads: {path}"
+        );
         assert!(path.contains("/usr/games"));
     }
 
@@ -447,19 +401,21 @@ mod tests {
         assert!(matches!(err, ProgramsError::Unknown(_)), "got: {err}");
     }
 
+    #[tokio::test]
+    async fn a_refused_launch_stages_no_log() {
+        // The catalogue is consulted before the log file exists, so a rejected
+        // command cannot litter the log directory.
+        let service = service();
+        service
+            .launch("definitely-not-installed")
+            .await
+            .unwrap_err();
+        assert!(!service.registry.tracked(std::process::id()));
+    }
+
     #[test]
     fn status_refuses_a_pid_this_session_did_not_launch() {
         let err = service().status(1, 50).unwrap_err();
         assert!(matches!(err, ProgramsError::Untracked(1)), "got: {err}");
-    }
-
-    #[test]
-    fn tail_returns_the_last_lines_and_tolerates_a_missing_file() {
-        let path = std::env::temp_dir().join(format!("gd-tail-{}.log", std::process::id()));
-        std::fs::write(&path, "a\nb\nc\nd\n").unwrap();
-        assert_eq!(tail(&path, 2), "c\nd");
-        assert_eq!(tail(&path, 99), "a\nb\nc\nd");
-        std::fs::remove_file(&path).unwrap();
-        assert_eq!(tail(&path, 2), "");
     }
 }

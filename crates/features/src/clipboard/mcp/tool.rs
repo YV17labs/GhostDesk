@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{CallToolResult, ContentBlock, McpError, Opaque, Parameters, mcp, tools};
+use nest_rs::mcp::{CallToolResult, ContentBlock, McpError, Parameters, mcp, tools};
 
-use super::super::dtos::ClipboardSetDto;
-use super::super::service::ClipboardService;
+use crate::blame::Answered;
+use crate::clipboard::dtos::ClipboardSetDto;
+use crate::clipboard::service::ClipboardService;
 
 #[mcp]
 #[derive(Clone)]
@@ -48,7 +49,7 @@ impl ClipboardTool {
         &self,
         Parameters(params): Parameters<ClipboardSetDto>,
     ) -> Result<CallToolResult, McpError> {
-        let message = self.svc.set(&params.text).await.opaque()?;
+        let message = self.svc.set(&params.text).await.answered()?;
         Ok(CallToolResult::success(vec![ContentBlock::text(message)]))
     }
 }

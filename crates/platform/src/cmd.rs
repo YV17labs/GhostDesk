@@ -1,5 +1,10 @@
-//! Async runner for the system commands GhostDesk shells out to
-//! (`swaymsg`, `grim`, `wl-paste`, …).
+//! Async runner for the helper binaries a backend shells out to.
+//!
+//! Neutral because both backends need it and neither owns it: `swaymsg`,
+//! `grim` and `wl-paste` on Linux, `screencapture`, `pbcopy` and `pbpaste` on
+//! macOS. Never through a shell, so no argument is word-split or
+//! glob-expanded — which is what makes it safe to hand a caller's region
+//! geometry or clipboard text to one of them.
 
 use std::process::Stdio;
 use std::time::Duration;
@@ -26,7 +31,11 @@ pub enum CmdError {
     },
 }
 
-/// Default ceiling, matching the Python port's `_cmd.run`.
+/// Default ceiling for a helper that is expected to answer immediately.
+///
+/// Generous on purpose: every caller here is a local tool talking to a local
+/// compositor or window server, so ten seconds is not a budget but a
+/// deadlock's expiry date.
 pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Run `argv` and return its stdout, trimmed. Never goes through a shell, so

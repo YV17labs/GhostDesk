@@ -7,6 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
+description = "The OS substrate — five neutral contracts, one backend per target, no framework"
 
 [dependencies]
 anyhow.workspace = true
@@ -33,3 +34,6 @@ wayland-protocols-wlr.workspace = true
 objc2-application-services.workspace = true
 objc2-core-foundation.workspace = true
 objc2-core-graphics.workspace = true
+
+[lints]
+workspace = true

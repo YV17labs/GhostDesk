@@ -14,16 +14,33 @@ disagreement is a bug here to fix, not a choice to defend.
 ## Layout — three crates, three jobs
 
 ```
-apps/ghostdesk/src/   main.rs, module.rs, and the endpoint's own edge — pure composition
+apps/ghostdesk/src/   main.rs + module.rs — composition, plus the one app-local slice below
 crates/features/      the product's domains, each with its own MCP edge
 crates/platform/      the OS substrate — knows nothing about the framework
 ```
+
+**An app is `main.rs` + `module.rs`.** `apps/ghostdesk/src/mcp/` is the
+framework's app-local exception, taken deliberately and once: what it holds —
+the identity the deployment alone knows, the session brief describing the whole
+surface, the per-call binding over idle and the coordinate space — is what
+*this app's exposure* decides, and no feature could generalize it. Anything a
+second app could reuse belongs in `crates/features/`.
 
 **`crates/platform/` is framework-free by decision.** Five OS-neutral contracts
 (`InputBackend`, `ScreenBackend`, `WindowManager`, `Clipboard`, `AppCatalog`);
 `host` picks the implementation for the compile target. Nothing outside that
 crate names an OS, and nothing inside it names the framework. A port to a third
 OS is a new sibling module, never a branch in a service.
+
+**Its root holds three kinds of file, and only three**: the five contracts, the
+neutral vocabulary two backends would otherwise write twice (`chord`, `frame`,
+`cmd`, `coords`), and `host`. A contract file holds a contract — the pixel
+pipeline is `frame`, not a second half of `screen` — because the sentence
+`lib.rs` opens with has to be true at a glance. **What `chord` publishes, every
+backend serves**: `MODIFIERS` and `KEYS` are the tokens the tool description
+promises on *any* desktop, each backend's own test proves it resolves all of
+them, and a token one backend accepts and the other refuses is the same defect
+read from the other side.
 
 **`crates/features/` holds the domains.** Each wraps a platform seam in an
 `#[injectable]` service. A domain never talks to the OS directly.
@@ -47,14 +64,27 @@ Several modules may join the **same** MCP endpoint: the framework merges them
 onto one, so a single client URL is no reason to fold domains together. That is
 how `/mcp` is served here — see *How the endpoint is composed*.
 
-## Names — four levels, and none overflows into the next
+## Names — five levels, and none overflows into the next
 
 | Level | Named for | Appears as |
 |---|---|---|
 | **Project** | the product | the repository and the workspace — **nowhere else** |
+| **Family** | the **standard** that names its members | a shared crate-name prefix — and nothing else |
 | **Crate** | what it holds | `crates/<crate>/`, and the root of every span target it emits |
 | **App** | what it **serves** (`api`, `worker`, `auth`) | `apps/<app>/`, the binary, `<App>Module` |
 | **Module** | its **domain** (`users`, `billing`) | `<module>/`, `<Module>Module` |
+
+**No family here, and a prefix would be a claim.** A family exists when one
+external standard names each of its members; three crates named for what they
+hold answer to none, so `features` and `platform` carry no shared prefix.
+
+**A name and its path say the same thing.** The stem is the crate's subject —
+empty for a product container like `features` — plus every folder below `src/`,
+joined: `screen/mcp/module.rs` is `ScreenMcpModule`, `idle/schedule/module.rs`
+is `IdleScheduleModule`. A module whose derived name is one the framework also
+exports keeps it anyway and adds no marker; the framework's is then written in
+full at the point of use, which is what `apps/ghostdesk/src/module.rs` does for
+`nest_rs::mcp::McpModule`.
 
 ```
 <App>Module              apps/<app>/src/module.rs     composition root
@@ -147,12 +177,15 @@ is named for the role, never for the type.
 | Event listener host | `events/listener.rs` |
 | Entity (ORM + `#[expose]`) | `entity.rs` / `entities/` |
 | Guard / Strategy / Pipe | `guard.rs` / `strategy.rs` / `pipe.rs` |
+| Interceptor / Filter / Exception filter | `interceptor.rs` / `filter.rs` / `exception_filter.rs` |
 | Module config (`#[config]`) | `config.rs` |
 | Domain error / Static constants | `error.rs` / `constants.rs` |
 
 An adapter role carries its folder: `schedule/tasks.rs`, never `tasks.rs` at
 the module root. A transport-specific guard belongs to its adapter too
-(`mcp/guard.rs`).
+(`mcp/guard.rs`), and so does a layer serving one transport
+(`http/interceptor.rs`); a layer a module applies to itself whatever the edge
+sits flat at the module root.
 
 **Custom providers.** Injectable, but nothing is dispatched *to* them. Named
 for what they are, file named the same, and **never folded into `service.rs`**.
@@ -162,7 +195,11 @@ A recognised word beats an invented one: `Factory`, `Client`, `Store`,
 **Vocabulary.** Not registered anywhere: an enum, a struct, a type alias, a set
 of constants. Named for *what it declares* — a role suffix on vocabulary is
 noise. Shared test doubles are the one crate-root file: `testing.rs`, behind
-`#[cfg(test)]`, doubles only.
+`#[cfg(test)]`, doubles only — one per platform seam. **Reading a logged act
+back is `nest_rs::testing::LogCapture`**, never a subscriber written here: an
+act on the desktop is a security record, so *whether the line was written* has
+to be a question a test can ask, and the framework already answers it in
+structured fields where a rendered line could only be grepped.
 
 ## Precedence — when a type carries a primitive role *and* logic
 
@@ -241,7 +278,7 @@ is `programs`, not `apps`.
 structure   apps  crates  features  src  tests
 roles       mod  module  service  controller  resolver  gateway  tool
             processor  tasks  listener  guard  strategy  pipe  config
-            entity  error  constants  testing
+            interceptor  filter  entity  error  constants  testing
 plurals     services  entities  dtos  commands  events  strategies  pipes
 edges       http  graphql  ws  queue  schedule  mcp  events
 ```
@@ -274,15 +311,32 @@ boundary, which maps them to a status code.
 because that is the one thing the adapter cannot read off a message. A refusal
 the caller can act on reaches the model verbatim, so it can correct itself and
 call again; everything else leaves through the framework's `opaque`, which
-keeps the real error for the operator and hands the model a constant. A tool
-that renders a server failure itself is re-implementing that posture — the
-adapter's `Answered` trait is where the two answers are chosen, and nowhere
-else.
+keeps the real error for the operator and hands the model a constant.
+
+**Both traits live in `features/src/blame.rs`, once.** A domain error says whose
+mistake it is by implementing `Blame`; `Answered` renders that decision at the
+MCP edge, and a blanket impl covers every error that answers the first. Crate
+root rather than per-adapter for the reason the framework's own `Opaque` is not
+per-host: this is a security posture, and a copy of it that forgets the refusal
+branch still compiles, still answers, and leaks. A tool that renders a server
+failure itself is re-implementing the same posture a third time.
 
 ## Configuration
 
-Every module's config is settable **both** ways: from the environment and
-pinned in code. A field that only exists in one of the two is incomplete.
+**Whose config it is decides the seam, and there is no judgement call.** A
+framework module's is pinned through its own `Module::for_root(cfg)` and
+overlaid by the environment field by field — that is how the app pins the bind
+address, the body cap and the endpoint's identity. **A config this project
+declares is registered with `ConfigModule::for_feature::<C>()`, and its `impl
+Default` is the in-code path**: we own the struct, so a `for_root` nobody calls
+is speculative API. Write one the day something outside the feature has to pin
+its config.
+
+**A `#[config]`'s namespace is its stem — read, never chosen.** The crate's
+subject (empty for `features`) plus every folder below `src/` on the way to the
+file, joined by `__`: `screen/config.rs` is `ScreenConfig`, and its fields are
+`<prefix>_SCREEN__*`. From a variable a reader knows the file that parses it,
+and from the file the variable.
 
 **Never spell a variable name as a literal** — not in a message, not in a
 check, not in a doc comment. `NESTRS_ENV_PREFIX` is set on the process and
@@ -294,6 +348,23 @@ nothing the day it changes, and the compiler never notices. Build it
 
 **One framework line.** `cargo add nest-rs --features <capability>` — never a
 `nest-rs-*` sub-crate. The manifest names only what your own source names.
+
+## Unsafe
+
+**`unsafe` is denied for the whole workspace and lifted one file at a time.**
+Two files bind Quartz and the Accessibility API — C, with no safe form — and
+each opens with an `#![expect(unsafe_code, reason = "…")]` above the `SAFETY`
+note every call already carries. Everywhere else it is a compile error, and
+that is the point: a service, a tool or a test reaching for `unsafe` is
+answering a question the wrong way, and the two OS seams are where the right
+answer already lives.
+
+**`expect`, never `allow`.** An expectation that stops being needed *warns*,
+and `-D warnings` turns that warning into a failure — so the attribute leaves
+with the last `unsafe` it covered, instead of outliving it in silence. A test
+that needs `unsafe` to set up its world is the shape to fix rather than to
+annotate: the function it exercises is reading the process instead of being
+handed what it reads.
 
 ## Observability
 
@@ -332,6 +403,16 @@ contents, anything a human put there: the field is a character count. An audit
 trail that leaks what it audits is worse than none, and this is the rule that
 makes the level above affordable.
 
+**And it is filed the moment the act lands, never once its effect is judged.**
+The two are different events with different failure modes: the desktop was
+touched, and then something is learned about what happened. Written from the
+verdict, an act disappears whenever the verdict does not arrive — a capture
+that cannot decode, a screen that goes away mid-poll, a shutdown inside the
+seconds the watch takes. `InputService::acted` is the shape: log, then observe,
+with every verb funnelled through it so a new one cannot be added without its
+trail. The verdict is `debug` in the service that produced it, carrying the same
+`action` so the two lines join.
+
 ## Testing
 
 A test target is always a directory — `tests/<suite>/main.rs`, even for one
@@ -358,6 +439,7 @@ knowing why it is there. Do not copy these shapes into new code.
 | `apps/ghostdesk/tests/` — `e2e/` is empty and `integration/` boots the real `GhostdeskModule` | integration = no app boot; wiring proof lives in e2e | **kept, and now true of the whole suite.** The wiring assertions need a boot but no desktop — `InputService::warm_up` reports an unbound compositor rather than aborting, so `TestApp` boots on a runner with no display. What still belongs in `e2e/` is anything that drives the desk. |
 | `apps/ghostdesk/src/mcp/guard.rs` — `CallTrail` is a guard that only observes | a guard decides access | **kept until the framework offers an observation seam.** The endpoint now files its own line per operation, but it names the JSON-RPC method — one word for all fourteen tools. The per-operation chain stays the one place `host`/`kind`/`name` reach an application; the alternative was the same line hand-written in every tool body. It never refuses, and every host is written with `#[tools]`, so it covers all four. |
 | `crates/platform/` contracts return `anyhow::Result` | thiserror in a library | **kept, deliberately.** The backends are opaque OS seams; the typed classification each caller needs happens once, at the feature boundary, in each domain's `error.rs`. Typing the substrate would duplicate that vocabulary one layer down with nothing new to say. |
+| `programs/mcp/tool.rs` injects `ScreenService`, and `screen/mod.rs` widens three items to `pub(crate)` for it | a domain never reaches into another domain | **kept, deliberately, and it is the only one.** `app_launch` answers with the settled frame, so the agent acts on the window it just opened without paying for a second round trip — that is the tool's whole value, and it is a composition decision no other shape expresses better. What is bounded is the blast radius: one consumer, named in `screen/mod.rs` beside the `pub(crate)` list, and nothing else in `features` crosses a domain. A second such reach is not a precedent — it is the signal that the two domains were drawn wrong. |
 
 Everything else that used to be listed here is done: the MCP edge is one
 `<module>/mcp/` adapter per domain merged onto one `/mcp`, the endpoint's
@@ -402,7 +484,9 @@ tree now assumes.
    `clipboard_get` under a second addressing scheme, and no client read them.
    Four hosts, four `#[tools]`, one shape.
 3. **The app declares who it is**, in `apps/ghostdesk/src/module.rs`:
-   `McpModule::for_root(McpOptions { server: Some(McpIdentity::new("ghostdesk", …).instructions(…).icons(…)), .. })`.
+   `nest_rs::mcp::McpModule::for_root(McpOptions { server: Some(McpIdentity::new("ghostdesk", …).instructions(…).icons(…)), .. })`
+   — the framework's, written in full because the app's own module derives the
+   same name from its folder.
    The identity carries no path — the endpoint is named by the hosts that join
    it — and `version` is the app's alone, since no shared host knows the
    deployment's. Identity is declared, capabilities stay *observed* from the
@@ -413,7 +497,7 @@ tree now assumes.
    `DesktopContext` (`dyn McpToolContext`) is resolved once per path and is
    glue over idle, the coordinate space and the caller's identity — so it sits
    in `apps/ghostdesk/src/mcp/context.rs`, not in a feature. It is provided by
-   `DesktopContextModule` (`mcp/module.rs`), which imports the port it
+   the app's own `McpModule` (`mcp/module.rs`), which imports the port it
    injects; `features` exports that port for exactly this consumer, and the
    root module composes imports and declares nothing.
 5. **Who called is the transport's answer, not a feature's.** The HTTP edge
@@ -446,7 +530,13 @@ tree now assumes.
    only test for `Ok`/`Err`, and `#[tools]` rejects a per-operation interceptor
    with a named compile error. **It covers all four hosts**, since every one of
    them is written with `#[tools]` and so runs the chain.
-6. **The endpoint serves tools and nothing else.** No host publishes a
+6. **One host may inject another domain's service, once, and it is spelled
+   out.** `ProgramsTool` takes `ScreenService` so `app_launch` can answer with
+   the settled frame. It is the single cross-domain edge in `features`, it is
+   in the deviations table above, and the reason it is tolerable is that it
+   buys the agent a round trip it would otherwise always spend. Adding a second
+   means splitting or merging the domains, not repeating this.
+7. **The endpoint serves tools and nothing else.** No host publishes a
    resource or a prompt, so the capabilities the framework observes are tools
    alone. A host that ever needs a resource would have to hand-write
    `ServerHandler` and leave `#[tools]` behind — and with it the per-operation

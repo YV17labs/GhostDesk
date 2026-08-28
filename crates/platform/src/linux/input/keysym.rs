@@ -1,8 +1,13 @@
 //! X11 keysym resolution.
 //!
 //! Only the symbolic names GhostDesk actually needs, derived from
-//! `X11/keysymdef.h`. Names mirror what the keyboard tool normalises to:
+//! `X11/keysymdef.h`. Names mirror what `chord::ALIASES` normalises to:
 //! lowercase, no underscores, `leftctrl` style for modifiers.
+//!
+//! Left-hand modifiers only. The right-hand keysyms stay in
+//! [`MODIFIER_BITS`] — a compositor may report either, and both raise the same
+//! bit — but nothing *names* them, because a name here is only ever reached
+//! through an alias and no published token aliases to one.
 
 /// Keysym → XKB modifier bit.
 ///
@@ -23,19 +28,14 @@ pub const MODIFIER_BITS: &[(u32, u32)] = &[
 
 const NAMED: &[(&str, u32)] = &[
     ("leftctrl", 0xFFE3),
-    ("rightctrl", 0xFFE4),
     ("leftshift", 0xFFE1),
-    ("rightshift", 0xFFE2),
     ("leftalt", 0xFFE9),
-    ("rightalt", 0xFFEA),
     ("leftmeta", 0xFFEB),
-    ("rightmeta", 0xFFEC),
     ("enter", 0xFF0D),
     ("esc", 0xFF1B),
     ("backspace", 0xFF08),
     ("tab", 0xFF09),
     ("delete", 0xFFFF),
-    ("insert", 0xFF63),
     ("home", 0xFF50),
     ("end", 0xFF57),
     ("pageup", 0xFF55),

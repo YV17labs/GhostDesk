@@ -7,39 +7,52 @@
 //! normalised space.
 
 use std::future::Future;
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
 use crate::screen::Region;
 
-/// Fallbacks, used only if nothing installs a size — a unit test reaching
-/// into `screen` or `wayland` without booting the app.
+/// Fallbacks, used only while nothing has installed a size — a unit test
+/// reaching into `screen` or the Wayland session without booting the app.
 const DEFAULT_WIDTH: i64 = 1280;
 const DEFAULT_HEIGHT: i64 = 1024;
 
-static SCREEN: OnceLock<(i64, i64)> = OnceLock::new();
+/// The installed size, if anything has installed one.
+///
+/// `Option` in one cell, and not a `OnceLock`, for the reason the previous
+/// shape got wrong: `get_or_init` made a **read** install the fallback, so real
+/// geometry arriving afterwards was discarded in silence — on a backend that
+/// owns its geometry, every coordinate wrong for the life of the process with
+/// nothing logged and nothing to notice. Here a read cannot write, so the size
+/// in force is whichever was installed last. One cell rather than two also
+/// means a reader can never pair a new width with an old height.
+///
+/// Installed by `ScreenService`'s boot hook, which is also what logs the
+/// geometry and where it came from — that line's absence is how an operator
+/// knows nothing installed one.
+static SCREEN: Mutex<Option<(i64, i64)>> = Mutex::new(None);
 
 /// Install the screen size for the process.
 ///
 /// This crate reads no environment of its own, so the size arrives from the
-/// one caller that resolved it and there is exactly one place it can come
-/// from. Idempotent — a second call is ignored, which keeps concurrent tests
-/// honest.
+/// one caller that resolved it. Idempotent in the only sense that matters: the
+/// same size installed twice changes nothing, and a display reconfigured
+/// mid-session can install its new one.
 pub fn set_screen(width: i64, height: i64) {
-    let _ = SCREEN.set((width, height));
+    *SCREEN.lock().expect("screen size poisoned") = Some((width, height));
 }
 
-fn screen() -> (i64, i64) {
-    *SCREEN.get_or_init(|| (DEFAULT_WIDTH, DEFAULT_HEIGHT))
-}
-
-/// Screen width in pixels.
-pub fn screen_width() -> i64 {
-    screen().0
-}
-
-/// Screen height in pixels.
-pub fn screen_height() -> i64 {
-    screen().1
+/// The size in force, in pixels.
+///
+/// The pair, never one half at a time: a caller taking the width and the
+/// height in two reads could straddle a display reconfiguration and pair a new
+/// width with an old height, which is the one thing the single cell exists to
+/// prevent. It is also the read on the pointer path, where a motion event
+/// would otherwise pay two acquisitions.
+pub fn screen() -> (i64, i64) {
+    SCREEN
+        .lock()
+        .expect("screen size poisoned")
+        .unwrap_or((DEFAULT_WIDTH, DEFAULT_HEIGHT))
 }
 
 tokio::task_local! {
@@ -70,10 +83,8 @@ pub fn to_pixels(mx: i64, my: i64) -> (i64, i64) {
     if space == 0 {
         return (mx, my);
     }
-    (
-        rescale(mx, space, screen_width()),
-        rescale(my, space, screen_height()),
-    )
+    let (width, height) = screen();
+    (rescale(mx, space, width), rescale(my, space, height))
 }
 
 /// A model-space region → a pixel region. Pass-through when disabled.
@@ -85,11 +96,12 @@ pub fn region_to_pixels(region: Region) -> Region {
     if space == 0 {
         return region;
     }
+    let (width, height) = screen();
     Region {
-        x: rescale(region.x, space, screen_width()),
-        y: rescale(region.y, space, screen_height()),
-        width: rescale(region.width, space, screen_width()),
-        height: rescale(region.height, space, screen_height()),
+        x: rescale(region.x, space, width),
+        y: rescale(region.y, space, height),
+        width: rescale(region.width, space, width),
+        height: rescale(region.height, space, height),
     }
 }
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use nest_rs::core::{hooks, injectable};
 use nest_rs::schedule::scheduled;
 
-use crate::idle::service::IdleService;
+use crate::idle::IdleService;
 
 #[injectable]
 pub struct IdleTasks {

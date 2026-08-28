@@ -2,15 +2,15 @@
 //! (`Button`, `ScrollDirection`) the feature layer speaks.
 //!
 //! Nothing here names a protocol or an OS. The Wayland backend presses evdev
-//! keycodes through a virtual keyboard; a macOS backend posts `CGEvent`s; the
+//! keycodes through a virtual keyboard; the macOS backend posts `CGEvent`s; the
 //! feature crate cannot tell the difference — that opacity is what makes the
 //! next OS a new directory under this crate instead of a sweep through
-//! `features`.
+//! `features`. The chord grammar the two share is [`chord`](crate::chord).
 
-use std::any::Any;
-
-use anyhow::{Result, bail};
+use anyhow::Result;
 use async_trait::async_trait;
+
+use crate::chord::Chord;
 
 /// Which pointer button an action uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -52,34 +52,6 @@ impl ScrollDirection {
     }
 }
 
-/// A chord resolved by the backend that will press it.
-///
-/// The payload is opaque on purpose: on Wayland a chord is an XKB modifier
-/// mask plus keysyms, on macOS it would be `(CGEventFlags, CGKeyCode)` — no
-/// neutral encoding covers both without lying to one of them. Only the
-/// backend that produced a `Chord` can consume it, and only one backend ever
-/// exists per process.
-pub struct Chord(Box<dyn Any + Send>);
-
-impl Chord {
-    pub fn new(payload: impl Any + Send) -> Self {
-        Self(Box::new(payload))
-    }
-
-    /// Recover the payload.
-    ///
-    /// The error means a backend was handed a chord it did not resolve — a
-    /// programming error, not a runtime condition. The diagnostic lives here
-    /// rather than in each backend so every implementation reports it the
-    /// same way without having to reword it.
-    pub fn take<T: Any>(self) -> Result<T> {
-        match self.0.downcast::<T>() {
-            Ok(payload) => Ok(*payload),
-            Err(_) => bail!("chord was resolved by a different input backend"),
-        }
-    }
-}
-
 /// How a drag is paced, shared by every backend.
 ///
 /// The numbers are not arbitrary and they are not per-OS. A gesture
@@ -115,34 +87,15 @@ pub mod drag {
     }
 }
 
-/// Split a `+`-separated chord into normalised tokens, applying `aliases`.
-///
-/// One definition rather than a convention two backends happen to agree on:
-/// the grammar is published to callers, so it cannot be per-OS. The alias
-/// *tables* are deliberately not shared: `cmd` means
-/// Super on Linux and Command on macOS, and merging them would reintroduce
-/// exactly the bug [`Conventions`] exists to prevent.
-pub fn normalize_chord(keys: &str, aliases: &[(&str, &str)]) -> Vec<String> {
-    keys.split('+')
-        .filter(|token| !token.trim().is_empty())
-        .map(|token| {
-            let key = token.trim().to_lowercase();
-            aliases
-                .iter()
-                .find_map(|(from, to)| (*from == key).then(|| (*to).to_string()))
-                .unwrap_or(key)
-        })
-        .collect()
-}
-
 /// The shortcut vocabulary of a desktop, as the agent must be told it.
 ///
 /// This is the one place the port reaches the agent contract, and it is not
 /// cosmetic: on macOS copy is `cmd+c`, and an agent told to send `ctrl+c`
 /// types a control character into the document instead of copying. Every
 /// other difference between the backends is invisible above `platform`;
-/// this one has to travel all the way out to the model, so it is a value the
-/// backend states rather than a string the feature layer guesses.
+/// this one has to travel all the way out to the model, so it is a value
+/// [`host::conventions`](crate::host::conventions) states rather than a string
+/// the feature layer guesses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Conventions {
     /// The desktop the agent is driving, in the words it should think in.
@@ -164,9 +117,6 @@ impl Conventions {
 /// already happened by the time a backend sees them.
 #[async_trait]
 pub trait InputBackend: Send + Sync {
-    /// How this desktop spells its standard shortcuts.
-    fn conventions(&self) -> Conventions;
-
     /// Open whatever the backend needs to open, once, and report whether it
     /// worked. Idempotent: a caller may bind eagerly at start-up so a missing
     /// protocol or permission is known before an agent's first click, and what
@@ -222,18 +172,6 @@ pub trait InputBackend: Send + Sync {
 mod tests {
     use super::*;
 
-    const ALIASES: &[(&str, &str)] = &[("return", "enter")];
-
-    #[test]
-    fn splits_a_chord_dropping_blanks_and_applying_aliases() {
-        assert_eq!(
-            normalize_chord("Ctrl+Shift+Return", ALIASES),
-            vec!["ctrl", "shift", "enter"],
-        );
-        assert_eq!(normalize_chord("ctrl++a", ALIASES), vec!["ctrl", "a"]);
-        assert_eq!(normalize_chord(" ", ALIASES), Vec::<String>::new());
-    }
-
     #[test]
     fn a_drag_path_ends_on_the_destination() {
         let points: Vec<_> = drag::path((0, 0), (100, 50)).collect();
@@ -243,14 +181,11 @@ mod tests {
     }
 
     #[test]
-    fn a_chord_handed_to_the_wrong_backend_says_so() {
-        let chord = Chord::new(42u32);
-        assert!(
-            chord
-                .take::<String>()
-                .unwrap_err()
-                .to_string()
-                .contains("different input backend")
-        );
+    fn a_shortcut_hangs_off_the_desktops_own_modifier() {
+        let mac = Conventions {
+            desktop: "macOS",
+            primary_modifier: "cmd",
+        };
+        assert_eq!(mac.shortcut("c"), "cmd+c");
     }
 }

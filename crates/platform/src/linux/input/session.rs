@@ -28,7 +28,7 @@ use wayland_protocols_wlr::virtual_pointer::v1::client::zwlr_virtual_pointer_v1:
 
 use super::connection::{Command, Job};
 use super::keymap;
-use crate::coords::{screen_height, screen_width};
+use crate::coords::screen;
 use crate::input::{Button, ScrollDirection};
 
 // --- Linux input-event-codes.h ------------------------------------------
@@ -155,12 +155,27 @@ pub(super) fn run(mut rx: mpsc::UnboundedReceiver<Job>, ready: oneshot::Sender<R
 /// logged with its reason — an operator watching a boot sees immediately
 /// whether the display name is wrong — and the deadline is what decides.
 fn connect_within(deadline: Duration) -> Result<Connection> {
+    retry_connect(deadline, Connection::connect_to_env)
+}
+
+/// The wait itself, over the connector it is handed rather than over the
+/// process environment.
+///
+/// What it promises — one more attempt after the first failure, and a deadline
+/// that ends it — is provable against a socket the caller controls. Pointing
+/// `WAYLAND_DISPLAY` at a fake display would mean writing state every other
+/// test in the process shares, to prove a loop that never needed to read it.
+fn retry_connect<C, E>(deadline: Duration, connect: C) -> Result<Connection>
+where
+    C: Fn() -> std::result::Result<Connection, E>,
+    E: std::error::Error + Send + Sync + 'static,
+{
     let started = Instant::now();
     let mut attempts: u32 = 0;
 
     loop {
         attempts += 1;
-        match Connection::connect_to_env() {
+        match connect() {
             Ok(connection) => {
                 if attempts > 1 {
                     tracing::info!(
@@ -276,12 +291,13 @@ impl Session {
     }
 
     fn motion(&self, x: i64, y: i64) {
+        let (width, height) = screen();
         self.pointer.motion_absolute(
             now_ms(),
             x.max(0) as u32,
             y.max(0) as u32,
-            screen_width() as u32,
-            screen_height() as u32,
+            width as u32,
+            height as u32,
         );
         self.pointer.frame();
     }
@@ -357,14 +373,12 @@ fn missing(interface: &str, err: impl std::fmt::Display) -> anyhow::Error {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::net::UnixListener;
+    use std::os::unix::net::{UnixListener, UnixStream};
 
     use super::*;
 
-    /// Both halves of the wait, in one test on purpose: `connect_to_env` reads
-    /// the process environment, so pointing it at a fake display means writing
-    /// to that environment, and two tests doing it concurrently would each see
-    /// the other's directory. One test, one writer.
+    /// Both halves of the wait in one test: the deadline that ends it when
+    /// nothing answers, and the first successful connect, which ends it at once.
     #[test]
     fn the_wait_ends_when_a_display_appears_and_not_before() {
         let dir = std::env::temp_dir().join(format!("ghostdesk-probe-{}", std::process::id()));
@@ -372,16 +386,17 @@ mod tests {
         let socket = dir.join("wayland-probe");
         let _ = std::fs::remove_file(&socket);
 
-        // SAFETY: single-threaded test, and the only writer of these two.
-        unsafe {
-            std::env::set_var("XDG_RUNTIME_DIR", &dir);
-            std::env::set_var("WAYLAND_DISPLAY", "wayland-probe");
-        }
+        // The same two steps `connect_to_env` performs once it has read the
+        // environment — which is the half this test deliberately replaces.
+        let connect = || {
+            let stream = UnixStream::connect(&socket)?;
+            Connection::from_socket(stream).map_err(std::io::Error::other)
+        };
 
         // Nothing there: the deadline is what ends it, not the first failure.
         // A boot that gave up on attempt one is the bug this exists to close.
         let started = Instant::now();
-        let err = connect_within(Duration::from_millis(600)).expect_err("no display to find");
+        let err = retry_connect(Duration::from_millis(600), connect).expect_err("no display");
         let waited = started.elapsed();
         assert!(
             waited >= CONNECT_RETRY,
@@ -397,7 +412,7 @@ mod tests {
         // this function's business, which is the split the retry rests on.
         let _listener = UnixListener::bind(&socket).expect("bind the fake display");
         assert!(
-            connect_within(Duration::from_millis(200)).is_ok(),
+            retry_connect(Duration::from_millis(200), connect).is_ok(),
             "a display that accepts a connection has to end the wait",
         );
 

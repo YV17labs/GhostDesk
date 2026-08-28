@@ -136,27 +136,29 @@ Include:
 ## Project Structure
 
 A Cargo workspace in the layout NestRS uses: one binary under `apps/`, the
-domains in a shared `features` crate, and the OS substrate beside it.
+domains in a shared `features` crate, and the OS substrate beside it. `AGENTS.md`
+carries the naming rules in full.
 
 ```
 GhostDesk/
-├── apps/ghostdesk/          # The binary — wires modules, owns no logic
-│   └── src/module.rs        # GhostdeskModule: HTTP + MCP + Schedule + features
-├── crates/features/         # One folder per domain
-│   ├── config.rs            # GhostdeskConfig — #[config(namespace = "ghostdesk")]
-│   ├── screen/              # capture, stabilise, encode
+├── apps/ghostdesk/          # The binary — composition, and the endpoint's app-local half
+│   ├── src/module.rs        # GhostdeskModule: HTTP + MCP + Schedule + Health + the domains
+│   └── src/mcp/             # identity, session brief, per-call context, call trail
+├── crates/features/         # One folder per domain, each with its own mcp/ adapter
+│   ├── auth/                # bearer strategy behind the framework's AuthnGuard
+│   ├── clipboard/           # read and write the desktop's clipboard
+│   ├── host/                # binds the platform contracts into the container
+│   ├── idle/                # idle watchdog (schedule/ adapter)
 │   ├── input/               # mouse, keyboard, post-action feedback
-│   ├── apps/                # .desktop catalogue, launch, status
-│   ├── clipboard/           # wl-copy / wl-paste
-│   ├── session/             # idle watchdog (#[scheduled])
-│   └── mcp/                 # the single #[mcp] host: 14 tools, 2 resources,
-│                            # the bearer guard and the model-space context
+│   ├── programs/            # .desktop catalogue, launch, status
+│   └── screen/              # capture, stabilise, encode
 ├── crates/platform/         # OS substrate — no framework types
-│   ├── wayland/             # virtual pointer + keyboard, XKB keymap
-│   ├── sway.rs              # IPC socket discovery, tree walking
-│   ├── screen.rs            # grim, frame diff, WebP/PNG
-│   ├── desktop.rs           # .desktop parser
-│   └── coords.rs            # model-space ↔ pixels
+│   ├── input.rs, screen.rs, window.rs, clipboard.rs, desktop.rs
+│   │                        # the five OS-neutral contracts
+│   ├── host.rs              # picks the backend for the compile target
+│   ├── coords.rs            # model-space ↔ pixels
+│   ├── linux/               # Wayland virtual pointer + keyboard, Sway IPC, grim
+│   └── macos/               # Quartz events, Accessibility, NSPasteboard
 ├── docker/                  # Base image, services, entrypoint
 ├── .devcontainer/           # Development container config
 └── .github/workflows/       # CI/CD workflows

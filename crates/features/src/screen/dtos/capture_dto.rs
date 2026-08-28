@@ -1,6 +1,6 @@
 use nest_rs::mcp::ContentBlock;
 
-use crate::screen::service::Capture;
+use crate::screen::capture::Capture;
 
 pub struct CaptureDto(ContentBlock);
 

@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use crate::blame::Blame;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ProgramsError {
     #[error("Invalid command syntax: {0:?}")]
@@ -39,9 +41,12 @@ pub enum ProgramsError {
     Desktop(#[source] anyhow::Error),
 }
 
-impl ProgramsError {
-    pub(crate) fn blames_the_caller(&self) -> bool {
+impl Blame for ProgramsError {
+    fn blames_the_caller(&self) -> bool {
         match self {
+            // Each of these names what to send instead, so the model can
+            // correct itself and call again. The rest are the host's problem,
+            // and their messages carry paths the model must never read.
             Self::Syntax(_)
             | Self::Empty
             | Self::Arguments(_)

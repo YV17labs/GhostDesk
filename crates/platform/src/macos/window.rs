@@ -17,6 +17,11 @@
 //! the opaque `WindowId` was introduced to absorb: Sway stores one integer
 //! here, macOS stores a pair, and the feature layer is none the wiser.
 
+#![expect(
+    unsafe_code,
+    reason = "the Accessibility API is C; each call carries its own SAFETY note"
+)]
+
 use std::ptr::NonNull;
 
 use anyhow::{Result, anyhow, bail};
@@ -161,7 +166,7 @@ fn window_entry(entry: CFRetained<CFType>) -> Option<(i32, String)> {
 ///
 /// Empty rather than an error: a process that refuses Accessibility, has no
 /// windows, or died since the window list was taken are the same thing to
-/// every caller here, and the one `unsafe` lives in this function alone.
+/// every caller here — none of them is a reason to fail the sweep.
 fn app_window_elements(pid: i32) -> Vec<CFRetained<AXUIElement>> {
     // SAFETY: a pid is all this takes; it returns a valid element even for a
     // process that has since exited (later calls then fail cleanly).
@@ -254,6 +259,7 @@ fn copy_attribute(element: &AXUIElement, attribute: &str) -> Option<CFRetained<C
     if err != AXError::Success {
         return None;
     }
-    // The call returns a +1 reference, which `from_raw` takes over.
+    // SAFETY: the call succeeded, so `value` is a live CF object owned at +1 —
+    // exactly the reference `from_raw` takes over.
     NonNull::new(value as *mut CFType).map(|value| unsafe { CFRetained::from_raw(value) })
 }

@@ -7,9 +7,10 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish = false
+description = "The desk's domains — one port plus one MCP adapter per domain, over the platform substrate"
 
 [dependencies]
-platform = { path = "../platform" }
+platform.workspace = true
 
 anyhow.workspace = true
 base64.workspace = true
@@ -24,3 +25,11 @@ subtle.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+
+# An act on the desktop is a security record, so "was the line written" has to
+# be a question a test can ask. `testing` carries the framework's own capture.
+[dev-dependencies]
+nest-rs = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

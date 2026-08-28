@@ -40,8 +40,11 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
 
+      # `--workspace`, not `--all-targets`: the latter silently drops doctests,
+      # so a `///` example would compile here and never run — while the local
+      # gate (`nestrs run test unit`) does run it.
       - name: Test
-        run: cargo test --all-targets --locked
+        run: cargo test --workspace --locked
 
       # `--locked` above already fails on a stale lockfile; this makes the
       # reason explicit rather than surfacing as a confusing resolve error.

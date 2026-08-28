@@ -6,7 +6,8 @@ use tokio::sync::OnceCell;
 
 use super::connection::Connection;
 use super::{chord, keysym};
-use crate::input::{Button, Chord, Conventions, InputBackend, ScrollDirection};
+use crate::chord::Chord;
+use crate::input::{Button, Conventions, InputBackend, ScrollDirection};
 
 /// The [`InputBackend`] the host selector hands out on Linux.
 ///
@@ -34,10 +35,9 @@ impl Wayland {
 
 /// What this desktop calls its shortcuts.
 ///
-/// A const, and the trait method below returns it, so the value
-/// [`host::conventions`](crate::host::conventions) reads at composition time
-/// and the value the keyboard presses are the same one — without a second
-/// backend having to exist to be asked.
+/// The same const [`chord`](super::chord) builds its modifier table against,
+/// so the value [`host::conventions`](crate::host::conventions) publishes at
+/// composition time and the value the keyboard presses are the same one.
 pub const CONVENTIONS: Conventions = Conventions {
     desktop: "Linux (Wayland)",
     primary_modifier: "ctrl",
@@ -45,10 +45,6 @@ pub const CONVENTIONS: Conventions = Conventions {
 
 #[async_trait]
 impl InputBackend for Wayland {
-    fn conventions(&self) -> Conventions {
-        CONVENTIONS
-    }
-
     async fn warm_up(&self) -> Result<()> {
         self.connection().await?;
         Ok(())

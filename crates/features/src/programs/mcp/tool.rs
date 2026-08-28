@@ -2,27 +2,16 @@ use std::sync::Arc;
 
 use nest_rs::mcp::{CallToolResult, Json, McpError, Opaque, Parameters, mcp, tools};
 
-use super::super::dtos::{
+use crate::blame::Answered;
+use crate::programs::dtos::{
     LaunchDto, LaunchedDto, ListedDto, ProgramDto, ProgramStatusDto, StatusDto, WindowDto,
 };
-use super::super::error::ProgramsError;
-use super::super::service::{ProgramsService, WindowWait};
+use crate::programs::service::ProgramsService;
+use crate::programs::window_wait::WindowWait;
+// The one cross-domain reach in the tree, and it is `app_launch`'s whole
+// point: the settled frame rides back with the launch so the agent needs no
+// follow-up `screen_shot()`. Owned in AGENTS.md, *Known deviations*.
 use crate::screen::{CaptureDto, ScreenService};
-
-trait Answered<T> {
-    fn answered(self) -> Result<T, McpError>;
-}
-
-impl<T> Answered<T> for Result<T, ProgramsError> {
-    fn answered(self) -> Result<T, McpError> {
-        match self {
-            Err(err) if err.blames_the_caller() => {
-                Err(McpError::invalid_params(err.to_string(), None))
-            }
-            other => other.opaque(),
-        }
-    }
-}
 
 #[mcp]
 #[derive(Clone)]
@@ -189,6 +178,7 @@ impl ProgramsTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::programs::error::ProgramsError;
 
     #[test]
     fn a_server_failure_leaves_as_the_shared_opaque_message() {

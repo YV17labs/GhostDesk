@@ -5,7 +5,7 @@ use nest_rs::core::module;
 use nest_rs::guards::{GuardSpec, guard};
 use nest_rs::health::HealthModule;
 use nest_rs::http::{HttpConfig, HttpModule};
-use nest_rs::mcp::{McpIdentity, McpModule, McpOptions};
+use nest_rs::mcp::{McpIdentity, McpOptions};
 use nest_rs::schedule::ScheduleModule;
 
 use features::auth::{AuthModule, AuthnGuard};
@@ -15,7 +15,7 @@ use features::input::InputMcpModule;
 use features::programs::ProgramsMcpModule;
 use features::screen::ScreenMcpModule;
 
-use crate::mcp::{CallTrail, DesktopContextModule, icons, instructions};
+use crate::mcp::{CallTrail, McpModule, icons, instructions};
 
 /// The app's half of the endpoint's identity — the half no feature could
 /// know: the deployment's version, and a session brief describing a surface
@@ -38,7 +38,7 @@ fn identity() -> McpIdentity {
             request_timeout: Some(Duration::from_secs(120)),
             ..Default::default()
         }),
-        McpModule::for_root(McpOptions {
+        nest_rs::mcp::McpModule::for_root(McpOptions {
             server: Some(identity()),
             ..Default::default()
         }),
@@ -54,7 +54,9 @@ fn identity() -> McpIdentity {
         ProgramsMcpModule,
         ClipboardMcpModule,
         IdleScheduleModule,
-        DesktopContextModule,
+        // Ours, not the framework's — the two share a name, which is why the
+        // framework's is written in full above.
+        McpModule,
     ],
 )]
 pub struct GhostdeskModule;

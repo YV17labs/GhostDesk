@@ -8,8 +8,12 @@ _default:
 
 # Run an app with auto-reload — watches the source, rebuilds and restarts on
 # save. Default: ghostdesk. Usage: nestrs run dev
+#
+# `GHOSTDESK_ENV` is set here rather than in `.env`: it selects the cascade, so
+# it has to exist before any file is read, and it is what arms the
+# development-only affordances — absence has to mean "not development".
 dev app="ghostdesk":
-    bacon run-long -- --bin {{app}}
+    GHOSTDESK_ENV=development bacon run-long -- --bin {{app}}
 
 # Run an app in release mode. Usage: nestrs run start
 start app="ghostdesk":

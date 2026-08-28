@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{CallToolResult, McpError, Opaque, Parameters, Valid, mcp, tools};
+use nest_rs::mcp::{CallToolResult, McpError, Parameters, Valid, mcp, tools};
 
-use super::super::dtos::{CaptureDto, ScreenShotDto};
-use super::super::service::ScreenService;
+use crate::blame::Answered;
+use crate::screen::dtos::{CaptureDto, ScreenShotDto};
+use crate::screen::service::ScreenService;
 
 #[mcp]
 #[derive(Clone)]
@@ -40,7 +41,7 @@ impl ScreenTool {
                 params.quality,
             )
             .await
-            .opaque()?;
+            .answered()?;
 
         Ok(CallToolResult::success(vec![
             CaptureDto::from(&capture).block(),

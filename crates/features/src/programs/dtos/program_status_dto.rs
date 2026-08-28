@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::Serialize;
 
-use crate::programs::service::ProgramStatus;
+use crate::programs::program_status::ProgramStatus;
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct ProgramStatusDto {

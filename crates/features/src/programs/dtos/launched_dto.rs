@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 
 use super::WindowDto;
-use crate::programs::service::Launched;
+use crate::programs::launched::Launched;
 
 #[derive(Debug, Clone, Serialize, JsonSchema)]
 pub struct LaunchedDto {
@@ -30,7 +30,7 @@ impl From<Launched> for LaunchedDto {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::programs::service::RunningWindow;
+    use crate::programs::running_window::RunningWindow;
 
     fn launched() -> Launched {
         Launched {

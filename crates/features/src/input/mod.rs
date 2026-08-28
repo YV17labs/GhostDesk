@@ -1,6 +1,7 @@
 mod action;
 mod dtos;
 mod error;
+mod feedback;
 mod mcp;
 mod module;
 mod services;

@@ -1,25 +1,10 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{Json, McpError, Opaque, Parameters, Valid, mcp, tools};
+use nest_rs::mcp::{Json, McpError, Parameters, Valid, mcp, tools};
 
-use super::super::dtos::{ClickDto, DragDto, FeedbackDto, MoveDto, PressDto, ScrollDto, TypeDto};
-use super::super::error::InputError;
-use super::super::services::InputService;
-
-trait Answered<T> {
-    fn answered(self) -> Result<T, McpError>;
-}
-
-impl<T> Answered<T> for Result<T, InputError> {
-    fn answered(self) -> Result<T, McpError> {
-        match self {
-            Err(err) if err.blames_the_caller() => {
-                Err(McpError::invalid_params(err.to_string(), None))
-            }
-            other => other.opaque(),
-        }
-    }
-}
+use crate::blame::Answered;
+use crate::input::dtos::{ClickDto, DragDto, FeedbackDto, MoveDto, PressDto, ScrollDto, TypeDto};
+use crate::input::services::InputService;
 
 #[mcp]
 #[derive(Clone)]
@@ -169,12 +154,14 @@ impl InputTool {
         description = "Press a key or a chord (modifiers plus key), using + as \
             separator.\n\n\
             Modifier tokens: ctrl/control, alt/option, shift, \
-            super/meta/win/cmd. Which of them carries the standard shortcuts \
-            differs by OS — the server instructions say which, and sending \
-            the wrong one types a stray character instead of failing.\n\n\
+            super/meta/win/cmd/command. Which of them carries the standard \
+            shortcuts differs by OS — the server instructions say which, and \
+            sending the wrong one types a stray character instead of \
+            failing.\n\n\
             Non-printable tokens: return/enter, escape/esc, backspace, delete, \
             tab, space, home/end, pageup/pagedown, left/right/up/down, \
-            f1..f12.\n\n\
+            f1..f12. Every one of them is accepted on every desktop this \
+            server runs on.\n\n\
             A screen_changed of false usually means the keystroke went to a \
             window or field that did not care about it — check focus with a \
             screenshot.",
@@ -194,6 +181,7 @@ impl InputTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::input::error::InputError;
 
     #[test]
     fn a_backend_failure_leaves_as_the_shared_opaque_message() {
@@ -213,6 +201,54 @@ mod tests {
             .unwrap_err();
 
         assert!(err.message.contains("ctrl+zz"), "{}", err.message);
+    }
+
+    #[test]
+    fn the_published_chord_grammar_is_the_one_the_backends_serve() {
+        // The description is where the grammar reaches the agent, and
+        // `platform::chord` is where both backends are held to it. A token
+        // served but never described is one no agent will send; a token
+        // described but not served is one every agent will.
+        let described = InputTool::tool_router()
+            .list_all()
+            .into_iter()
+            .find(|tool| tool.name == "key_press")
+            .and_then(|tool| tool.description)
+            .expect("key_press describes itself")
+            .to_string();
+
+        // Whole words, not substrings: `esc` sits inside `escape`, `up` inside
+        // `pageup` and `cmd` inside `command`, so containment would pass three
+        // of these without the description ever naming them.
+        let words: Vec<&str> = described
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .collect();
+
+        for token in platform::chord::MODIFIERS
+            .iter()
+            .chain(platform::chord::KEYS)
+        {
+            // The function keys are named by their endpoints — `f1..f12` —
+            // so those two are checked and the ten between them are covered
+            // by shape, which is what keeps an `f13` from needing an edit
+            // here.
+            if !matches!(*token, "f1" | "f12")
+                && token
+                    .strip_prefix('f')
+                    .is_some_and(|number| number.parse::<u8>().is_ok())
+            {
+                continue;
+            }
+
+            // `page_up`/`page_down` reach the reader as their hyphen-free
+            // twins, which `KEYS` publishes too — so the description is asked
+            // for the token with its underscore dropped.
+            let published_as = token.replace('_', "");
+            assert!(
+                words.contains(&&*published_as),
+                "{token:?} is served but never published: {described}",
+            );
+        }
     }
 
     #[test]

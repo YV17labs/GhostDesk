@@ -1,9 +1,10 @@
 //! The one place an OS is chosen.
 //!
-//! Each function answers `Arc<dyn Trait>` for one of the five seams, picked
-//! by `target_os` at compile time. Porting GhostDesk to another OS is a new
-//! sibling of `linux`/`macos` implementing the five contracts, plus one arm
-//! in each selector below — no other file in the workspace names an OS.
+//! Five selectors answer `Arc<dyn Trait>`, one per seam, picked by `target_os`
+//! at compile time; [`conventions`] answers a plain value for the sixth thing
+//! a port has to state. Porting GhostDesk to another OS is a new sibling of
+//! `linux`/`macos` implementing the five contracts, plus one arm in each
+//! selector below — no other file in the workspace names an OS.
 
 use std::sync::Arc;
 
@@ -25,12 +26,13 @@ pub fn input() -> Arc<dyn InputBackend> {
 
 /// How this OS's desktop spells its standard shortcuts.
 ///
-/// The same const the backend's own `conventions()` returns, so the value a
+/// The same const the backend's chord table is built against, so the value a
 /// caller publishes and the value the keyboard actually presses can never be
-/// two different things. Selected here rather than by
-/// building a backend to ask it: the brief is rendered at composition time,
-/// and instantiating a second seam to read a compile-target constant would
-/// put two backends in a process the `Chord` contract says has one.
+/// two different things. A free function rather than a trait method: the brief
+/// is rendered at composition time, and instantiating a second seam to read a
+/// compile-target constant would put two backends in a process the `Chord`
+/// contract says has one — which is why the method the trait used to carry had
+/// no caller at all.
 pub fn conventions() -> Conventions {
     #[cfg(target_os = "linux")]
     return crate::linux::input::CONVENTIONS;

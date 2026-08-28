@@ -11,4 +11,4 @@ mod module;
 pub use guard::CallTrail;
 pub use icons::icons;
 pub use instructions::instructions;
-pub use module::DesktopContextModule;
+pub use module::McpModule;

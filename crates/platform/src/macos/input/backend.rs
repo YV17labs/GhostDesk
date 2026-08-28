@@ -6,7 +6,8 @@ use objc2_core_graphics::{CGEventFlags, CGKeyCode};
 use tokio::time::sleep;
 
 use super::{chord, event};
-use crate::input::{Button, Chord, Conventions, InputBackend, ScrollDirection, drag};
+use crate::chord::Chord;
+use crate::input::{Button, Conventions, InputBackend, ScrollDirection, drag};
 
 /// The [`InputBackend`] the host selector hands out on macOS.
 ///
@@ -26,9 +27,10 @@ struct QuartzChord {
 /// What this desktop calls its shortcuts.
 ///
 /// Command, not Control. This one value is the whole reason `Conventions`
-/// exists. A const, and the trait method below returns it, so the value
-/// [`host::conventions`](crate::host::conventions) reads at composition time
-/// and the value the keyboard presses are the same one.
+/// exists. The same const [`chord`](super::chord) builds its modifier table
+/// against, so the value [`host::conventions`](crate::host::conventions)
+/// publishes at composition time and the value the keyboard presses are the
+/// same one.
 pub const CONVENTIONS: Conventions = Conventions {
     desktop: "macOS",
     primary_modifier: "cmd",
@@ -36,10 +38,6 @@ pub const CONVENTIONS: Conventions = Conventions {
 
 #[async_trait]
 impl InputBackend for Quartz {
-    fn conventions(&self) -> Conventions {
-        CONVENTIONS
-    }
-
     /// Refuse the boot when the process is not trusted for Accessibility.
     ///
     /// TCC cannot be granted from code — it is a decision the user makes in

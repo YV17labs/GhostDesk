@@ -1,7 +1,15 @@
-use std::fmt;
-
 use platform::input::{Button, ScrollDirection};
 
+/// One act performed on the desktop, in the fields the audit trail asks for.
+///
+/// The accessors below all answer `Option`, and `tracing` records nothing for
+/// a `None` — which is how a field that does not apply to an act stays absent
+/// rather than empty. `x` on a keypress would be a coordinate the act never
+/// had, and a trail queried for "every click below this line" cannot afford
+/// one.
+///
+/// The prose an agent reads is deliberately not here: it belongs to the wire
+/// type, phrased from these same values so the two cannot drift.
 #[derive(Debug, Clone)]
 pub enum Action {
     Move {
@@ -20,8 +28,10 @@ pub enum Action {
     },
     Drag {
         button: Button,
-        from: (i64, i64),
-        to: (i64, i64),
+        x: i64,
+        y: i64,
+        to_x: i64,
+        to_y: i64,
     },
     Scroll {
         direction: ScrollDirection,
@@ -78,8 +88,8 @@ impl Action {
             Self::Move { x, .. }
             | Self::Click { x, .. }
             | Self::DoubleClick { x, .. }
-            | Self::Scroll { x, .. } => Some(*x),
-            Self::Drag { from, .. } => Some(from.0),
+            | Self::Scroll { x, .. }
+            | Self::Drag { x, .. } => Some(*x),
             _ => None,
         }
     }
@@ -89,22 +99,22 @@ impl Action {
             Self::Move { y, .. }
             | Self::Click { y, .. }
             | Self::DoubleClick { y, .. }
-            | Self::Scroll { y, .. } => Some(*y),
-            Self::Drag { from, .. } => Some(from.1),
+            | Self::Scroll { y, .. }
+            | Self::Drag { y, .. } => Some(*y),
             _ => None,
         }
     }
 
     pub fn to_x(&self) -> Option<i64> {
         match self {
-            Self::Drag { to, .. } => Some(to.0),
+            Self::Drag { to_x, .. } => Some(*to_x),
             _ => None,
         }
     }
 
     pub fn to_y(&self) -> Option<i64> {
         match self {
-            Self::Drag { to, .. } => Some(to.1),
+            Self::Drag { to_y, .. } => Some(*to_y),
             _ => None,
         }
     }
@@ -124,73 +134,9 @@ impl Action {
     }
 }
 
-impl fmt::Display for Action {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Move { x, y } => write!(f, "Moved cursor to ({x}, {y})"),
-            Self::Click { button, x, y } => {
-                write!(f, "Clicked {} at ({x}, {y})", button.as_str())
-            }
-            Self::DoubleClick { button, x, y } => {
-                write!(f, "Double-clicked {} at ({x}, {y})", button.as_str())
-            }
-            Self::Drag { from, to, .. } => write!(
-                f,
-                "Dragged from ({}, {}) to ({}, {})",
-                from.0, from.1, to.0, to.1
-            ),
-            Self::Scroll {
-                direction,
-                amount,
-                x,
-                y,
-            } => write!(
-                f,
-                "Scrolled {} {amount} clicks at ({x}, {y})",
-                direction.as_str()
-            ),
-            Self::Type { chars } => write!(f, "Typed {chars} characters"),
-            Self::Key { keys } => write!(f, "Pressed {keys}"),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn the_prose_the_agent_reads_is_unchanged() {
-        let cases = [
-            (Action::Move { x: 10, y: 20 }, "Moved cursor to (10, 20)"),
-            (
-                Action::Click {
-                    button: Button::Left,
-                    x: 612,
-                    y: 335,
-                },
-                "Clicked left at (612, 335)",
-            ),
-            (
-                Action::Drag {
-                    button: Button::Left,
-                    from: (1, 2),
-                    to: (3, 4),
-                },
-                "Dragged from (1, 2) to (3, 4)",
-            ),
-            (Action::Type { chars: 15 }, "Typed 15 characters"),
-            (
-                Action::Key {
-                    keys: "Return".into(),
-                },
-                "Pressed Return",
-            ),
-        ];
-        for (action, expected) in cases {
-            assert_eq!(action.to_string(), expected);
-        }
-    }
 
     #[test]
     fn typed_text_is_counted_never_carried() {
@@ -204,8 +150,10 @@ mod tests {
     fn a_drag_reports_both_ends() {
         let action = Action::Drag {
             button: Button::Left,
-            from: (1, 2),
-            to: (3, 4),
+            x: 1,
+            y: 2,
+            to_x: 3,
+            to_y: 4,
         };
         assert_eq!((action.x(), action.y()), (Some(1), Some(2)));
         assert_eq!((action.to_x(), action.to_y()), (Some(3), Some(4)));

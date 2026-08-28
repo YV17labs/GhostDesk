@@ -11,6 +11,11 @@
 //! hardware: every tap, every app and the window server itself see them. That
 //! placement is what needs Accessibility permission.
 
+#![expect(
+    unsafe_code,
+    reason = "Quartz Event Services is C; each call carries its own SAFETY note"
+)]
+
 use anyhow::{Result, bail};
 use objc2_core_foundation::CGPoint;
 use objc2_core_graphics::{
@@ -18,8 +23,8 @@ use objc2_core_graphics::{
     CGScrollEventUnit,
 };
 
-use super::super::display;
 use crate::input::{Button, ScrollDirection};
+use crate::macos::display;
 
 /// The mouse-event types for one button: `(down, up, dragged)`.
 fn mouse_types(button: Button) -> (CGEventType, CGEventType, CGEventType) {
