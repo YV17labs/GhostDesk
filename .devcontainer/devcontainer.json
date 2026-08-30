@@ -5,7 +5,7 @@
   "workspaceFolder": "/workspaces/ghostdesk",
   "remoteUser": "vscode",
   "forwardPorts": [3000, 5900, 6080],
-  "postCreateCommand": "cargo build -p ghostdesk",
+  "postCreateCommand": ".devcontainer/setup.sh",
   "customizations": {
     "vscode": {
       "extensions": [

@@ -20,7 +20,7 @@ repository = "https://github.com/YV17labs/ghostdesk"
 # rather than asking the supervisor whether the processes exist — which is a
 # different question, and the one that answered "healthy" through a desktop
 # nobody could drive.
-nest-rs = { version = "6.0", features = ["authn", "health", "mcp", "schedule"] }
+nest-rs = { version = "6.1", features = ["authn", "health", "mcp", "schedule"] }
 
 # `rmcp`'s `#[tool_router]` / `#[tool_handler]` expand to bare `rmcp::` paths.
 # They are relative, so `use nest_rs::mcp::rmcp;` resolves them at the exact
