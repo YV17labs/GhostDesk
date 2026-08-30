@@ -33,24 +33,6 @@ impl McpToolContext for DesktopContext {
         Arc::new(Ambient { space })
     }
 
-    /// The caller is deliberately **not** captured here.
-    ///
-    /// This used to read the peer address and `x-forwarded-for` itself and hang
-    /// them on a span, because nothing else answered "who did this". Two things
-    /// now do, and both answer better: the transport resolves the caller once —
-    /// the peer, or a forwarding header only from a proxy the deployment named
-    /// — and files it on the request's own line, and the operation every event
-    /// below inherits already carries the ids that tie the two together.
-    ///
-    /// Re-reading it here would be a second resolution to keep in agreement
-    /// with the first, which is the disagreement that makes a trail
-    /// unauditable. Nor is a span of our own the place to put it: a span names
-    /// a unit of work an operator asks about, and neither pushing the watchdog
-    /// back nor installing a coordinate space is one.
-    ///
-    /// What stays is what no layer above can know: the desktop is being
-    /// touched, so the idle watchdog is pushed back, and the agent's coordinate
-    /// space is installed for the tools that convert against it.
     fn around<'a>(
         &'a self,
         captured: &'a Captured,

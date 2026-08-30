@@ -17,9 +17,6 @@ use features::screen::ScreenMcpModule;
 
 use crate::mcp::{CallTrail, McpModule, icons, instructions};
 
-/// The app's half of the endpoint's identity — the half no feature could
-/// know: the deployment's version, and a session brief describing a surface
-/// no single host can see.
 fn identity() -> McpIdentity {
     McpIdentity::new("ghostdesk", env!("CARGO_PKG_VERSION"))
         .title("GhostDesk")
@@ -43,10 +40,6 @@ fn identity() -> McpIdentity {
             ..Default::default()
         }),
         ScheduleModule,
-        // The probes stay reachable where the desk is gated: a probe an
-        // orchestrator cannot read is a probe that reports nothing, and the
-        // body carries indicator names and up/down with every reason kept to
-        // the log.
         HealthModule,
         AuthModule,
         ScreenMcpModule,
@@ -54,21 +47,12 @@ fn identity() -> McpIdentity {
         ProgramsMcpModule,
         ClipboardMcpModule,
         IdleScheduleModule,
-        // Ours, not the framework's — the two share a name, which is why the
-        // framework's is written in full above.
         McpModule,
     ],
 )]
 pub struct GhostdeskModule;
 
 impl GhostdeskModule {
-    /// The chain every request crosses, declared here rather than at the
-    /// binary so the suite can assert the wiring the deployment actually
-    /// ships — a test that redeclares its own list proves only itself.
-    ///
-    /// Global rather than per host: `/mcp` is one request carrying many
-    /// operations, so admission is decided once, where the request still
-    /// exists. `CallTrail` rides alongside to name the operation inside it.
     pub fn guards() -> [GuardSpec; 2] {
         [guard::<AuthnGuard>(), guard::<CallTrail>()]
     }
