@@ -10,3 +10,6 @@ services:
       - GHOSTDESK_USER=vscode
       - TZ=America/Montreal
       - LANG=fr_CA.UTF-8
+
+volumes:
+  ghostdesk-cargo:

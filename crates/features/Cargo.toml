@@ -1,0 +1,35 @@
+[package]
+name = "features"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+description = "The desk's domains — one port plus one MCP adapter per domain, over the platform substrate"
+
+[dependencies]
+platform.workspace = true
+
+anyhow.workspace = true
+base64.workspace = true
+image.workspace = true
+nest-rs.workspace = true
+rustix.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+shlex.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+# An act on the desktop is a security record, so "was the line written" has to
+# be a question a test can ask. `testing` carries the framework's own capture.
+[dev-dependencies]
+nest-rs = { workspace = true, features = ["testing"] }
+
+[lints]
+workspace = true

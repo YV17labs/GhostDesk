@@ -5,13 +5,20 @@
   "workspaceFolder": "/workspaces/ghostdesk",
   "remoteUser": "vscode",
   "forwardPorts": [3000, 5900, 6080],
+  "postCreateCommand": ".devcontainer/setup.sh",
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-python.python",
-        "charliermarsh.ruff",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "vadimcn.vscode-lldb",
         "Anthropic.claude-code"
-      ]
+      ],
+      "settings": {
+        "rust-analyzer.check.command": "clippy",
+        "rust-analyzer.cargo.allTargets": true,
+        "editor.formatOnSave": true
+      }
     }
   }
 }

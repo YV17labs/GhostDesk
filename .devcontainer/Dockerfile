@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
-# ghostdesk devcontainer — mirrors docker/base/Dockerfile runtime stack
-# and adds the dev extras (compilers, *-dev, foot, GUI probes, extra
-# fonts). Supervisord config and service wrappers are shared verbatim.
+# ghostdesk devcontainer — mirrors docker/base/Dockerfile's runtime stack and
+# adds the Rust toolchain plus the GUI apps a developer wants on the desktop.
+# Supervisord config and service wrappers are shared verbatim with prod.
 
 ARG UBUNTU_VERSION=26.04
 
@@ -13,9 +13,7 @@ ARG WAYVNC_REF=v0.10.1
 ARG NEATVNC_REF=v1.0.1
 ARG AML_REF=v1.0.0
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates git \
         meson ninja-build pkg-config gcc dpkg-dev \
         libdrm-dev libxkbcommon-dev libwayland-dev \
@@ -41,8 +39,6 @@ RUN set -eux \
     done
 
 # ---- Stage 2: novnc — upstream tag (Ubuntu repos lag the upstream release) ----
-# Mirrors docker/base/Dockerfile § novnc. Isolated so the dev image
-# stays free of curl+tarball clutter for the noVNC fetch itself.
 FROM ubuntu:${UBUNTU_VERSION} AS novnc
 ARG NOVNC_VERSION=1.7.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -54,10 +50,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY docker/services/novnc/index.html /opt/novnc/index.html
 COPY assets/logo-mark.svg              /opt/novnc/app/images/ghostdesk-logo.svg
 
-# ---- Stage 3: runtime — devcontainer base + prod runtime stack ----
+# ---- Stage 3: runtime — devcontainer base + prod runtime stack + Rust ----
 FROM mcr.microsoft.com/devcontainers/base:ubuntu26.04
 
 ARG TARGETARCH
+
+# Same prefix as prod (docker/base/Dockerfile), and here for the same reason:
+# the framework resolves GHOSTDESK_* only because this names it. The Justfile
+# exports it too, so `nestrs run …` carries it outside the container; this
+# covers the other way into the stack — supervisord, a `docker exec` shell,
+# a debugger launched from VS Code.
+ENV NESTRS_ENV_PREFIX=GHOSTDESK
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/Montreal \
@@ -72,19 +75,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
     WLR_LIBINPUT_NO_DEVICES=1 \
     WLR_RENDERER=pixman
 
-# Dev extras on top of the prod stack: compilers + *-dev for pywayland
-# wheels, curl for the Mozilla APT key, foot, GUI probes, fonts.
-# Runtime libs (libdrm2 etc.) feed the wayvnc binary copied from the
-# vnc-builder stage — the apt wayvnc package is NOT installed here.
+# The prod runtime stack, plus what a Rust developer needs on top:
+# build-essential and pkg-config for the `cc`-built crates (libwebp is
+# vendored, not a system package), mold for fast incremental links, and the
+# GUI apps the agent drives.
+#
+# Note what is *not* here: no libwayland-dev, and no Python at all.
+# `wayland-client` speaks the protocol from pure Rust, so the compositor is
+# driven over a socket with no C library in the link line.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         sway mako-notifier \
         grim wl-clipboard \
-        libwayland-client0 libxkbcommon0 \
+        libxkbcommon0 \
         dbus dbus-user-session libglib2.0-bin \
         websockify \
         supervisor \
-        python3 \
         fonts-dejavu \
         tzdata locales xdg-user-dirs gettext-base \
         ca-certificates \
@@ -92,17 +98,16 @@ RUN apt-get update \
         libavfilter11 libavcodec62 libavutil60 libturbojpeg0 \
         libpixman-1-0 libnettle8 libgmp10 zlib1g \
         curl \
-        python3-dev libwayland-dev pkg-config build-essential \
+        build-essential pkg-config mold \
         foot \
         mousepad galculator \
         fonts-noto-color-emoji \
     && locale-gen en_US.UTF-8 fr_CA.UTF-8 C.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
-# wayvnc (+ wayvncctl + libneatvnc + libaml) built from pinned master
-# SHA — see vnc-builder. Single `COPY /out/ /` keeps meson's multiarch
-# libdir (`lib/x86_64-linux-gnu`, `lib/aarch64-linux-gnu`, …) intact
-# regardless of the target architecture.
+# wayvnc (+ wayvncctl + libneatvnc + libaml) built from pinned refs — see
+# vnc-builder. A single `COPY /out/ /` keeps meson's multiarch libdir intact
+# whatever the target architecture.
 COPY --from=vnc-builder /out/ /
 RUN ldconfig
 
@@ -112,10 +117,10 @@ RUN install -d -m 0755 /usr/share/ghostdesk
 COPY assets/wallpaper.svg /usr/share/ghostdesk/wallpaper.svg
 
 # Same bwrap stub as docker/base/Dockerfile — Docker's default AppArmor
-# profile blocks bwrap's pivot_root with a message glycin doesn't
-# recognize, so swaybg never falls back to the no-sandbox loader path
-# and the wallpaper fails to render. Emit the message glycin DOES
-# recognize as "namespaces unavailable" to force the no-sandbox path.
+# profile blocks bwrap's pivot_root with a message glycin doesn't recognize,
+# so swaybg never falls back to the no-sandbox loader path and the wallpaper
+# fails to render. Emit the message glycin DOES recognize as "namespaces
+# unavailable" to force the no-sandbox path.
 RUN printf '#!/bin/sh\necho "bwrap: No permissions to create a new namespace" >&2\nexit 1\n' \
         > /usr/local/bin/bwrap \
     && chmod 0755 /usr/local/bin/bwrap
@@ -131,20 +136,45 @@ RUN install -d -m 0755 /etc/apt/keyrings \
     && apt-get install -y --no-install-recommends firefox/mozilla \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /usr/local/bin/uv
+# ---- Rust toolchain ----
+# RUSTUP_HOME sits outside $HOME so the toolchain survives a rebuild of the
+# home volume; CARGO_HOME stays per-user for the registry cache.
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/home/vscode/.cargo \
+    PATH=/home/vscode/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-# Shared runtime with prod. GHOSTDESK_USER and the Wayland/DBus/WLR env
-# come from .devcontainer/docker-compose.yml in dev (prod bakes them in
+# rustup is installed with no toolchain; `rust-toolchain.toml` names the
+# channel *and* the components, so the version lives in exactly one file and
+# the devcontainer cannot drift from CI or the prod builder. `rust-src` is the
+# one extra rust-analyzer wants and the toml has no reason to carry.
+COPY rust-toolchain.toml /tmp/rust-toolchain.toml
+RUN install -d -m 0755 -o vscode -g vscode "${RUSTUP_HOME}" \
+    && install -d -m 0755 -o vscode -g vscode "${CARGO_HOME}" \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o /tmp/rustup-init.sh \
+    && chmod 0755 /tmp/rustup-init.sh \
+    && su vscode -c "/tmp/rustup-init.sh -y --no-modify-path --default-toolchain none" \
+    && su vscode -c "cd /tmp && ${CARGO_HOME}/bin/rustup toolchain install && ${CARGO_HOME}/bin/rustup component add rust-src" \
+    && rm -f /tmp/rustup-init.sh /tmp/rust-toolchain.toml \
+    && chmod -R a+rX "${RUSTUP_HOME}"
+
+# mold cuts incremental link time to a fraction of GNU ld's. It lives in the
+# environment rather than in a committed .cargo/config.toml so the repo still
+# builds on a machine that does not have mold installed.
+ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold"
+
+# Shared runtime with prod. GHOSTDESK_USER and the Wayland/DBus/WLR env come
+# from .devcontainer/docker-compose.yml in dev (prod bakes them in
 # docker/base/Dockerfile ENV). CMD below sends entrypoint.sh down its
-# `$# > 0` branch: init runs then sleeps; the developer starts the stack
-# manually via the "GhostDesk: Start stack" VS Code task.
+# `$# > 0` branch: init runs then sleeps, and the developer starts the stack
+# with the "GhostDesk: Start stack" VS Code task.
 COPY docker/supervisor/supervisord.conf /etc/supervisord.conf
 COPY docker/supervisor/conf.d/          /etc/supervisor/conf.d/
 COPY docker/services/sway/config        /etc/ghostdesk/sway.config
 COPY --chmod=0755 docker/init/entrypoint.sh         /usr/local/bin/entrypoint
 COPY --chmod=0755 docker/init/healthcheck.sh        /usr/local/bin/health
+COPY --chmod=0755 docker/init/wait-for-wayland.sh   /usr/local/bin/wait-for-wayland
+COPY --chmod=0755 docker/services/sway/run.sh       /usr/local/bin/sway-run
 COPY --chmod=0755 docker/services/mcp/run.sh        /usr/local/bin/mcp-run
-COPY --chmod=0755 docker/services/mako/run.sh       /usr/local/bin/mako-run
 COPY --chmod=0755 docker/services/websockify/run.sh /usr/local/bin/websockify-run
 COPY --chmod=0644 docker/shell/sway-env.sh          /etc/profile.d/sway-env.sh
 

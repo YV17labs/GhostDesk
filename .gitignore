@@ -1,12 +1,16 @@
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-*.egg-info/
-dist/
-build/
-.env
-.env.local
-.coverage
+# Rust
+/target/
+**/*.rs.bk
+
+# Coverage (cargo-llvm-cov, via `nestrs run test cov`)
+*.profraw
+*.profdata
+/coverage
+
+# Secrets / local state — the `.local` tier of the .env cascade
+.env*.local
+tls/
+
+# Editor / agent
 .claude/
 .DS_Store

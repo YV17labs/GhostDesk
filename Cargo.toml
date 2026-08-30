@@ -1,0 +1,129 @@
+[workspace]
+resolver = "3"
+members = ["apps/*", "crates/*"]
+
+[workspace.package]
+version = "8.0.0"
+edition = "2024"
+rust-version = "1.97"
+license = "LicenseRef-FSL-1.1-ALv2"
+authors = ["Yoann Vanitou <yvanitou@gmail.com>"]
+repository = "https://github.com/YV17labs/ghostdesk"
+
+[workspace.dependencies]
+# The framework. `mcp` pulls the HTTP transport the endpoint self-mounts on
+# plus the guard surface that gates it; `authn` carries the `Strategy` seam
+# the bearer check is written against, so the shared secret is checked by the
+# framework's guard rather than beside it; `schedule` is what makes the idle
+# watchdog a decorated method instead of a hand-rolled task; `health` is what
+# lets the container ask *this server* whether the desktop is still there,
+# rather than asking the supervisor whether the processes exist — which is a
+# different question, and the one that answered "healthy" through a desktop
+# nobody could drive.
+nest-rs = { version = "6.1", features = ["authn", "health", "mcp", "schedule"] }
+
+# `rmcp`'s `#[tool_router]` / `#[tool_handler]` expand to bare `rmcp::` paths.
+# They are relative, so `use nest_rs::mcp::rmcp;` resolves them at the exact
+# major nest-rs was built against — never a second rmcp in the graph.
+tokio = { version = "1.53", features = ["full"] }
+async-trait = "0.1"
+anyhow = "1.0"
+thiserror = "2.0"
+tracing = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Wayland. The compositor is driven directly over two unstable extensions —
+# `zwlr_virtual_pointer_v1` (wlroots) and `zwp_virtual_keyboard_v1` — whose
+# bindings these crates generate at build time. The Python port carried 6.4k
+# lines of committed protocol glue; here there is none.
+wayland-client = "0.31"
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+wayland-protocols-misc = { version = "0.3", features = ["client"] }
+
+# Screen capture pipeline: decode grim's PNG, diff two frames, re-encode.
+image = { version = "0.25", default-features = false, features = ["png"] }
+# Lossy WebP — `image` only decodes it. libwebp is vendored and built by
+# `cc`, so there is no system package to install in the runtime image.
+webp = "0.3"
+
+# macOS. The desktop is driven through the C/Objective-C frameworks directly —
+# Quartz Event Services for input, Accessibility for windows — so there is no
+# Swift helper process and no second language in the build. Each crate is
+# feature-gated down to the handful of headers actually bound; the default
+# would compile the whole framework surface.
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "CFBase",
+    "CFArray",
+    "CFDictionary",
+    "CFNumber",
+    "CFString",
+    "CFCGTypes",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = [
+    "std",
+    "libc",
+    "CGError",
+    "CGEvent",
+    "CGEventTypes",
+    "CGEventSource",
+    "CGRemoteOperation",
+    "CGDirectDisplay",
+    "CGWindow",
+] }
+objc2-application-services = { version = "0.3", default-features = false, features = [
+    "std",
+    "libc",
+    "HIServices",
+    "AXError",
+    "AXUIElement",
+] }
+# `memfd_create` for the XKB keymap fd handed to the virtual keyboard, and
+# `kill(pid, 0)` for the app_status liveness probe.
+rustix = { version = "1.1", features = ["fs", "process"] }
+
+# `.desktop` entries are INI; `Exec=` values are shell-quoted.
+configparser = "3.1"
+shlex = "1.3"
+
+# Constant-time bearer-token comparison — a plain `==` leaks the length and
+# the matching prefix through its early return.
+subtle = "2.6"
+
+# The logo mark travels to clients as a `data:` URI.
+base64 = "0.23"
+
+# Tool input schemas. Must resolve to the same crate rmcp re-exports, or the
+# derive produces a different trait than `Parameters<T>` expects — hence the
+# same `major.minor` nest-rs builds against.
+schemars = "1.2"
+
+# The product's own crates. `features` holds the domains and the MCP edge each
+# one publishes; `platform` is the OS substrate they drive, and the only crate
+# in the tree that names an operating system.
+features = { path = "crates/features" }
+platform = { path = "crates/platform" }
+
+# `deny`, not `forbid`: the OS seams bind Quartz, the Accessibility API and
+# `memfd_create`, and each of those files lifts the lint at its top with the
+# SAFETY note that earns it. `forbid` would have to be lifted for a whole crate,
+# which is the opposite of saying where unsafe is allowed to live.
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+# Config literals always close with `..Default::default()` so an import site
+# stays forward-compatible as the options struct gains fields.
+[workspace.lints.clippy]
+needless_update = "allow"
+
+# Release: the binary the image ships. Compile time is not the constraint here.
+[profile.release]
+opt-level = 3       # maximum runtime performance
+lto = "fat"         # whole-program optimisation across every crate
+codegen-units = 1   # give the optimiser the whole program at once
+strip = true        # drop symbols from the shipped binary
+
+# Dev: fastest rebuilds, keeping file:line in backtraces.
+[profile.dev]
+debug = "line-tables-only"

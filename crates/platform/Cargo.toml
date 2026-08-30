@@ -1,0 +1,39 @@
+[package]
+name = "platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish = false
+description = "The OS substrate — five neutral contracts, one backend per target, no framework"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+image.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+webp.workspace = true
+
+# Each backend's own toolbox, target-gated so a macOS build never compiles a
+# Wayland protocol and a Linux build never links a framework. The neutral
+# layer above depends on neither list, and the gate is what proves it at
+# every `cargo check`.
+[target.'cfg(target_os = "linux")'.dependencies]
+configparser.workspace = true
+rustix.workspace = true
+serde_json.workspace = true
+wayland-client.workspace = true
+wayland-protocols-misc.workspace = true
+wayland-protocols-wlr.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-application-services.workspace = true
+objc2-core-foundation.workspace = true
+objc2-core-graphics.workspace = true
+
+[lints]
+workspace = true

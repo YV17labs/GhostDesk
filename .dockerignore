@@ -11,26 +11,15 @@ tls/
 .vscode
 .devcontainer
 
-# Python build / cache / venv
-.venv
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache
-.mypy_cache
-.ruff_cache
-.coverage
-htmlcov
-dist
-build
-*.egg-info
+# Rust build output. The builder stage compiles inside a cache mount, so a
+# host `target/` would only bloat the context — and a directory built
+# against the host's glibc has no business near the image anyway.
+target
 
 # Node (if any)
 node_modules
 
-# Tests, demos, docs not needed inside the image
-tests
+# Docs and demos not needed inside the image
 demos
 docs
 
