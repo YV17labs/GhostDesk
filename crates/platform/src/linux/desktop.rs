@@ -9,9 +9,9 @@ use crate::desktop::{self, AppCatalog, DesktopApp};
 const APPS_DIR: &str = "/usr/share/applications";
 
 /// The [`AppCatalog`] the host selector hands out on Linux.
-pub struct XdgEntries;
+pub struct XdgDesktop;
 
-impl AppCatalog for XdgEntries {
+impl AppCatalog for XdgDesktop {
     fn apps(&self) -> Vec<DesktopApp> {
         apps_in(Path::new(APPS_DIR))
     }

@@ -29,9 +29,9 @@ const BUNDLE_DIRS: &[&str] = &[
 ];
 
 /// The [`AppCatalog`] the host selector hands out on macOS.
-pub struct AppBundles;
+pub struct BundleDesktop;
 
-impl AppCatalog for AppBundles {
+impl AppCatalog for BundleDesktop {
     fn apps(&self) -> Vec<DesktopApp> {
         let mut apps: Vec<DesktopApp> = bundle_dirs()
             .iter()

@@ -224,10 +224,10 @@ fn window_info(node: &Value) -> Option<WindowInfo> {
 }
 
 /// The [`WindowManager`] the host selector hands out on Linux.
-pub struct Sway;
+pub struct SwayWindows;
 
 #[async_trait]
-impl WindowManager for Sway {
+impl WindowManager for SwayWindows {
     async fn windows(&self) -> Result<Vec<WindowInfo>> {
         let tree = get_tree()
             .await

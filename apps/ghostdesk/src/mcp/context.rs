@@ -16,7 +16,7 @@ struct Ambient {
 #[injectable]
 pub struct DesktopContext {
     #[inject]
-    idle_svc: Arc<IdleService>,
+    svc: Arc<IdleService>,
 }
 
 impl McpToolContext for DesktopContext {
@@ -56,7 +56,7 @@ impl McpToolContext for DesktopContext {
         captured: &'a Captured,
         inner: BoxFuture<'a, OperationOutcome>,
     ) -> BoxFuture<'a, OperationOutcome> {
-        self.idle_svc.mark_activity();
+        self.svc.mark_activity();
 
         let space = captured
             .downcast_ref::<Ambient>()

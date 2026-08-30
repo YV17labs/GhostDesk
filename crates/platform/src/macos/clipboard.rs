@@ -16,10 +16,10 @@ use crate::cmd;
 const COPY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The [`Clipboard`] the host selector hands out on macOS.
-pub struct Pasteboard;
+pub struct PbClipboard;
 
 #[async_trait]
-impl Clipboard for Pasteboard {
+impl Clipboard for PbClipboard {
     /// `pbpaste` writes nothing for an empty pasteboard and fails for content
     /// it cannot render as text — both are the "empty string" contract.
     async fn get(&self) -> String {

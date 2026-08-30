@@ -45,7 +45,7 @@ pub fn conventions() -> Conventions {
 /// The screen-capture backend for this OS.
 pub fn screen() -> Arc<dyn ScreenBackend> {
     #[cfg(target_os = "linux")]
-    return Arc::new(crate::linux::screen::Grim);
+    return Arc::new(crate::linux::screen::GrimScreen);
     #[cfg(target_os = "macos")]
     return Arc::new(crate::macos::screen::ScreenCapture);
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -55,9 +55,9 @@ pub fn screen() -> Arc<dyn ScreenBackend> {
 /// The window manager for this OS.
 pub fn windows() -> Arc<dyn WindowManager> {
     #[cfg(target_os = "linux")]
-    return Arc::new(crate::linux::window::Sway);
+    return Arc::new(crate::linux::window::SwayWindows);
     #[cfg(target_os = "macos")]
-    return Arc::new(crate::macos::window::Quartz);
+    return Arc::new(crate::macos::window::QuartzWindows);
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     return Arc::new(crate::unsupported::Unsupported);
 }
@@ -67,7 +67,7 @@ pub fn clipboard() -> Arc<dyn Clipboard> {
     #[cfg(target_os = "linux")]
     return Arc::new(crate::linux::clipboard::WlClipboard);
     #[cfg(target_os = "macos")]
-    return Arc::new(crate::macos::clipboard::Pasteboard);
+    return Arc::new(crate::macos::clipboard::PbClipboard);
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     return Arc::new(crate::unsupported::Unsupported);
 }
@@ -75,9 +75,9 @@ pub fn clipboard() -> Arc<dyn Clipboard> {
 /// The installed-apps catalogue for this OS.
 pub fn apps() -> Arc<dyn AppCatalog> {
     #[cfg(target_os = "linux")]
-    return Arc::new(crate::linux::desktop::XdgEntries);
+    return Arc::new(crate::linux::desktop::XdgDesktop);
     #[cfg(target_os = "macos")]
-    return Arc::new(crate::macos::desktop::AppBundles);
+    return Arc::new(crate::macos::desktop::BundleDesktop);
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     return Arc::new(crate::unsupported::Unsupported);
 }

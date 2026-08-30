@@ -9,10 +9,10 @@ use crate::cmd;
 use crate::screen::{Region, ScreenBackend};
 
 /// The [`ScreenBackend`] the host selector hands out on Linux.
-pub struct Grim;
+pub struct GrimScreen;
 
 #[async_trait]
-impl ScreenBackend for Grim {
+impl ScreenBackend for GrimScreen {
     /// Single grim invocation — raw PNG bytes.
     ///
     /// grim writes to stdout when the output path is `-`. Region geometry

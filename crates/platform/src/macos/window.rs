@@ -58,10 +58,10 @@ struct MacWindow {
 }
 
 /// The [`WindowManager`] the host selector hands out on macOS.
-pub struct Quartz;
+pub struct QuartzWindows;
 
 #[async_trait]
-impl WindowManager for Quartz {
+impl WindowManager for QuartzWindows {
     async fn windows(&self) -> Result<Vec<WindowInfo>> {
         // Synchronous and self-contained: every `AXUIElement` is created and
         // dropped inside this call, so no `!Send` handle can be captured by
