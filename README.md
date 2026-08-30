@@ -433,16 +433,16 @@ Every variable GhostDesk reads is namespaced under `GHOSTDESK_*`. Standard POSIX
 
 The names come straight from the framework: the image sets `NESTRS_ENV_PREFIX=GHOSTDESK`, so what would be `NESTRS_HTTP__PORT` in a stock NestRS app is `GHOSTDESK_HTTP__PORT` here. There is no second spelling and no translation layer — one name, one place to look it up.
 
-Read them as `GHOSTDESK_<NAMESPACE>__<KEY>`: the double underscore separates the namespace from the setting. `http` and `mcp` are the framework's own namespaces; `screen`, `session` and `auth` are GhostDesk's, one per feature module. A single underscore (`GHOSTDESK_VNC_PASSWORD`) marks a container-level knob the entrypoint consumes itself, never reaching the server.
+Read them as `GHOSTDESK_<NAMESPACE>__<KEY>`: the double underscore separates the namespace from the setting. `http` and `mcp` are the framework's own namespaces; `screen`, `idle` and `auth` are GhostDesk's, one per feature module that owns settings. A single underscore (`GHOSTDESK_VNC_PASSWORD`) marks a container-level knob the entrypoint consumes itself, never reaching the server.
 
 `NESTRS_ENV_PREFIX` is the one name no prefix can rename, and it has to be on the process before the server starts — a `.env` file is read after it has already chosen which cascade to read. Both images bake it and the `Justfile` exports it, so a container run and a `nestrs run dev` both carry it; a binary you start any other way needs `NESTRS_ENV_PREFIX=GHOSTDESK` in its environment, or every variable below is read under its stock `NESTRS_*` name instead.
 
-### Secrets (required — container refuses to boot without them)
+### Secrets (required under TLS — the prod container refuses to boot without them)
 
 | Variable | Description |
 |----------|-------------|
 | `GHOSTDESK_AUTH__TOKEN` | Bearer token required on every MCP request. Generate with `openssl rand -hex 32`. |
-| `GHOSTDESK_VNC_PASSWORD` | Password for wayvnc (username is `agent` in the prod image). Generate with `openssl rand -hex 16`. |
+| `GHOSTDESK_VNC_PASSWORD` | Password for wayvnc. RFB security type 2 carries a password and no username, so the noVNC overlay prompts for this one value. Generate with `openssl rand -hex 16`. |
 
 Both are plain environment variables. Wire them from your secret store (`secretKeyRef` on Kubernetes, Docker secrets / Vault / AWS SM on compose) — see [SECURITY.md](SECURITY.md#secrets-handling--rotation) for the full contract.
 
@@ -452,7 +452,7 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 |----------|---------|-------------|
 | `GHOSTDESK_HTTP__PORT` | `3000` | MCP server listening port |
 | `GHOSTDESK_HTTP__HOST` | `127.0.0.1` (standalone) / `0.0.0.0` (container) | Bind address for the MCP endpoint. Defaults to loopback per [MCP transports spec](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http); the container's entrypoint exports `0.0.0.0` so Docker's port-publishing layer can reach it. |
-| `GHOSTDESK_HTTP__CORS_ORIGINS` | *(empty)* | Comma-separated list of `Origin` headers accepted from browser clients (e.g. `https://app.example.com,https://localhost:8080`). Non-browser clients (Claude Desktop, SDKs, `curl`) send no `Origin` and are always allowed. Required for any browser-based MCP UI; without it, browser requests are rejected with HTTP 403 to mitigate DNS rebinding (per MCP transports spec). |
+| `GHOSTDESK_HTTP__CORS_ORIGINS` | *(empty)* | Comma-separated list of `Origin` headers accepted from browser clients (e.g. `https://app.example.com,https://localhost:8080`). Non-browser clients (Claude Desktop, SDKs, `curl`) send no `Origin` and are always allowed. Required for any browser-based MCP UI: without it no CORS layer is mounted at all, so the browser — not the server — refuses the response. The anti-DNS-rebinding control is the next row, and it is on by default. |
 | `GHOSTDESK_MCP__ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Comma-separated `Host` header allow-list for the MCP endpoint. A request whose `Host` is not listed gets HTTP 403 — this is what stops a page on an attacker's origin from pointing its own hostname at a locally-running GhostDesk and calling your tools. **A deployment reached under a real hostname must name itself here.** Do not empty the list. |
 | `GHOSTDESK_TLS_CERT` | `/etc/ghostdesk/tls/server.crt` | Path to the TLS certificate. When the file exists, `websockify` and the MCP server auto-switch to `wss://` / `https://`. See [Security](#security). |
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
