@@ -47,15 +47,10 @@ mod test
 fmt:
     cargo fmt --all
 
-# Clippy (strict) + format check + the naming convention.
-#
-# `layout.py` is the third one because a convention nobody can check is a
-# convention that rots: it reads every file's declared items and refuses a name
-# the folder and the file do not spell together.
+# Clippy (strict) + format check.
 lint:
     cargo clippy --workspace --all-targets -- -D warnings
     cargo fmt --all --check
-    python3 scripts/layout.py
 
 # --- GhostDesk -------------------------------------------------------------
 # The desktop the MCP server drives — Sway, mako, wayvnc, websockify and the

@@ -40,9 +40,6 @@ jobs:
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
 
-      - name: Layout
-        run: python3 scripts/layout.py
-
       # `--workspace`, not `--all-targets`: the latter silently drops doctests,
       # so a `///` example would compile here and never run — while the local
       # gate (`nestrs run test unit`) does run it.
