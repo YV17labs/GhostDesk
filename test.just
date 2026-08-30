@@ -17,9 +17,10 @@ e2e:
     cargo nextest run --workspace -E 'binary(e2e)' --no-tests=pass
 
 # Coverage over the full suite, e2e included. The only recipe with a prerequisite
-# the CLI does not bootstrap: `cargo install cargo-llvm-cov` plus the LLVM tools
-# it shells out to — `rustup component add llvm-tools-preview`. On a toolchain
-# without rustup (Homebrew, distro packages) set LLVM_COV / LLVM_PROFDATA instead.
+# the CLI does not bootstrap: `cargo install cargo-llvm-cov`. The LLVM binaries it
+# shells out to come from rust-toolchain.toml's `llvm-tools-preview`, so rustup
+# provisions them with the channel. On a toolchain without rustup (Homebrew,
+# distro packages) that file is ignored — set LLVM_COV / LLVM_PROFDATA instead.
 cov:
     cargo llvm-cov nextest --workspace
 
