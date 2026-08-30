@@ -47,10 +47,10 @@ Security fixes are provided for the current major version. Users are encouraged 
 
 GhostDesk is a **single-tenant** service designed to run **behind a reverse proxy** on a trusted internal network or an identity-aware edge (Tailscale, Cloudflare Access, oauth2-proxy, Pomerium, etc.). It is **not designed to be exposed directly on the public internet**.
 
-**Auth ≡ TLS.** GhostDesk has exactly two postures, decided at boot by whether the operator mounted a cert+key at `/etc/ghostdesk/tls/server.{crt,key}`:
+**TLS makes auth mandatory.** GhostDesk has two deployment postures, decided at boot by whether the operator mounted a cert+key at `/etc/ghostdesk/tls/server.{crt,key}`:
 
 - **Cert mounted → prod posture.** Every exposed surface runs TLS *and* authenticated: `wss://` + bearer-token on the MCP server, `wss://` on `websockify` with password auth delegated down to wayvnc (RFB security type 2, single password prompt in the noVNC overlay). `GHOSTDESK_AUTH__TOKEN` and `GHOSTDESK_VNC_PASSWORD` are mandatory — the container refuses to boot without them.
-- **No cert → dev posture.** Every exposed surface runs plain and **unauthenticated**. This is the devcontainer shape: the ports are reachable only via the IDE's localhost-scoped forward, so shipping a static bearer token or VNC password over cleartext would add no real defense (no rotation, no per-user identity, no per-request revocation). We intentionally disable the application-level gate in this posture rather than give a false sense of security; setting `GHOSTDESK_AUTH__TOKEN` or `GHOSTDESK_VNC_PASSWORD` without a cert logs a warning and is ignored.
+- **No cert → dev posture.** Every exposed surface runs plain, and unauthenticated unless the operator asked for otherwise. This is the devcontainer shape: the ports are reachable only via the IDE's localhost-scoped forward, so a static bearer token over cleartext adds little real defense (no rotation, no per-user identity, no per-request revocation) — but a token set here is **honoured**, not discarded, and warned about at boot, because the container and a bare `ghostdesk` run must answer a given credential the same way. `GHOSTDESK_VNC_PASSWORD` is the exception and is genuinely ignored: wayvnc's RFB type 2 challenge is DES, and outside the `wss://` envelope it is a password sent in the clear.
 
 The threat boundary the container itself is responsible for defending:
 
@@ -102,11 +102,11 @@ Then mount `./tls/server.crt` and `./tls/server.key` at `/etc/ghostdesk/tls/serv
 
 ## Authentication
 
-**Auth is gated on TLS.** The presence of a mounted cert at `/etc/ghostdesk/tls/server.{crt,key}` is the single switch that arms (or disarms) both credentials:
+**A mounted cert at `/etc/ghostdesk/tls/server.{crt,key}` is what makes both credentials mandatory**, and what arms the VNC password. The bearer token is not gated on it: set it and it is required, cert or no cert.
 
 | Surface | TLS off (dev) | TLS on (prod) |
 |---|---|---|
-| MCP server — port 3000 | Plain HTTP, **no auth** | `https://` + `Authorization: Bearer <GHOSTDESK_AUTH__TOKEN>` required on every request (constant-time compare) |
+| MCP server — port 3000 | Plain HTTP, **no auth** — unless `GHOSTDESK_AUTH__TOKEN` is set, which requires it on every request, in cleartext, with a `cleartext_token` warning at boot | `https://` + `Authorization: Bearer <GHOSTDESK_AUTH__TOKEN>` required on every request (constant-time compare) |
 | Health probes — port 3000 | **No auth** | **No auth** — the guard covers MCP operations only; the body names indicators and their status, never a reason |
 | wayvnc — port 5900 (via `websockify` on 6080) | Plain RFB on loopback, `enable_auth=false` | `wss://` on websockify + RFB security type 2 password challenge inside wayvnc (`GHOSTDESK_VNC_PASSWORD`, no username) |
 
@@ -133,19 +133,19 @@ this port without a token.**
 
 ### Dev posture (no cert)
 
-Both secrets are **ignored**, with a warning logged at boot if they are set anyway:
+Neither secret is required, and the two are treated differently when set anyway:
 
 ```
-entrypoint: WARN GHOSTDESK_AUTH__TOKEN is set but TLS is off — ignored (no point shipping a static token over cleartext)
-entrypoint: WARN GHOSTDESK_VNC_PASSWORD is set but TLS is off — ignored (wayvnc auth is only enabled under TLS)
+entrypoint: WARN GHOSTDESK_AUTH__TOKEN crosses the wire in cleartext — TLS is off
+entrypoint: WARN GHOSTDESK_VNC_PASSWORD ignored — wayvnc auth is only enabled under TLS
+features::auth: bearer token configured without TLS — the token crosses the wire in cleartext; mount a cert, or terminate TLS in front  posture="cleartext_token"
 ```
 
-The rationale is deliberate: GhostDesk's credentials are **static shared secrets** with no rotation, no per-user identity, and no revocation story. Over a cleartext channel they buy no real defense against anyone who can observe the transport — they only paper over the dev surface with a thin veneer of "auth is on" that a `tcpdump` peels off in seconds. The alternatives are both worse:
+**The bearer token is honoured.** A static shared secret over cleartext buys little — no rotation, no per-user identity, no revocation, and a `tcpdump` on the path reads it — so the boot says so, loudly, every time. But it is the operator's credential to spend: discarding it made the container answer an anonymous caller in a configuration where a bare `ghostdesk` run answers nobody, and a deployment whose gate depends on *how the binary was started* is the one failure an operator cannot reason about. One credential, one behaviour, and a warning that names the risk.
 
-1. **Require secrets unconditionally**, as earlier builds did. This trains operators to paste placeholder tokens into committed compose files and forget they are there when the container moves to a public host.
-2. **Enforce bearer auth even without TLS**, then document "it's fine because loopback." That's correct today but fragile — a small refactor or a misread `ports:` stanza is enough to leak a cleartext token to the LAN.
+**The VNC password is not**, and the asymmetry is the transport rather than the policy: wayvnc's RFB security type 2 is a DES challenge that is only ever safe inside the `wss://` envelope TLS provides. Outside it, arming that prompt would advertise an authentication the wire does not carry.
 
-Instead, auth is bound to the posture that actually protects it. If you want auth, you get TLS with it; if you don't have TLS, the surface is honest about being open, and the operator is expected to constrain reachability some other way (devcontainer forward, Unix socket, loopback bind, reverse proxy). There is no middle ground and no "disable auth" toggle — just mount a cert or don't.
+What neither of them does is make the surface reachable. Without TLS the operator is still expected to constrain reachability some other way — devcontainer forward, loopback bind, reverse proxy — and the server refuses no posture here: it names what it is serving at boot (`secured`, `cleartext_token`, `loopback_open`, `exposed_open`) and leaves the deployment decision where it belongs. The one posture it does refuse is the reverse case, TLS without a token, above.
 
 ### The noVNC deployment contract
 

@@ -45,8 +45,9 @@ image writes GHOSTDESK_* settings the server would not read under another prefix
 # /etc/ghostdesk/tls/server.{crt,key} (or GHOSTDESK_TLS_CERT/KEY):
 #   - Cert present → prod: TLS + auth. AUTH__TOKEN and VNC_PASSWORD
 #     are mandatory.
-#   - No cert      → dev:  plain + no auth. A static token over
-#     cleartext would be theater, so we unset it if supplied.
+#   - No cert      → dev:  plain transport. A token supplied here is
+#     passed through and enforced by the server — the same as a bare
+#     `ghostdesk` run — and warned about, since it crosses in cleartext.
 TLS_DIR="/etc/ghostdesk/tls"
 TLS_CRT="${GHOSTDESK_TLS_CERT:-${TLS_DIR}/server.crt}"
 TLS_KEY="${GHOSTDESK_TLS_KEY:-${TLS_DIR}/server.key}"
@@ -58,7 +59,7 @@ if [ -s "${TLS_CRT}" ] && [ -s "${TLS_KEY}" ]; then
     echo "entrypoint: TLS enabled (cert=${TLS_CRT})"
 else
     TLS_ENABLED=0
-    echo "entrypoint: no TLS cert at ${TLS_CRT} — dev posture: plain transport, auth disabled"
+    echo "entrypoint: no TLS cert at ${TLS_CRT} — dev posture: plain transport"
 fi
 
 if [ "${TLS_ENABLED}" = "1" ]; then
@@ -69,8 +70,8 @@ if [ "${TLS_ENABLED}" = "1" ]; then
     export GHOSTDESK_AUTH__TOKEN GHOSTDESK_VNC_PASSWORD
 else
     if [ -n "${GHOSTDESK_AUTH__TOKEN:-}" ]; then
-        echo "entrypoint: WARN GHOSTDESK_AUTH__TOKEN ignored — TLS is off" >&2
-        unset GHOSTDESK_AUTH__TOKEN
+        echo "entrypoint: WARN GHOSTDESK_AUTH__TOKEN crosses the wire in cleartext — TLS is off" >&2
+        export GHOSTDESK_AUTH__TOKEN
     fi
     if [ -n "${GHOSTDESK_VNC_PASSWORD:-}" ]; then
         echo "entrypoint: WARN GHOSTDESK_VNC_PASSWORD ignored — wayvnc auth is only enabled under TLS" >&2
