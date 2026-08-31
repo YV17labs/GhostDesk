@@ -3,7 +3,7 @@ resolver = "3"
 members = ["apps/*", "crates/*"]
 
 [workspace.package]
-version = "8.0.0"
+version = "8.1.0"
 edition = "2024"
 rust-version = "1.97"
 license = "LicenseRef-FSL-1.1-ALv2"
@@ -79,8 +79,30 @@ objc2-application-services = { version = "0.3", default-features = false, featur
     "AXError",
     "AXUIElement",
 ] }
+# Windows. The desktop is driven through Win32 directly — `SendInput` for the
+# pointer and the keyboard, GDI for capture, `EnumWindows` for the window list,
+# and the shell's own `IShellLink` to read the Start Menu — so there is no
+# helper process and nothing to install beside the binary. Feature-gated down
+# to the headers actually bound, exactly as the objc2 crates above are.
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+    "Win32_System_StationsAndDesktops",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
 # `memfd_create` for the XKB keymap fd handed to the virtual keyboard, and
-# `kill(pid, 0)` for the app_status liveness probe.
+# `kill(pid, 0)` for the liveness probe both Unix backends answer with.
 rustix = { version = "1.1", features = ["fs", "process"] }
 
 # `.desktop` entries are INI; `Exec=` values are shell-quoted.

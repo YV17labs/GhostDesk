@@ -37,7 +37,11 @@ impl ProgramsTool {
     #[public]
     async fn app_list(&self) -> Result<Json<ListedDto<ProgramDto>>, McpError> {
         Ok(Json(ListedDto::new(
-            self.programs_svc.list().into_iter().map(ProgramDto::from),
+            self.programs_svc
+                .list()
+                .await
+                .into_iter()
+                .map(ProgramDto::from),
         )))
     }
 
@@ -71,9 +75,8 @@ impl ProgramsTool {
             is slow to start or has no UI — set wait_for_window: false for \
             the latter kind.\n\n\
             The process runs detached; its stdout and stderr are captured to \
-            /tmp/ghostdesk/proc-<pid>.log and can be tailed with \
-            app_status(pid). Check app_running() first — the target may \
-            already be open.",
+            the log file named in the result, which app_status(pid) tails. \
+            Check app_running() first — the target may already be open.",
         annotations(destructive_hint = false, open_world_hint = false),
         output_schema = rmcp::handler::server::tool::schema_for_output::<LaunchedDto>()
     )]

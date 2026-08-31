@@ -34,6 +34,10 @@ wayland-protocols-wlr.workspace = true
 objc2-application-services.workspace = true
 objc2-core-foundation.workspace = true
 objc2-core-graphics.workspace = true
+rustix.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows.workspace = true
 
 [lints]
 workspace = true

@@ -4,15 +4,15 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
-  <img src="https://img.shields.io/badge/rust-1.96+-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust 1.96+">
+  <img src="https://img.shields.io/badge/rust-1.97+-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust 1.97+">
   <img src="https://img.shields.io/badge/built%20with-NestRS-7B6FDE?style=for-the-badge" alt="Built with NestRS">
   <img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge" alt="FSL-1.1-ALv2 License">
-  <img src="https://img.shields.io/badge/platform-Docker%20%7C%20Linux%20%7C%20macOS-orange?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/platform-Docker%20%7C%20Linux%20%7C%20macOS%20%7C%20Windows-orange?style=for-the-badge" alt="Platform">
 </p>
 
 <p align="center">
   <strong>Give your AI agent eyes, hands, and a full desktop.</strong><br>
-  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, launch apps, and run shell commands — in a sandboxed virtual desktop, or on your own Mac.
+  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, launch apps, and run shell commands — in a sandboxed virtual desktop, or on your own Mac or PC.
 </p>
 
 <p align="center">
@@ -31,6 +31,27 @@
 
 ---
 
+**One binary, one MCP endpoint, three desktops.** The fourteen tools are the
+same everywhere — an agent calls `mouse_click` and `app_launch` without
+knowing which desktop it is on.
+
+| | **Linux** | **macOS** | **Windows** |
+|---|---|---|---|
+| **How it runs** | the Docker container, in one command | a native binary | a native binary |
+| **The desktop it drives** | a virtual one, shipped inside the image | the Mac in front of you | the PC in front of you |
+| **Sandboxed** | yes — disposable, one per agent | no | no |
+| **Driven through** | `zwlr_virtual_pointer_v1`, Sway IPC, `grim` | Quartz Event Services, Accessibility, `screencapture` | `SendInput`, GDI, `EnumWindows` |
+
+**Linux is the server.** The container is the deployment this README shows
+unless it says otherwise, and the only one of the three with a sandbox around
+it. macOS and Windows run the very same server against a real desk — no
+container, and therefore no isolation. Jump to
+[macOS](#run-on-macos-without-the-container) or
+[Windows](#run-on-windows-without-the-container), or read
+[what differs](#what-differs-from-the-container) between the three.
+
+---
+
 ## Table of contents
 
 - [Why GhostDesk?](#why-ghostdesk)
@@ -38,6 +59,8 @@
 - [Quick start](#quick-start)
 - [Secure local run (TLS + auth)](#secure-local-run-tls--auth)
 - [Run on macOS, without the container](#run-on-macos-without-the-container)
+- [Run on Windows, without the container](#run-on-windows-without-the-container)
+- [What differs from the container](#what-differs-from-the-container)
 - [Tools](#tools)
 - [Model requirements](#model-requirements)
 - [From one agent to a workforce](#from-one-agent-to-a-workforce)
@@ -73,10 +96,11 @@ Frontier models (Claude, GPT-4o, Gemini) work too and remain the smoothest path 
 
 ## How it works
 
-GhostDesk drives a desktop and exposes it as an MCP server. There are two ways to run it, and the tool surface is identical in both — an agent calls `mouse_click` and `app_launch` without knowing which desktop it is on:
+GhostDesk drives a desktop and exposes it as an MCP server. There are three ways to run it, and the tool surface is identical in all of them:
 
 - **In the container** — a virtual Linux desktop inside Docker, with a taskbar, clock, and pre-installed applications. Sandboxed, disposable, one per agent. This is what the rest of this README shows unless it says otherwise.
 - **As a binary on macOS** — the same server, driving the Mac in front of you. No container, and therefore no sandbox. See [Run on macOS](#run-on-macos-without-the-container).
+- **As a binary on Windows** — the same server again, driving the PC in front of you. Also unsandboxed. See [Run on Windows](#run-on-windows-without-the-container).
 
 The agent perceives the screen by calling `screen_shot()`, which captures the full desktop at native resolution and returns it as WebP (or PNG). An optional `region=` argument can crop to a sub-rectangle when the agent explicitly wants to narrow its focus.
 
@@ -95,15 +119,18 @@ all.
 
 The operating system sits behind five traits — input, screen, windows,
 clipboard, application catalogue — and each OS is one directory implementing
-those five. Nothing above that boundary names a desktop, which is what makes a
-second one possible at all.
+those five. Nothing above that boundary names a desktop, which is what made
+the second one possible at all, and the third one routine.
 
 On Linux the compositor is driven from pure Rust: GhostDesk speaks
 `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` directly over the
 Wayland socket, with an XKB keymap it generates on the fly — which is why
 text entry produces identical output on a French AZERTY host and a US
 QWERTY one. On macOS the same five contracts are answered by Quartz Event
-Services, the Accessibility API, `screencapture` and the pasteboard.
+Services, the Accessibility API, `screencapture` and the pasteboard. On
+Windows they are answered by `SendInput`, `EnumWindows`, GDI, the Win32
+clipboard and the Start Menu — all in process, because Windows is the one of
+the three that ships no capture or clipboard tool to shell out to.
 
 ---
 
@@ -302,24 +329,105 @@ The server binds `127.0.0.1:3000` and serves with no token (posture
 as in [Connect your AI](#2-connect-your-ai). There is no noVNC endpoint — the
 desktop is the one you are looking at.
 
-### What differs from the container
+---
 
-| | Container (Linux) | Native (macOS) |
-|---|---|---|
-| Desktop | virtual, disposable, sandboxed | yours |
-| Primary modifier | `ctrl` | `cmd` |
-| App catalogue | `.desktop` entries | `.app` bundles in `/Applications`, `/System/Applications`, their `Utilities`, and `~/Applications` |
-| Supervision | noVNC on `:6080` | your own screen |
-| Screen geometry | `GHOSTDESK_SCREEN__WIDTH` / `_HEIGHT` | the main display, at native pixel size |
-| Permissions | none | Accessibility + Screen Recording, granted by hand |
+## Run on Windows, without the container
+
+The same binary once more, driving **the PC in front of you** — same fourteen
+tools, same MCP endpoint. The five OS seams are answered by `SendInput` for
+the pointer and keyboard, `EnumWindows` and `WM_CLOSE` for windows, GDI for
+frames, the Win32 clipboard, and Start Menu shortcuts for the catalogue.
+
+Nothing here shells out to a helper process. Linux has `grim` and
+`wl-clipboard`, macOS has `screencapture` and `pbcopy`; Windows ships neither,
+so this is the one host that captures and copies in process — which also means
+a scaled capture is scaled by the *blit*, not by decoding and resizing a
+full-resolution frame afterwards.
+
+> **There is no sandbox on this path.** Every isolation guarantee in
+> [Secure by design](#secure-by-design) belongs to the container. A native run
+> hands the agent your real mouse, your real keyboard, your real screen and
+> your real applications, with your own permissions. Run it on a machine you
+> are willing to hand over, and watch it.
+
+### 1. Build and install
+
+GhostDesk links a WebP encoder written in C, so the build needs a C toolchain.
+Install the **Visual Studio Build Tools** with the *Desktop development with
+C++* workload (Visual Studio itself works too), then:
+
+```powershell
+cargo install --path apps/ghostdesk --locked
+```
+
+### 2. Grant nothing — but run it as yourself
+
+Windows puts none of this behind a privacy setting, so unlike macOS there is
+nothing to click. What it gates instead is **integrity level**, and two rules
+follow from that:
+
+- **Run GhostDesk as the signed-in user, in an interactive session.** A
+  Windows service lives in session 0, which has no desktop at all. GhostDesk
+  refuses to boot there, naming the reason, rather than accepting clicks that
+  go nowhere.
+- **An unelevated GhostDesk cannot reach an elevated window** — Task Manager,
+  an installer, anything started with *Run as administrator*. Windows discards
+  that input in silence, which is exactly why the boot check exists. Starting
+  GhostDesk elevated lifts the restriction and hands the agent an
+  administrator's desktop; do that deliberately or not at all.
+
+While a UAC prompt or the lock screen is in front, the session belongs to
+Winlogon and **no** application can drive it — GhostDesk included. It reports
+that instead of reporting a healthy desk, so a supervisor sees a server that
+cannot work rather than one that appears to.
+
+### 3. Run it
+
+```powershell
+$env:NESTRS_ENV_PREFIX = "GHOSTDESK"
+$env:GHOSTDESK_IDLE__TIMEOUT_SECS = "0"
+ghostdesk
+```
+
+Both variables are load-bearing, for the same two reasons they are on macOS:
+`NESTRS_ENV_PREFIX=GHOSTDESK` is what makes every `GHOSTDESK_*` name below
+reach the server, and `GHOSTDESK_IDLE__TIMEOUT_SECS=0` disarms the idle sweep,
+which would otherwise close your own windows after thirty minutes of MCP
+silence.
+
+The server binds `127.0.0.1:3000` and serves with no token (posture
+`loopback_open`); point your MCP client at `http://localhost:3000/mcp` exactly
+as in [Connect your AI](#2-connect-your-ai). There is no noVNC endpoint — the
+desktop is the one you are looking at.
+
+---
+
+## What differs from the container
+
+| | Container (Linux) | Native (macOS) | Native (Windows) |
+|---|---|---|---|
+| Desktop | virtual, disposable, sandboxed | yours | yours |
+| Primary modifier | `ctrl` | `cmd` | `ctrl` |
+| App catalogue | `.desktop` entries | `.app` bundles in `/Applications`, `/System/Applications`, their `Utilities`, and `~/Applications` | Start Menu shortcuts, machine-wide and per-user |
+| Supervision | noVNC on `:6080` | your own screen | your own screen |
+| Screen geometry | `GHOSTDESK_SCREEN__WIDTH` / `_HEIGHT` | the main display, at native pixel size | the primary display, at native pixel size |
+| Permissions | none | Accessibility + Screen Recording, granted by hand | none to grant — integrity level decides what it can reach |
+| Windows are closed by | Sway IPC | the Accessibility close button | `WM_CLOSE` |
 
 The modifier is not something you configure, and it is not cosmetic. The
 server publishes the desktop and its primary modifier in the tool
 descriptions, built from the same constant the key table presses, so the model
-is told `cmd+c` on macOS and `ctrl+c` on Linux. Every modifier *name* resolves
-on both desktops — `ctrl`, `alt`, `option`, `super`, `meta`, `win`, `cmd`,
-`command` — but on macOS `ctrl+c` presses Control and puts a control character
-in the field, which is why the instruction is published rather than assumed.
+is told `cmd+c` on macOS and `ctrl+c` on Linux and Windows. Every modifier
+*name* resolves on all three desktops — `ctrl`, `alt`, `option`, `super`,
+`meta`, `win`, `cmd`, `command` — but on macOS `ctrl+c` presses Control and
+puts a control character in the field, which is why the instruction is
+published rather than assumed.
+
+The app catalogue is a whitelist on all three, and it is what an agent may
+launch: nothing outside it can be started, whatever name the model sends. On
+Windows that means the Start Menu, and a Store application whose shortcut
+points at a package rather than at an executable stays out of it — a catalogue
+that listed what it cannot start would be a whitelist that lies.
 
 > **Running the binary on a Linux host instead of the container** works the
 > same way, with the Wayland stack's own expectations: a Sway session for the
@@ -554,9 +662,9 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | `GHOSTDESK_MCP__ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Comma-separated `Host` header allow-list for the MCP endpoint. A request whose `Host` is not listed gets HTTP 403 — this is what stops a page on an attacker's origin from pointing its own hostname at a locally-running GhostDesk and calling your tools. **A deployment reached under a real hostname must name itself here.** Do not empty the list. |
 | `GHOSTDESK_TLS_CERT` | `/etc/ghostdesk/tls/server.crt` | Path to the TLS certificate. When the file exists, `websockify` and the MCP server auto-switch to `wss://` / `https://`. See [Security](#security). |
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
-| `GHOSTDESK_SCREEN__WIDTH` | `1280` | Virtual screen width in pixels. The fallback for a virtual screen with no display to ask — ignored on macOS, where the main display reports its own pixel size. |
+| `GHOSTDESK_SCREEN__WIDTH` | `1280` | Virtual screen width in pixels. The fallback for a virtual screen with no display to ask — ignored on macOS and Windows, where the display reports its own pixel size. |
 | `GHOSTDESK_SCREEN__HEIGHT` | `1024` | Virtual screen height in pixels. Same fallback rule as the row above. |
-| `GHOSTDESK_IDLE__TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable — **which you want on a native macOS run**, where the windows it would close are your own. |
+| `GHOSTDESK_IDLE__TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable — **which you want on any native run**, macOS or Windows, where the windows it would close are your own. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 
@@ -578,7 +686,7 @@ variable rather than silently falling back to a default.
 
 GhostDesk owns two things: **transport encryption** and **authentication**. Everything else (rate limiting, SSO, WAF, session recording, brute-force protection, per-user identity on noVNC) is a reverse-proxy concern — the container is designed to run behind one, not directly on the internet.
 
-That posture, and the threat model behind it, assume the container. A binary run directly on macOS has no container boundary to lean on — see [Run on macOS](#run-on-macos-without-the-container) for what that costs you.
+That posture, and the threat model behind it, assume the container. A binary run directly on [macOS](#run-on-macos-without-the-container) or [Windows](#run-on-windows-without-the-container) has no container boundary to lean on — see either section for what that costs you.
 
 The full threat model, the *Auth ≡ TLS* posture switch, the wayvnc RFB-type-2-inside-`wss://` rationale, the secrets handling contract, and the exhaustive in-scope / out-of-scope table all live in **[SECURITY.md](SECURITY.md)** — single source of truth. Start there before deploying to anything you don't fully trust.
 
@@ -608,6 +716,24 @@ Security, then restart the server — macOS applies the grant at process start.
 The failing tool names the setting it needs in its error, so read that rather
 than guessing which of the two it is. If both were working until you rebuilt:
 the grant is bound to the binary's signature, and a rebuild revokes it. Full walkthrough: [Run on macOS](#run-on-macos-without-the-container).
+
+### On Windows, clicks and keystrokes go nowhere
+
+Three causes, and the server's own error names which one. **A UAC prompt or
+the lock screen is in front** — the session belongs to Winlogon and no
+application can drive it, so wait for it to be dismissed. **GhostDesk was
+started as a Windows service** — session 0 has no desktop; start it as the
+signed-in user instead. **The target window is elevated** — Task Manager, an
+installer, anything started with *Run as administrator* — and an unelevated
+process cannot reach it; everything else on the desktop still works. Full
+walkthrough: [Run on Windows](#run-on-windows-without-the-container).
+
+### On Windows, an application is missing from `app_list`
+
+The catalogue is the Start Menu, and an entry only counts when its shortcut
+resolves to an executable that exists. Microsoft Store applications point at a
+package identity instead, so they are not listed and cannot be launched —
+install the desktop build of the application if the agent needs to drive it.
 
 ### Firefox / Electron apps fail to launch or crash immediately
 

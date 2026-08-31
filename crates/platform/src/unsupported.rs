@@ -22,7 +22,7 @@ use crate::screen::{Region, ScreenBackend};
 use crate::window::{WindowId, WindowInfo, WindowManager};
 
 const NO_BACKEND: &str = "GhostDesk has no desktop backend for this OS \
-                          (Linux/Wayland and macOS are the implemented ones)";
+                          (Linux/Wayland, macOS and Windows are the implemented ones)";
 
 pub struct Unsupported;
 
@@ -101,4 +101,21 @@ impl AppCatalog for Unsupported {
     fn resolve(&self, _exec: &str) -> Option<PathBuf> {
         None
     }
+}
+
+/// The child-process answers, mirroring each backend's own `process` module.
+///
+/// Here rather than inline in `host` so that there is one rule for what an
+/// unported target says, not two: every other seam states its refusal in this
+/// file, and a seventh thing added later should have an obvious place to go.
+pub mod process {
+    use tokio::process::Command;
+
+    /// Nothing can have been launched through a backend that refuses to boot.
+    pub fn is_running(_pid: u32) -> bool {
+        false
+    }
+
+    /// No child to detach, and no group to detach it from.
+    pub fn detach(_command: &mut Command) {}
 }

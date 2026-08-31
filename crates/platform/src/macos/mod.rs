@@ -14,6 +14,7 @@
 pub mod clipboard;
 pub mod desktop;
 pub mod input;
+pub mod process;
 pub mod screen;
 pub mod window;
 

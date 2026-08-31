@@ -10,7 +10,15 @@ use super::error::ProgramsError;
 
 type Result<T> = std::result::Result<T, ProgramsError>;
 
-const LOG_DIR: &str = "/tmp/ghostdesk";
+/// The directory launched programs' output lives in.
+///
+/// Under the OS's own temporary directory rather than a literal `/tmp`: the
+/// three desktops GhostDesk drives disagree about where that is — a per-user
+/// folder on macOS, a per-profile one on Windows — and a hard-coded POSIX path
+/// is a directory created on the wrong drive rather than an error anyone sees.
+fn log_dir() -> PathBuf {
+    std::env::temp_dir().join("ghostdesk")
+}
 
 /// Which programs this session started, and where their output went.
 ///
@@ -19,7 +27,7 @@ const LOG_DIR: &str = "/tmp/ghostdesk";
 /// *what ran*. The membership test is a security control — `app_status` reads
 /// a file path derived from a pid, so a pid this session never launched must
 /// be refused before that path is built, or the tool becomes a reader of
-/// arbitrary `/tmp` files.
+/// arbitrary files in the log directory.
 #[injectable]
 #[derive(Default)]
 pub struct LaunchRegistry {
@@ -29,7 +37,7 @@ pub struct LaunchRegistry {
 impl LaunchRegistry {
     /// Where a launched program's output lives, addressed by pid alone.
     pub fn log_path(&self, pid: u32) -> PathBuf {
-        PathBuf::from(LOG_DIR).join(format!("proc-{pid}.log"))
+        log_dir().join(format!("proc-{pid}.log"))
     }
 
     /// A log file for a launch that has not happened yet, and the two handles
@@ -39,9 +47,10 @@ impl LaunchRegistry {
     /// process exists: the file has to be open *before* the spawn, and only
     /// the spawn can say what to call it.
     pub fn stage_log(&self) -> Result<(PathBuf, Stdio, Stdio)> {
-        std::fs::create_dir_all(LOG_DIR).map_err(ProgramsError::Log)?;
+        let directory = log_dir();
+        std::fs::create_dir_all(&directory).map_err(ProgramsError::Log)?;
 
-        let path = PathBuf::from(LOG_DIR).join(format!(
+        let path = directory.join(format!(
             "proc-{}-{}.log",
             std::process::id(),
             SystemTime::now()
@@ -79,20 +88,13 @@ impl LaunchRegistry {
 
     /// Is the process still alive?
     ///
-    /// `kill(pid, 0)` asks the kernel rather than reading a cached exit status:
-    /// the child is reaped by a detached task, so nothing here holds a handle
-    /// to ask.
+    /// The OS is asked rather than a cached exit status read: the child is
+    /// reaped by a detached task, so nothing here holds a handle to ask. *How*
+    /// it is asked is the substrate's business — a signal probe on the Unix
+    /// hosts, a zero-length wait on a process handle on Windows — which is why
+    /// this line is a delegation and not three lines of `cfg`.
     pub fn is_running(&self, pid: u32) -> bool {
-        let Some(pid) = i32::try_from(pid)
-            .ok()
-            .and_then(rustix::process::Pid::from_raw)
-        else {
-            return false;
-        };
-        !matches!(
-            rustix::process::test_kill_process(pid),
-            Err(rustix::io::Errno::SRCH)
-        )
+        platform::host::process_is_running(pid)
     }
 }
 

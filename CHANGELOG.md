@@ -2,6 +2,79 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [v8.1.0] — 2026-08-31
+
+**GhostDesk drives a third desktop.** Windows joins Linux and macOS as a host
+the same binary runs on, with the same fourteen tools and the same MCP
+endpoint — and it took no new architecture, which is what the v8.0.0 rewrite
+was for. The operating system was already five traits; Windows is a third
+directory implementing them, plus one arm in each selector.
+
+### Added
+- **A Windows backend.** `SendInput` for the pointer and keyboard, GDI for
+  capture, `EnumWindows` and `WM_CLOSE` for the window seam, the Win32
+  clipboard, and Start Menu shortcuts — resolved through the shell's own
+  `IShellLink` — for the application catalogue. Nothing shells out to a helper
+  binary: Windows ships no `grim` and no `screencapture`, so this is the one
+  host that captures and copies in process, and the one where a scaled capture
+  is scaled by the blit rather than by decoding and resizing a full-resolution
+  frame afterwards.
+- **The boot says when the desktop cannot be driven.** macOS refuses to start
+  without its Accessibility grant; Windows refuses to start with no interactive
+  desktop to reach — a server in session 0, or a session showing the secure
+  desktop. Both are conditions under which every event is accepted and silently
+  discarded, and the liveness probe asks the same question on every tick, so a
+  UAC prompt or a lock reports a server that cannot work rather than one that
+  appears to. What no probe can see is stated instead: an unelevated GhostDesk
+  cannot reach an elevated window, which the boot message and the README both
+  say outright.
+- **The process declares itself DPI-aware before it reads a single metric.**
+  Windows reports a virtualised desktop to a process that does not, so on a
+  panel at 150% scaling the screen would answer two thirds of its real size and
+  every click would land a third of the way off. This is the Windows
+  counterpart of the Retina point/pixel ratio the macOS backend already
+  absorbed, and it lives in the same place: one file, beside the coordinate
+  conversion it feeds.
+- **Chords resolve through the active keyboard layout.** `VkKeyScanW` is asked
+  which key carries a character, so `ctrl+a` presses the key that types `a` —
+  the physical `Q` on an AZERTY board — and a digit that needs Shift on the
+  user's layout gets it. That is the same property the Wayland backend buys by
+  generating its own XKB keymap, and it means the published chord grammar
+  means one thing on all three desktops.
+
+### Changed
+- **A launched program's liveness and its detachment moved into the
+  substrate.** `LaunchRegistry` asked the kernel with `kill(pid, 0)` and the
+  launcher put every child in its own process group — both POSIX, both in the
+  feature crate, and both false on Windows, where the answer is a zero-length
+  wait on a process handle and there is nothing to detach from. They are not
+  desktop seams, so they are not new contracts; they are two free functions in
+  `platform::host`, answered by a `process` module in each backend. The claim
+  that nothing outside `crates/platform` names an operating system is true
+  again, and it is `cargo check --target x86_64-pc-windows-gnu` that says so
+  rather than a reviewer.
+- **Launched programs write their logs under the OS's own temporary
+  directory** instead of a hard-coded `/tmp/ghostdesk`, and the extra `PATH`
+  entries are joined with `std::env::join_paths` instead of a literal `:`. On
+  Linux both resolve to exactly what they were; on the other two hosts the old
+  spelling was a directory on the wrong drive and a separator that separates
+  nothing. `app_launch`'s description stops spelling the path out too — it
+  names the log file the result carries, which is the one copy that is true on
+  every host.
+- **The application catalogue is read off the runtime.** `app_list` and the
+  lookup inside `app_launch` now run on the blocking pool. Reading a catalogue
+  is a few milliseconds of flat directory on Linux and several hundred shell
+  loads on Windows, and the second belongs nowhere near a runtime worker — nor
+  does the COM apartment that Windows opens to do it.
+- **The published platform list is three.** The README opens with a table of
+  what each desktop means — how it runs, what it drives, whether there is a
+  sandbox around it — followed by a Windows section beside the macOS one and a
+  three-column comparison against the container. Linux remains the server: the
+  container is the supported deployment and the only one of the three with an
+  isolation boundary. The banner and the social card name all three too:
+  `DOCKER` said how it runs and nothing said what it drives, so `LINUX` now
+  sits beside `MACOS` and `WINDOWS` on both.
+
 ## [v8.0.0] — 2026-08-30
 
 GhostDesk is rewritten in Rust on [NestRS](https://nestrs.dev), and **it is no longer a Linux-only product: the same binary now drives a macOS desktop.** That is what the rewrite bought. Every version through v7.5.0 spoke Wayland and nothing else, with the compositor's assumptions spread across the codebase; the port put the operating system behind five traits, and a second implementation of those five is what macOS support *is* — not a compatibility layer bolted on beside the first.
@@ -431,7 +504,12 @@ Initial public release.
 - Google Sheets automation demo; Wikipedia agent demo GIF.
 - VS Code devcontainer with MCP server auto-start.
 
-[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v7.4.0...HEAD
+[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v8.1.0...HEAD
+[v8.1.0]: https://github.com/yv17labs/ghostdesk/compare/v8.0.0...v8.1.0
+[v8.0.0]: https://github.com/yv17labs/ghostdesk/compare/v7.5.0...v8.0.0
+[v7.5.0]: https://github.com/yv17labs/ghostdesk/compare/v7.4.2...v7.5.0
+[v7.4.2]: https://github.com/yv17labs/ghostdesk/compare/v7.4.1...v7.4.2
+[v7.4.1]: https://github.com/yv17labs/ghostdesk/compare/v7.4.0...v7.4.1
 [v7.4.0]: https://github.com/yv17labs/ghostdesk/compare/v7.3.1...v7.4.0
 [v7.3.1]: https://github.com/yv17labs/ghostdesk/compare/v7.3.0...v7.3.1
 [v7.3.0]: https://github.com/yv17labs/ghostdesk/compare/v7.2.0...v7.3.0

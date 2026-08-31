@@ -1,5 +1,5 @@
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -19,7 +19,13 @@ use super::window_wait::WindowWait;
 
 type Result<T> = std::result::Result<T, ProgramsError>;
 
-const EXTRA_PATH: &str = "/usr/games:/usr/local/games";
+/// Directories appended to a launched program's `PATH`.
+///
+/// Debian keeps games out of the default `PATH`, and the container installs
+/// some. Appended with the platform's own separator rather than a literal
+/// `:` — the two directories simply do not exist on the other hosts, where an
+/// absent entry costs a launched program nothing.
+const EXTRA_PATH: &[&str] = &["/usr/games", "/usr/local/games"];
 
 const SCRUBBED_PREFIX: &str = "GHOSTDESK_";
 
@@ -46,8 +52,18 @@ impl ProgramsService {
 }
 
 impl ProgramsService {
-    pub fn list(&self) -> Vec<DesktopApp> {
-        self.catalog.apps()
+    /// The installed-application catalogue.
+    ///
+    /// Read off the runtime, because what reading it costs is the host's
+    /// business and not this method's: Linux walks one flat directory of ini
+    /// files in a few milliseconds, while Windows loads every Start Menu
+    /// shortcut through the shell — hundreds of file opens, in a COM
+    /// apartment that wants a thread of its own in any case.
+    pub async fn list(&self) -> Vec<DesktopApp> {
+        let catalog = Arc::clone(&self.catalog);
+        tokio::task::spawn_blocking(move || catalog.apps())
+            .await
+            .expect("application catalogue read panicked")
     }
 
     pub async fn running(&self) -> Result<Vec<RunningWindow>> {
@@ -126,7 +142,16 @@ impl ProgramsService {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
 
-        let Some(program) = self.catalog.resolve(&name) else {
+        // Off the runtime for the reason `list` is: a lookup walks the same
+        // catalogue, and on Windows it opens the shell object that reads a
+        // shortcut.
+        let catalog = Arc::clone(&self.catalog);
+        let wanted = name.clone();
+        let resolved = tokio::task::spawn_blocking(move || catalog.resolve(&wanted))
+            .await
+            .expect("application catalogue lookup panicked");
+
+        let Some(program) = resolved else {
             return Err(ProgramsError::Unknown(name));
         };
 
@@ -138,8 +163,8 @@ impl ProgramsService {
             .stdout(out)
             .stderr(errors)
             .env_clear()
-            .envs(launch_env())
-            .process_group(0);
+            .envs(launch_env());
+        platform::host::process_detach(&mut command_builder);
 
         let child = match command_builder.spawn() {
             Ok(child) => child,
@@ -192,6 +217,21 @@ impl ProgramsService {
     }
 }
 
+/// One `PATH`, plus [`EXTRA_PATH`], joined the way this OS joins them.
+///
+/// `join_paths` rather than a separator this crate picks: the separator is a
+/// platform fact, and naming one here is exactly the leak `platform` exists to
+/// absorb. An unjoinable value (a directory containing the separator itself)
+/// leaves the inherited `PATH` untouched — a launched program with a shorter
+/// search path beats one with none.
+fn extended(path: &str) -> String {
+    let entries = std::env::split_paths(path).chain(EXTRA_PATH.iter().map(PathBuf::from));
+    match std::env::join_paths(entries) {
+        Ok(joined) => joined.to_string_lossy().into_owned(),
+        Err(_) => path.to_owned(),
+    }
+}
+
 fn launch_env() -> Vec<(String, String)> {
     scrub(std::env::vars(), EnvPrefix::current())
 }
@@ -208,7 +248,7 @@ fn scrub(vars: impl Iterator<Item = (String, String)>, prefix: &str) -> Vec<(Str
     vars.filter(|(key, _)| !key.starts_with(SCRUBBED_PREFIX) && !key.starts_with(&active))
         .map(|(key, value)| {
             if key == "PATH" {
-                (key, format!("{value}:{EXTRA_PATH}"))
+                (key, extended(&value))
             } else {
                 (key, value)
             }

@@ -117,7 +117,7 @@
 
     <!-- Tagline -->
     <text x="1204" y="400" font-size="26" font-weight="400" fill="#E8E6FF" opacity="0.78" letter-spacing="1">Give your AI agent eyes, hands, and a full desktop.</text>
-    <text x="1204" y="438" font-size="19" font-weight="400" fill="#E8E6FF" opacity="0.5" letter-spacing="1">A sandboxed virtual desktop, or your own Mac.</text>
+    <text x="1204" y="438" font-size="19" font-weight="400" fill="#E8E6FF" opacity="0.5" letter-spacing="1">A sandboxed virtual desktop, or your own Mac or PC.</text>
 
     <!-- Feature chips -->
     <g font-size="16" font-weight="500" letter-spacing="3" fill="#E8E6FF">
@@ -129,13 +129,19 @@
         <text x="191" y="22" text-anchor="middle" opacity="0.9">DOCKER</text>
 
         <rect x="272" y="0" width="124" height="34" rx="17" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
-        <text x="334" y="22" text-anchor="middle" opacity="0.9">MACOS</text>
+        <text x="334" y="22" text-anchor="middle" opacity="0.9">LINUX</text>
 
-        <rect x="412" y="0" width="160" height="34" rx="17" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
-        <text x="492" y="22" text-anchor="middle" opacity="0.9">VNC  READY</text>
+        <rect x="412" y="0" width="124" height="34" rx="17" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="474" y="22" text-anchor="middle" opacity="0.9">MACOS</text>
 
-        <rect x="588" y="0" width="110" height="34" rx="17" fill="none" stroke="#5DCAA5" stroke-opacity="0.55"/>
-        <text x="643" y="22" text-anchor="middle" opacity="0.9" fill="#5DCAA5">RUST</text>
+        <rect x="552" y="0" width="148" height="34" rx="17" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="626" y="22" text-anchor="middle" opacity="0.9">WINDOWS</text>
+
+        <rect x="716" y="0" width="160" height="34" rx="17" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="796" y="22" text-anchor="middle" opacity="0.9">VNC  READY</text>
+
+        <rect x="892" y="0" width="110" height="34" rx="17" fill="none" stroke="#5DCAA5" stroke-opacity="0.55"/>
+        <text x="947" y="22" text-anchor="middle" opacity="0.9" fill="#5DCAA5">RUST</text>
       </g>
     </g>
   </g>
