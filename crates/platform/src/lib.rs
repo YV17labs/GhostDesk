@@ -21,7 +21,7 @@
 //! chord grammar every backend serves, [`frame`] the pixel work on what a
 //! capture returns, [`cmd`] the runner for the helper binaries a backend
 //! shells out to, and [`coords`] the model-space conversion. Each exists
-//! because two backends would otherwise write it twice and drift.
+//! because every backend would otherwise write its own copy and drift.
 //!
 //! Nothing here knows about MCP or NestRS. The feature crate wraps each seam
 //! in an `#[injectable]` service; this crate is what those services call.

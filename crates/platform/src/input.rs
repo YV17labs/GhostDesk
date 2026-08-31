@@ -3,9 +3,10 @@
 //!
 //! Nothing here names a protocol or an OS. The Wayland backend presses evdev
 //! keycodes through a virtual keyboard; the macOS backend posts `CGEvent`s; the
-//! feature crate cannot tell the difference — that opacity is what makes the
-//! next OS a new directory under this crate instead of a sweep through
-//! `features`. The chord grammar the two share is [`chord`](crate::chord).
+//! Windows backend hands structures to `SendInput`; the feature crate cannot
+//! tell the three apart — that opacity is what makes the next OS a new
+//! directory under this crate instead of a sweep through `features`. The chord
+//! grammar they share is [`chord`](crate::chord).
 
 use anyhow::Result;
 use async_trait::async_trait;

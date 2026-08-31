@@ -1,9 +1,10 @@
 //! The chord grammar, and the opaque chord a backend resolves it to.
 //!
-//! One published vocabulary, two resolutions. [`MODIFIERS`] and [`KEYS`] are
-//! the tokens a caller may send on *any* desktop — the tool description quotes
-//! them — while what each token becomes is the backend's business: `cmd` is
-//! Super on Linux and Command on macOS, and merging those tables would
+//! One published vocabulary, one resolution per desktop. [`MODIFIERS`] and
+//! [`KEYS`] are the tokens a caller may send on *any* desktop — the tool
+//! description quotes them — while what each token becomes is the backend's
+//! business: `cmd` is Super on Linux, the Windows key on Windows and Command
+//! on macOS, and merging those tables would
 //! reintroduce exactly the bug [`Conventions`](crate::input::Conventions)
 //! exists to prevent.
 //!
@@ -20,7 +21,7 @@
 //! reachable by anyone who guesses them: `leftctrl` and `rightmeta` are how the
 //! Linux keymap spells its modifiers, and both resolved there and nowhere else.
 //! So [`normalize`] refuses any multi-character token the lists below do not
-//! name, before either backend's table is consulted — one gate, both desktops,
+//! name, before any backend's table is consulted — one gate, every desktop,
 //! nothing to remember.
 
 use std::any::Any;
@@ -124,7 +125,7 @@ fn published(token: &str) -> bool {
 
 /// Split a `+`-separated chord into normalised tokens, applying `aliases`.
 ///
-/// One definition rather than a convention two backends happen to agree on:
+/// One definition rather than a convention three backends happen to agree on:
 /// the grammar is published to callers, so it cannot be per-OS. A token is
 /// either a single character — a key on every keyboard, resolved through the
 /// backend's own layout handling — or a *name*, and a name is either published
@@ -156,7 +157,7 @@ pub fn normalize(keys: &str, aliases: &[(&str, &str)]) -> Result<Vec<String>> {
 /// Called from each backend's own test module, so the check runs on the target
 /// that owns the table rather than on whichever one the developer happens to
 /// be building. Modifiers are probed in a real chord (`ctrl+a`) because a
-/// modifier alone resolves to an empty key list on both backends and would
+/// modifier alone resolves to an empty key list on every backend and would
 /// pass without ever reaching the table.
 #[cfg(test)]
 pub(crate) fn every_published_token_resolves<T, E: std::fmt::Display>(
@@ -195,7 +196,7 @@ mod tests {
         // `leftctrl` and `rightmeta` are how the Linux keymap spells its own
         // modifiers. Both resolved there and on no other desktop, under one
         // published description — which is the divergence this gate closes
-        // without either backend having to prune its table.
+        // without a backend having to prune its table.
         for unpublished in ["leftctrl", "rightmeta", "capslock", "insert", "del", "fn"] {
             assert!(
                 normalize(unpublished, ALIASES).is_err(),

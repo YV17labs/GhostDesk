@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn every_published_token_resolves() {
-        // The published grammar is one contract over two backends. Before this
+        // The published grammar is one contract over three backends. Before this
         // ran, `option` resolved on macOS and failed here, under a single tool
         // description that promised it on both.
         chord::every_published_token_resolves(resolve);

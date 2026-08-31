@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn the_published_chord_grammar_is_the_one_the_backends_serve() {
         // The description is where the grammar reaches the agent, and
-        // `platform::chord` is where both backends are held to it. A token
+        // `platform::chord` is where every backend is held to it. A token
         // served but never described is one no agent will send; a token
         // described but not served is one every agent will.
         let described = InputTool::tool_router()

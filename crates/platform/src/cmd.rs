@@ -1,8 +1,10 @@
 //! Async runner for the helper binaries a backend shells out to.
 //!
-//! Neutral because both backends need it and neither owns it: `swaymsg`,
-//! `grim` and `wl-paste` on Linux, `screencapture`, `pbcopy` and `pbpaste` on
-//! macOS. Never through a shell, so no argument is word-split or
+//! Neutral because the two Unix backends need it and neither owns it:
+//! `swaymsg`, `grim` and `wl-paste` on Linux, `screencapture`, `pbcopy` and
+//! `pbpaste` on macOS. Windows calls none of this — it ships no such helper
+//! and answers capture and clipboard in process. Never through a shell, so no
+//! argument is word-split or
 //! glob-expanded — which is what makes it safe to hand a caller's region
 //! geometry or clipboard text to one of them.
 
