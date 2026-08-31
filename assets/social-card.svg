@@ -113,8 +113,8 @@
     <text x="660" y="280" font-size="78" font-weight="500" fill="#E8E6FF" letter-spacing="4">GhostDesk</text>
     <text x="662" y="312" font-size="14" font-weight="400" fill="#7B6FDE" opacity="0.9" letter-spacing="6">VIRTUAL  DESKTOP  CONTROL</text>
 
-    <text x="662" y="370" font-size="18" font-weight="400" fill="#E8E6FF" opacity="0.75">Give your AI agent eyes, hands,</text>
-    <text x="662" y="394" font-size="18" font-weight="400" fill="#E8E6FF" opacity="0.75">and a full Linux desktop.</text>
+    <text x="662" y="368" font-size="19" font-weight="400" fill="#E8E6FF" opacity="0.78">Give your AI agent eyes, hands, and a full desktop.</text>
+    <text x="662" y="396" font-size="15" font-weight="400" fill="#E8E6FF" opacity="0.5">A sandboxed virtual desktop, or your own Mac.</text>
 
     <g font-size="11" font-weight="500" letter-spacing="2" fill="#E8E6FF">
       <g transform="translate(662 430)">
@@ -124,11 +124,14 @@
         <rect x="82"  y="0" width="86"  height="24" rx="12" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
         <text x="125" y="16" text-anchor="middle" opacity="0.9">DOCKER</text>
 
-        <rect x="180" y="0" width="104" height="24" rx="12" fill="none" stroke="#5DCAA5" stroke-opacity="0.55"/>
-        <text x="232" y="16" text-anchor="middle" opacity="0.9" fill="#5DCAA5">VNC  READY</text>
+        <rect x="180" y="0" width="82"  height="24" rx="12" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="221" y="16" text-anchor="middle" opacity="0.9">MACOS</text>
 
-        <rect x="296" y="0" width="110" height="24" rx="12" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
-        <text x="351" y="16" text-anchor="middle" opacity="0.9">PYTHON 3.12+</text>
+        <rect x="274" y="0" width="104" height="24" rx="12" fill="none" stroke="#7B6FDE" stroke-opacity="0.55"/>
+        <text x="326" y="16" text-anchor="middle" opacity="0.9">VNC  READY</text>
+
+        <rect x="390" y="0" width="74"  height="24" rx="12" fill="none" stroke="#5DCAA5" stroke-opacity="0.55"/>
+        <text x="427" y="16" text-anchor="middle" opacity="0.9" fill="#5DCAA5">RUST</text>
       </g>
     </g>
   </g>
