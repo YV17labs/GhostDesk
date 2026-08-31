@@ -12,7 +12,7 @@
 
 <p align="center">
   <strong>Give your AI agent eyes, hands, and a full desktop.</strong><br>
-  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, launch apps, and run shell commands — in a sandboxed virtual desktop, or on your own Mac or PC.
+  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, launch apps, and run shell commands — in a sandboxed virtual desktop, or on the one in front of you.
 </p>
 
 <p align="center">

@@ -117,7 +117,7 @@
 
     <!-- Tagline -->
     <text x="1204" y="400" font-size="26" font-weight="400" fill="#E8E6FF" opacity="0.78" letter-spacing="1">Give your AI agent eyes, hands, and a full desktop.</text>
-    <text x="1204" y="438" font-size="19" font-weight="400" fill="#E8E6FF" opacity="0.5" letter-spacing="1">A sandboxed virtual desktop, or your own Mac or PC.</text>
+    <text x="1204" y="438" font-size="19" font-weight="400" fill="#E8E6FF" opacity="0.5" letter-spacing="1">A sandboxed virtual desktop, or the one in front of you.</text>
 
     <!-- Feature chips -->
     <g font-size="16" font-weight="500" letter-spacing="3" fill="#E8E6FF">

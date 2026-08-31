@@ -114,7 +114,7 @@
     <text x="662" y="312" font-size="14" font-weight="400" fill="#7B6FDE" opacity="0.9" letter-spacing="6">VIRTUAL  DESKTOP  CONTROL</text>
 
     <text x="662" y="368" font-size="19" font-weight="400" fill="#E8E6FF" opacity="0.78">Give your AI agent eyes, hands, and a full desktop.</text>
-    <text x="662" y="396" font-size="15" font-weight="400" fill="#E8E6FF" opacity="0.5">A sandboxed virtual desktop, or your own Mac or PC.</text>
+    <text x="662" y="396" font-size="15" font-weight="400" fill="#E8E6FF" opacity="0.5">A sandboxed virtual desktop, or the one in front of you.</text>
 
     <g font-size="11" font-weight="500" letter-spacing="2" fill="#E8E6FF">
       <g transform="translate(662 430)">
