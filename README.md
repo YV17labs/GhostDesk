@@ -78,16 +78,16 @@ The agent perceives the screen by calling `screen_shot()`, which captures the fu
 
 This works with **any application** — web apps, native apps, legacy software, Canvas, WebGL.
 
-### Built in Rust, on NestRS
+### Built in Rust
 
 GhostDesk is a single compiled binary. It links `libc` and nothing else — no
 interpreter, no virtual environment, no package tree to harden at build time.
 
-The server is built on [**NestRS**](https://nestrs.dev), a declarative Rust
-backend framework: the tool host is a `#[mcp]` provider that self-mounts on
-the HTTP transport, each domain is an `#[injectable]` service, the whole
-dependency graph is verified at boot, and the endpoint is **closed by
-default** — a guard has to bind before `/mcp` answers anything at all.
+The tool host mounts itself on the HTTP transport, each domain is a service
+resolved by type, and the whole dependency graph is verified at boot — a
+missing binding is a startup error, never a runtime surprise. The endpoint is
+**closed by default**: a guard has to bind before `/mcp` answers anything at
+all.
 
 The compositor is driven from pure Rust too. GhostDesk speaks
 `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` directly over the
@@ -431,9 +431,9 @@ Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agen
 
 Every variable GhostDesk reads is namespaced under `GHOSTDESK_*`. Standard POSIX variables (`TZ`, `LANG`) are kept as-is so the existing Unix ecosystem keeps working.
 
-The names come straight from the framework: the image sets `NESTRS_ENV_PREFIX=GHOSTDESK`, so what would be `NESTRS_HTTP__PORT` in a stock NestRS app is `GHOSTDESK_HTTP__PORT` here. There is no second spelling and no translation layer — one name, one place to look it up.
+The image sets `NESTRS_ENV_PREFIX=GHOSTDESK`, and that single variable is what makes every setting below read `GHOSTDESK_HTTP__PORT` rather than `NESTRS_HTTP__PORT`. There is no second spelling and no translation layer — one name, one place to look it up.
 
-Read them as `GHOSTDESK_<NAMESPACE>__<KEY>`: the double underscore separates the namespace from the setting. `http` and `mcp` are the framework's own namespaces; `screen`, `idle` and `auth` are GhostDesk's, one per feature module that owns settings. A single underscore (`GHOSTDESK_VNC_PASSWORD`) marks a container-level knob the entrypoint consumes itself, never reaching the server.
+Read them as `GHOSTDESK_<NAMESPACE>__<KEY>`: the double underscore separates the namespace from the setting. `http` and `mcp` are the server's transport namespaces; `screen`, `idle` and `auth` are GhostDesk's, one per feature module that owns settings. A single underscore (`GHOSTDESK_VNC_PASSWORD`) marks a container-level knob the entrypoint consumes itself, never reaching the server.
 
 `NESTRS_ENV_PREFIX` is the one name no prefix can rename, and it has to be on the process before the server starts — a `.env` file is read after it has already chosen which cascade to read. Both images bake it and the `Justfile` exports it, so a container run and a `nestrs run dev` both carry it; a binary you start any other way needs `NESTRS_ENV_PREFIX=GHOSTDESK` in its environment, or every variable below is read under its stock `NESTRS_*` name instead.
 
