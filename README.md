@@ -7,12 +7,12 @@
   <img src="https://img.shields.io/badge/rust-1.96+-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust 1.96+">
   <img src="https://img.shields.io/badge/built%20with-NestRS-7B6FDE?style=for-the-badge" alt="Built with NestRS">
   <img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge" alt="FSL-1.1-ALv2 License">
-  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20Docker-orange?style=for-the-badge&logo=docker&logoColor=white" alt="Platform">
+  <img src="https://img.shields.io/badge/platform-Docker%20%7C%20Linux%20%7C%20macOS-orange?style=for-the-badge" alt="Platform">
 </p>
 
 <p align="center">
-  <strong>Give your AI agent eyes, hands, and a full Linux desktop.</strong><br>
-  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, launch apps, and run shell commands — all inside a sandboxed virtual desktop.
+  <strong>Give your AI agent eyes, hands, and a full desktop.</strong><br>
+  An MCP server that lets LLM agents see the screen, move the mouse, type on the keyboard, launch apps, and run shell commands — in a sandboxed virtual desktop, or on your own Mac.
 </p>
 
 <p align="center">
@@ -37,6 +37,7 @@
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
 - [Secure local run (TLS + auth)](#secure-local-run-tls--auth)
+- [Run on macOS, without the container](#run-on-macos-without-the-container)
 - [Tools](#tools)
 - [Model requirements](#model-requirements)
 - [From one agent to a workforce](#from-one-agent-to-a-workforce)
@@ -72,7 +73,10 @@ Frontier models (Claude, GPT-4o, Gemini) work too and remain the smoothest path 
 
 ## How it works
 
-GhostDesk runs a virtual Linux desktop inside Docker and exposes it as an MCP server. Your agent gets a sandboxed desktop with a taskbar, clock, and pre-installed applications — equivalent to what a human sees on their screen.
+GhostDesk drives a desktop and exposes it as an MCP server. There are two ways to run it, and the tool surface is identical in both — an agent calls `mouse_click` and `app_launch` without knowing which desktop it is on:
+
+- **In the container** — a virtual Linux desktop inside Docker, with a taskbar, clock, and pre-installed applications. Sandboxed, disposable, one per agent. This is what the rest of this README shows unless it says otherwise.
+- **As a binary on macOS** — the same server, driving the Mac in front of you. No container, and therefore no sandbox. See [Run on macOS](#run-on-macos-without-the-container).
 
 The agent perceives the screen by calling `screen_shot()`, which captures the full desktop at native resolution and returns it as WebP (or PNG). An optional `region=` argument can crop to a sub-rectangle when the agent explicitly wants to narrow its focus.
 
@@ -89,11 +93,17 @@ missing binding is a startup error, never a runtime surprise. The endpoint is
 **closed by default**: a guard has to bind before `/mcp` answers anything at
 all.
 
-The compositor is driven from pure Rust too. GhostDesk speaks
+The operating system sits behind five traits — input, screen, windows,
+clipboard, application catalogue — and each OS is one directory implementing
+those five. Nothing above that boundary names a desktop, which is what makes a
+second one possible at all.
+
+On Linux the compositor is driven from pure Rust: GhostDesk speaks
 `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` directly over the
 Wayland socket, with an XKB keymap it generates on the fly — which is why
 text entry produces identical output on a French AZERTY host and a US
-QWERTY one.
+QWERTY one. On macOS the same five contracts are answered by Quartz Event
+Services, the Accessibility API, `screencapture` and the pasteboard.
 
 ---
 
@@ -230,9 +240,97 @@ The named volume persists the agent's home directory across restarts — browser
 
 ---
 
+## Run on macOS, without the container
+
+The container ships a Linux desktop. GhostDesk is also just a binary, and on
+macOS that binary drives **the Mac in front of you** — same fourteen tools,
+same MCP endpoint, nothing in between. The five OS seams are answered by
+Quartz Event Services for the pointer and keyboard, the Accessibility API for
+windows, `screencapture` for frames, the pasteboard for the clipboard, and
+`.app` bundles for the catalogue.
+
+> **There is no sandbox on this path.** Every isolation guarantee in
+> [Secure by design](#secure-by-design) belongs to the container. A native run
+> hands the agent your real mouse, your real keyboard, your real screen and
+> your real applications, with your own permissions. Run it on a machine you
+> are willing to hand over, and watch it.
+
+### 1. Build and install
+
+```bash
+cargo install --path apps/ghostdesk --locked
+```
+
+### 2. Grant the two permissions
+
+macOS gates input and capture behind privacy settings that **cannot be
+requested from code**, so you grant them by hand, once, in **System Settings ▸
+Privacy & Security**:
+
+| Setting | What it buys |
+|---------|--------------|
+| **Accessibility** | `mouse_*`, `key_*`, and every window operation |
+| **Screen Recording** | `screen_shot`, and window titles |
+
+Miss one and the affected tools fail naming the setting to open, rather than
+returning a black image or silently doing nothing.
+
+> **The grant is bound to the binary's path *and* its signature**, which is
+> macOS's rule and not ours: rebuild `ghostdesk` and the grant is revoked, so
+> both permissions have to be re-granted after every `cargo install`. Nothing
+> can script this away — TCC exists precisely so that no process can grant
+> itself the thing.
+
+### 3. Run it
+
+```bash
+NESTRS_ENV_PREFIX=GHOSTDESK GHOSTDESK_IDLE__TIMEOUT_SECS=0 ghostdesk
+```
+
+Both variables are load-bearing:
+
+- `NESTRS_ENV_PREFIX=GHOSTDESK` has to be on the process — see
+  [Configuration](#configuration). Without it every setting is read under its
+  stock `NESTRS_*` name instead, and none of the `GHOSTDESK_*` names below
+  reach the server.
+- `GHOSTDESK_IDLE__TIMEOUT_SECS=0` disarms the idle sweep. Armed, thirty
+  minutes of MCP silence closes every open window — the right behaviour for a
+  disposable container desktop, and the wrong one for your laptop.
+
+The server binds `127.0.0.1:3000` and serves with no token (posture
+`loopback_open`); point your MCP client at `http://localhost:3000/mcp` exactly
+as in [Connect your AI](#2-connect-your-ai). There is no noVNC endpoint — the
+desktop is the one you are looking at.
+
+### What differs from the container
+
+| | Container (Linux) | Native (macOS) |
+|---|---|---|
+| Desktop | virtual, disposable, sandboxed | yours |
+| Primary modifier | `ctrl` | `cmd` |
+| App catalogue | `.desktop` entries | `.app` bundles in `/Applications`, `/System/Applications`, their `Utilities`, and `~/Applications` |
+| Supervision | noVNC on `:6080` | your own screen |
+| Screen geometry | `GHOSTDESK_SCREEN__WIDTH` / `_HEIGHT` | the main display, at native pixel size |
+| Permissions | none | Accessibility + Screen Recording, granted by hand |
+
+The modifier is not something you configure, and it is not cosmetic. The
+server publishes the desktop and its primary modifier in the tool
+descriptions, built from the same constant the key table presses, so the model
+is told `cmd+c` on macOS and `ctrl+c` on Linux. Every modifier *name* resolves
+on both desktops — `ctrl`, `alt`, `option`, `super`, `meta`, `win`, `cmd`,
+`command` — but on macOS `ctrl+c` presses Control and puts a control character
+in the field, which is why the instruction is published rather than assumed.
+
+> **Running the binary on a Linux host instead of the container** works the
+> same way, with the Wayland stack's own expectations: a Sway session for the
+> window seam, `grim` for capture, `wl-clipboard` for the clipboard. The
+> container exists so you do not have to assemble that.
+
+---
+
 ## Tools
 
-13 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
+14 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
 
 ### Screen
 | Tool | Description |
@@ -456,9 +554,9 @@ Both are plain environment variables. Wire them from your secret store (`secretK
 | `GHOSTDESK_MCP__ALLOWED_HOSTS` | `localhost,127.0.0.1,::1` | Comma-separated `Host` header allow-list for the MCP endpoint. A request whose `Host` is not listed gets HTTP 403 — this is what stops a page on an attacker's origin from pointing its own hostname at a locally-running GhostDesk and calling your tools. **A deployment reached under a real hostname must name itself here.** Do not empty the list. |
 | `GHOSTDESK_TLS_CERT` | `/etc/ghostdesk/tls/server.crt` | Path to the TLS certificate. When the file exists, `websockify` and the MCP server auto-switch to `wss://` / `https://`. See [Security](#security). |
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
-| `GHOSTDESK_SCREEN__WIDTH` | `1280` | Virtual screen width in pixels |
-| `GHOSTDESK_SCREEN__HEIGHT` | `1024` | Virtual screen height in pixels |
-| `GHOSTDESK_IDLE__TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable. |
+| `GHOSTDESK_SCREEN__WIDTH` | `1280` | Virtual screen width in pixels. The fallback for a virtual screen with no display to ask — ignored on macOS, where the main display reports its own pixel size. |
+| `GHOSTDESK_SCREEN__HEIGHT` | `1024` | Virtual screen height in pixels. Same fallback rule as the row above. |
+| `GHOSTDESK_IDLE__TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed via Sway IPC to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable — **which you want on a native macOS run**, where the windows it would close are your own. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 
@@ -480,6 +578,8 @@ variable rather than silently falling back to a default.
 
 GhostDesk owns two things: **transport encryption** and **authentication**. Everything else (rate limiting, SSO, WAF, session recording, brute-force protection, per-user identity on noVNC) is a reverse-proxy concern — the container is designed to run behind one, not directly on the internet.
 
+That posture, and the threat model behind it, assume the container. A binary run directly on macOS has no container boundary to lean on — see [Run on macOS](#run-on-macos-without-the-container) for what that costs you.
+
 The full threat model, the *Auth ≡ TLS* posture switch, the wayvnc RFB-type-2-inside-`wss://` rationale, the secrets handling contract, and the exhaustive in-scope / out-of-scope table all live in **[SECURITY.md](SECURITY.md)** — single source of truth. Start there before deploying to anything you don't fully trust.
 
 Reporting a vulnerability? Use GitHub's [private security advisory](../../security/advisories) — see [SECURITY.md § Reporting](SECURITY.md#reporting-security-vulnerabilities).
@@ -499,6 +599,15 @@ The prod posture (cert mounted) **requires** both `GHOSTDESK_AUTH__TOKEN` and `G
 ### noVNC shows a black screen or the desktop renders with graphical glitches
 
 You're probably short on shared memory. Browsers and other GPU-accelerated apps inside the container need a reasonable `/dev/shm` — `--shm-size 2g` is the baseline in every example and should not be trimmed. If you already have `--shm-size 2g`, check the container logs for wayvnc or compositor errors.
+
+### On macOS, clicks do nothing or screenshots fail
+
+The two privacy permissions are missing. Grant **Accessibility** (input and
+windows) and **Screen Recording** (capture) in System Settings ▸ Privacy &
+Security, then restart the server — macOS applies the grant at process start.
+The failing tool names the setting it needs in its error, so read that rather
+than guessing which of the two it is. If both were working until you rebuilt:
+the grant is bound to the binary's signature, and a rebuild revokes it. Full walkthrough: [Run on macOS](#run-on-macos-without-the-container).
 
 ### Firefox / Electron apps fail to launch or crash immediately
 
