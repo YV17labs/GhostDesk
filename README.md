@@ -57,17 +57,18 @@ container, and therefore no isolation. Jump to
 - [Why GhostDesk?](#why-ghostdesk)
 - [How it works](#how-it-works)
 - [Quick start](#quick-start)
+- [Tools](#tools)
+- [Model requirements](#model-requirements)
 - [Secure local run (TLS + auth)](#secure-local-run-tls--auth)
+- [Running many agents](#running-many-agents)
+- [Custom image](#custom-image)
 - [Run on macOS, without the container](#run-on-macos-without-the-container)
 - [Run on Windows, without the container](#run-on-windows-without-the-container)
 - [What differs from the container](#what-differs-from-the-container)
-- [Tools](#tools)
-- [Model requirements](#model-requirements)
-- [From one agent to a workforce](#from-one-agent-to-a-workforce)
 - [Configuration](#configuration)
 - [Security](#security)
 - [Troubleshooting](#troubleshooting)
-- [Custom image](#custom-image)
+- [Build from source](#build-from-source)
 - [License](#license)
 
 ---
@@ -119,8 +120,9 @@ all.
 
 The operating system sits behind five traits — input, screen, windows,
 clipboard, application catalogue — and each OS is one directory implementing
-those five. Nothing above that boundary names a desktop, which is what made
-the second one possible at all, and the third one routine.
+those five, under [crates/platform/src](crates/platform/src). Nothing above
+that boundary names a desktop, which is what made the second one possible at
+all, and the third one routine.
 
 On Linux the compositor is driven from pure Rust: GhostDesk speaks
 `zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` directly over the
@@ -200,6 +202,127 @@ The demo run creates no named volume, so this leaves nothing behind.
 
 ---
 
+## Tools
+
+14 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
+
+### Screen
+| Tool | Description |
+|------|-------------|
+| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Tune `quality=` (1-100, default `50` — invisible on UI content, ~50% smaller than `80`; raise for fine fonts or design surfaces). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
+
+### Mouse
+| Tool | Description |
+|------|-------------|
+| `mouse_move` | Move the cursor to coordinates without clicking — reveals hover-only menus, tooltips, and CSS `:hover` states (e.g. Gmail action bar) |
+| `mouse_click` | Click at coordinates |
+| `mouse_double_click` | Double-click at coordinates |
+| `mouse_drag` | Drag from one position to another |
+| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
+
+### Keyboard
+| Tool | Description |
+|------|-------------|
+| `key_type` | Type text with realistic per-character delays |
+| `key_press` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
+
+### Clipboard
+| Tool | Description |
+|------|-------------|
+| `clipboard_get` | Read clipboard contents |
+| `clipboard_set` | Write to clipboard |
+
+### Apps
+| Tool | Description |
+|------|-------------|
+| `app_list` | List the GUI applications installed on the desktop |
+| `app_running` | List the application windows currently open — call before `app_launch` to avoid relaunching an app that is already there |
+| `app_launch` | Start a GUI application by name |
+| `app_status` | Check if an application is running and read its logs |
+
+---
+
+## Model requirements
+
+Your inference stack must cover four capabilities — all four are mandatory:
+
+1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
+2. **Tool use** — GhostDesk exposes 14 tools as function calls; the model must be able to invoke them.
+3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
+4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
+
+Points 3 and 4 are where most stacks fall short, and both halves have an answer here: [SpecterChat](https://github.com/YV17labs/SpecterChat) on the client side, and the llama.cpp forks below on the inference side.
+
+### Coordinate space — `GhostDesk-Model-Space` header
+
+By default no header is needed: Claude and the other major frontier LLMs work out of the box. **Qwen3.x** need the client to send `GhostDesk-Model-Space: 1000` on every MCP request.
+
+Example MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "ghostdesk": {
+      "url": "http://localhost:3000/mcp",
+      "headers": {
+        "GhostDesk-Model-Space": "1000"
+      }
+    }
+  }
+}
+```
+
+### Running locally
+
+For self-hosted inference we maintain two llama.cpp forks, both kept current with upstream, both adding the WebP decoding upstream still lacks. The day it lands there, they are archived and this points at upstream directly.
+
+- **[YV17labs/llama-cpp-webp](https://github.com/YV17labs/llama-cpp-webp)** — branch `feature/webp`. **Start here.** WebP decoding and nothing else on top of upstream, so it stays close to master and inherits its backend work. It is the faster of the two on Metal and on CUDA — on an Apple Silicon Mac or an NVIDIA card, this is the one to run.
+- **[YV17labs/llama-cpp-turboquant-webp](https://github.com/YV17labs/llama-cpp-turboquant-webp)** — branch `feature/turboquant-webp`. The same WebP support plus the turbo-quant KV cache (`--cache-type-v turbo3`). Still maintained and still tracking upstream, but turbo quant is no longer where the interest is, and this is no longer the first recommendation.
+
+> **macOS users: use llama.cpp, not mlx-vlm (as of 2026-04-01).** The mlx-vlm stack currently produces inaccurate coordinate outputs for the same models that work correctly under llama.cpp. This is caused by an upstream bug in an Apple dependency, not the model itself. Until the fix lands, llama.cpp is the recommended backend on every platform — including Apple Silicon Macs.
+
+Run whatever local model you like — nothing in GhostDesk is pinned to one. The one behind my own runs is **[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)**: 35B parameters with only 3B active per token, and on desktop control that ratio is the whole point — the agent decides where to click on every step, so tokens per second is what you feel.
+
+#### The commands
+
+One tested invocation per fork. They do not take the same flags, so each gets its own rather than one command with a switch — and the model in them is an example, not a requirement: swap in whatever you run.
+
+**`llama-cpp-webp`** — `--image-min-tokens 1024` is the one that matters for desktop control: it floors how much of the token budget a screenshot gets, and a screenshot the model reads at too coarse a scale is where off-target clicks come from.
+
+```bash
+build/bin/llama-server \
+  --model ~/Models/Qwen3.6-35B-A3B-Q4_K_M.gguf \
+  --mmproj ~/Models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
+  --alias 'Qwen3.6-35B-A3B-Q4_K_M' \
+  --host 127.0.0.1 --port 8080 \
+  --ctx-size 131072 \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  --flash-attn on \
+  --image-min-tokens 1024 \
+  --reasoning on --reasoning-format deepseek --reasoning-preserve \
+  --jinja
+```
+
+**`llama-cpp-turboquant-webp`** — the KV cache goes to `--cache-type-v turbo3`, and `--cache-reuse 256` keeps the prefix across turns, which a desktop session hits constantly: the conversation grows by one screenshot and one tool result at a time. `--spec-type draft-mtp` turns on the model's own multi-token-prediction draft head, so speculative decoding needs no second model loaded beside it.
+
+```bash
+build/bin/llama-server \
+  --model ~/Models/Qwen3.6-35B-A3B-Q4_K_M.gguf \
+  --mmproj ~/Models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
+  --alias 'Qwen3.6-35B-A3B-Q4_K_M' \
+  --host 127.0.0.1 --port 8080 \
+  --ctx-size 131072 \
+  --cache-type-k q8_0 --cache-type-v turbo3 \
+  --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 3 \
+  --reasoning on --reasoning-format deepseek \
+  --jinja --cache-reuse 256
+```
+
+`llama-server` exposes an OpenAI-compatible endpoint on `http://127.0.0.1:8080`; point your MCP host's inference backend at it — SpecterChat's endpoint field takes that URL as is — and remember the `GhostDesk-Model-Space: 1000` header for the Qwen family.
+
+---
+
 ## Secure local run (TLS + auth)
 
 The Quick start above drops every gate so you can kick the tires in thirty seconds. The moment you want to expose this to anything beyond your own laptop — another machine on your LAN, a devcontainer port-forward on an untrusted network, a teammate's browser — flip to the secured posture: real TLS + bearer-token auth on MCP + password prompt on noVNC.
@@ -269,6 +392,142 @@ The named volume persists the agent's home directory across restarts — browser
 
 ---
 
+## Running many agents
+
+One agent is one container. Two of them share nothing — not the filesystem,
+not the desktop, not the clipboard — so a second agent is a second port pair,
+a second volume and a second name. What differs between two of them is the
+system prompt you give the model, the applications in the image ([Custom
+image](#custom-image)), and the networks you attach the container to.
+
+### Three agents, one compose file
+
+```yaml
+# docker-compose.yml — 3 specialized agents, one command
+#
+# Prerequisites: the TLS cert + key at ./tls and the two secrets
+# (GHOSTDESK_AUTH__TOKEN, GHOSTDESK_VNC_PASSWORD) in your environment or a
+# .env file. Generate both exactly as shown in the Secure local run
+# section above. See SECURITY.md for the production secret-handling
+# contract.
+
+x-ghostdesk-defaults: &ghostdesk-defaults
+  image: ghcr.io/yv17labs/ghostdesk:latest
+  restart: unless-stopped
+  cap_add: [SYS_ADMIN]
+  shm_size: 2g
+  environment:
+    - GHOSTDESK_AUTH__TOKEN
+    - GHOSTDESK_VNC_PASSWORD
+    - TZ=America/New_York
+    - LANG=en_US.UTF-8
+
+services:
+  sales-agent:
+    <<: *ghostdesk-defaults
+    container_name: ghostdesk-sales-agent
+    ports: ["3001:3000", "6081:6080"]
+    volumes:
+      - ghostdesk-sales-agent-home:/home/agent
+      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
+      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
+
+  research-agent:
+    <<: *ghostdesk-defaults
+    container_name: ghostdesk-research-agent
+    ports: ["3002:3000", "6082:6080"]
+    volumes:
+      - ghostdesk-research-agent-home:/home/agent
+      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
+      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
+
+  accounting-agent:
+    <<: *ghostdesk-defaults
+    container_name: ghostdesk-accounting-agent
+    ports: ["3003:3000", "6083:6080"]
+    volumes:
+      - ghostdesk-accounting-agent-home:/home/agent
+      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
+      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
+
+volumes:
+  ghostdesk-sales-agent-home:
+  ghostdesk-research-agent-home:
+  ghostdesk-accounting-agent-home:
+```
+
+```bash
+docker compose up -d
+```
+
+Each service is the same image with its name, its ports and its volume
+changed. Per agent, that costs:
+
+| Per agent | What it takes |
+|---|---|
+| **Two published ports** | `3000` for MCP, `6080` for noVNC — one pair per container, mapped to whatever the host has free |
+| **One named volume** | the agent's `/home/agent`: browser profile, cookies, downloads, desktop settings, kept across restarts |
+| **One `shm_size: 2g`** | shared memory for the browser and the other GPU-accelerated apps. It is a cap rather than a reservation — pages are allocated as they are touched — but every container may claim up to that much of the host's RAM |
+| **One desktop** | Sway, mako, wayvnc, websockify and the MCP server, under one supervisord |
+
+Nothing coordinates the instances: no scheduler, no shared state, no leader.
+Ten agents are ten `docker run`s, and stopping one is `docker rm`.
+
+### Container isolation
+
+The container boundary is the only isolation GhostDesk has, and it is
+Docker's rather than the server's: separate filesystem, process and network
+namespaces, one volume per agent, and a `docker rm` that takes the desktop
+and everything the agent did to it. The MCP port and the noVNC port are the
+two doors through that boundary, which is why [Secure local
+run](#secure-local-run-tls--auth) puts TLS and a credential on both.
+
+Two things it does not give you, and both belong to the deployment.
+Segmentation *between* agents is the first: a container reaches whatever the
+networks you attached it to reach, so an agent that must not see the internet
+is one you attach only to Docker networks with no route off the host. Per-user
+identity on either door is the second — the token and the VNC password are one
+credential each, shared by every caller. [SECURITY.md](SECURITY.md#threat-model)
+draws the whole line, in scope against out of scope.
+
+### Watching one work
+
+Every instance serves its own noVNC, so supervision is one browser tab per
+agent — `https://localhost:6081/` for the sales agent above, `6082` for
+research, `6083` for accounting (the compose file mounts a cert, so those are
+the secured posture's URLs). The tab is not read-only: take the mouse and
+keyboard whenever you want, and the agent's next `screen_shot()` sees whatever
+you left on screen.
+
+---
+
+## Custom image
+
+The `base` tag provides GhostDesk without any pre-installed GUI application — just the virtual desktop, VNC, and the MCP server. Use it to build your own image with only the tools you need:
+
+```dockerfile
+FROM ghcr.io/yv17labs/ghostdesk:base
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        chromium-browser \
+        libreoffice-calc \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+```bash
+docker build -t my-agent .
+```
+
+See the project's [Dockerfile](Dockerfile) for a complete example.
+
+| Tag | Description |
+|-----|-------------|
+| `latest`, `X.Y.Z`, `X.Y` | Full image — Firefox, foot terminal, mousepad, galculator, passwordless sudo |
+| `base`, `base-X.Y.Z`, `base-X.Y` | Minimal image — no GUI app, meant to be extended |
+
+---
+
 ## Run on macOS, without the container
 
 The container ships a Linux desktop. GhostDesk is also just a binary, and on
@@ -279,12 +538,15 @@ windows, `screencapture` for frames, the pasteboard for the clipboard, and
 `.app` bundles for the catalogue.
 
 > **There is no sandbox on this path.** Every isolation guarantee in
-> [Secure by design](#secure-by-design) belongs to the container. A native run
+> [Container isolation](#container-isolation) belongs to the container. A native run
 > hands the agent your real mouse, your real keyboard, your real screen and
 > your real applications, with your own permissions. Run it on a machine you
 > are willing to hand over, and watch it.
 
 ### 1. Build and install
+
+From a clone of the repository — [Build from source](#build-from-source) has
+the toolchain it needs:
 
 ```bash
 cargo install --path apps/ghostdesk --locked
@@ -347,7 +609,7 @@ a scaled capture is scaled by the *blit*, not by decoding and resizing a
 full-resolution frame afterwards.
 
 > **There is no sandbox on this path.** Every isolation guarantee in
-> [Secure by design](#secure-by-design) belongs to the container. A native run
+> [Container isolation](#container-isolation) belongs to the container. A native run
 > hands the agent your real mouse, your real keyboard, your real screen and
 > your real applications, with your own permissions. Run it on a machine you
 > are willing to hand over, and watch it.
@@ -356,7 +618,8 @@ full-resolution frame afterwards.
 
 GhostDesk links a WebP encoder written in C, so the build needs a C toolchain.
 Install the **Visual Studio Build Tools** with the *Desktop development with
-C++* workload (Visual Studio itself works too), then:
+C++* workload (Visual Studio itself works too), then, from a clone of the
+repository:
 
 ```powershell
 cargo install --path apps/ghostdesk --locked
@@ -433,227 +696,8 @@ that listed what it cannot start would be a whitelist that lies.
 
 > **Running the binary on a Linux host instead of the container** works the
 > same way, with the Wayland stack's own expectations: a Sway session for the
-> window seam, `grim` for capture, `wl-clipboard` for the clipboard. The
-> container exists so you do not have to assemble that.
-
----
-
-## Tools
-
-14 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
-
-### Screen
-| Tool | Description |
-|------|-------------|
-| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Tune `quality=` (1-100, default `50` — invisible on UI content, ~50% smaller than `80`; raise for fine fonts or design surfaces). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
-
-### Mouse
-| Tool | Description |
-|------|-------------|
-| `mouse_move` | Move the cursor to coordinates without clicking — reveals hover-only menus, tooltips, and CSS `:hover` states (e.g. Gmail action bar) |
-| `mouse_click` | Click at coordinates |
-| `mouse_double_click` | Double-click at coordinates |
-| `mouse_drag` | Drag from one position to another |
-| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
-
-### Keyboard
-| Tool | Description |
-|------|-------------|
-| `key_type` | Type text with realistic per-character delays |
-| `key_press` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
-
-### Clipboard
-| Tool | Description |
-|------|-------------|
-| `clipboard_get` | Read clipboard contents |
-| `clipboard_set` | Write to clipboard |
-
-### Apps
-| Tool | Description |
-|------|-------------|
-| `app_list` | List the GUI applications installed on the desktop |
-| `app_running` | List the application windows currently open — call before `app_launch` to avoid relaunching an app that is already there |
-| `app_launch` | Start a GUI application by name |
-| `app_status` | Check if an application is running and read its logs |
-
----
-
-## Model requirements
-
-Your inference stack must cover four capabilities — all four are mandatory:
-
-1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
-2. **Tool use** — GhostDesk exposes 14 tools as function calls; the model must be able to invoke them.
-3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
-4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
-
-Points 3 and 4 are where most stacks fall short, and both halves have an answer here: [SpecterChat](https://github.com/YV17labs/SpecterChat) on the client side, and the llama.cpp forks below on the inference side.
-
-### Coordinate space — `GhostDesk-Model-Space` header
-
-By default no header is needed: Claude and the other major frontier LLMs work out of the box. **Qwen3.x** need the client to send `GhostDesk-Model-Space: 1000` on every MCP request.
-
-Example MCP client config:
-
-```json
-{
-  "mcpServers": {
-    "ghostdesk": {
-      "url": "https://localhost:3000/mcp",
-      "headers": {
-        "GhostDesk-Model-Space": "1000"
-      }
-    }
-  }
-}
-```
-
-### Running locally
-
-For self-hosted inference we maintain two llama.cpp forks, both kept current with upstream, both adding the WebP decoding upstream still lacks. The day it lands there, they are archived and this points at upstream directly.
-
-- **[YV17labs/llama-cpp-webp](https://github.com/YV17labs/llama-cpp-webp)** — branch `feature/webp`. **Start here.** WebP decoding and nothing else on top of upstream, so it stays close to master and inherits its backend work. It is the faster of the two on Metal and on CUDA — on an Apple Silicon Mac or an NVIDIA card, this is the one to run.
-- **[YV17labs/llama-cpp-turboquant-webp](https://github.com/YV17labs/llama-cpp-turboquant-webp)** — branch `feature/turboquant-webp`. The same WebP support plus the turbo-quant KV cache (`--cache-type-v turbo3`). Still maintained and still tracking upstream, but turbo quant is no longer where the interest is, and this is no longer the first recommendation.
-
-> **macOS users: use llama.cpp, not mlx-vlm (as of 2026-04-01).** The mlx-vlm stack currently produces inaccurate coordinate outputs for the same models that work correctly under llama.cpp. This is caused by an upstream bug in an Apple dependency, not the model itself. Until the fix lands, llama.cpp is the recommended backend on every platform — including Apple Silicon Macs.
-
-Run whatever local model you like — nothing in GhostDesk is pinned to one. The one behind my own runs is **[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)**: 35B parameters with only 3B active per token, and on desktop control that ratio is the whole point — the agent decides where to click on every step, so tokens per second is what you feel.
-
-#### The commands
-
-One tested invocation per fork. They do not take the same flags, so each gets its own rather than one command with a switch — and the model in them is an example, not a requirement: swap in whatever you run.
-
-**`llama-cpp-webp`** — `--image-min-tokens 1024` is the one that matters for desktop control: it floors how much of the token budget a screenshot gets, and a screenshot the model reads at too coarse a scale is where off-target clicks come from.
-
-```bash
-build/bin/llama-server \
-  --model ~/Models/Qwen3.6-35B-A3B-Q4_K_M.gguf \
-  --mmproj ~/Models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
-  --alias 'Qwen3.6-35B-A3B-Q4_K_M' \
-  --host 127.0.0.1 --port 8080 \
-  --ctx-size 131072 \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  --flash-attn on \
-  --image-min-tokens 1024 \
-  --reasoning on --reasoning-format deepseek --reasoning-preserve \
-  --jinja
-```
-
-**`llama-cpp-turboquant-webp`** — the KV cache goes to `--cache-type-v turbo3`, and `--cache-reuse 256` keeps the prefix across turns, which a desktop session hits constantly: the conversation grows by one screenshot and one tool result at a time. `--spec-type draft-mtp` turns on the model's own multi-token-prediction draft head, so speculative decoding needs no second model loaded beside it.
-
-```bash
-build/bin/llama-server \
-  --model ~/Models/Qwen3.6-35B-A3B-Q4_K_M.gguf \
-  --mmproj ~/Models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
-  --alias 'Qwen3.6-35B-A3B-Q4_K_M' \
-  --host 127.0.0.1 --port 8080 \
-  --ctx-size 131072 \
-  --cache-type-k q8_0 --cache-type-v turbo3 \
-  --flash-attn on \
-  --spec-type draft-mtp --spec-draft-n-max 3 \
-  --reasoning on --reasoning-format deepseek \
-  --jinja --cache-reuse 256
-```
-
-`llama-server` exposes an OpenAI-compatible endpoint on `http://127.0.0.1:8080`; point your MCP host's inference backend at it — SpecterChat's endpoint field takes that URL as is — and remember the `GhostDesk-Model-Space: 1000` header for the Qwen family.
-
----
-
-## From one agent to a workforce
-
-Each GhostDesk instance is a container. Spin up one, ten, or a hundred — each agent gets its own isolated desktop, its own apps, its own role. Think of it as hiring a team of digital employees, each with their own workstation.
-
-### Scale horizontally
-
-```yaml
-# docker-compose.yml — 3 specialized agents, one command
-#
-# Prerequisites: the TLS cert + key at ./tls and the two secrets
-# (GHOSTDESK_AUTH__TOKEN, GHOSTDESK_VNC_PASSWORD) in your environment or a
-# .env file. Generate both exactly as shown in the Secure local run
-# section above. See SECURITY.md for the production secret-handling
-# contract.
-
-x-ghostdesk-defaults: &ghostdesk-defaults
-  image: ghcr.io/yv17labs/ghostdesk:latest
-  restart: unless-stopped
-  cap_add: [SYS_ADMIN]
-  shm_size: 2g
-  environment:
-    - GHOSTDESK_AUTH__TOKEN
-    - GHOSTDESK_VNC_PASSWORD
-    - TZ=America/New_York
-    - LANG=en_US.UTF-8
-
-services:
-  sales-agent:
-    <<: *ghostdesk-defaults
-    container_name: ghostdesk-sales-agent
-    ports: ["3001:3000", "6081:6080"]
-    volumes:
-      - ghostdesk-sales-agent-home:/home/agent
-      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
-      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
-
-  research-agent:
-    <<: *ghostdesk-defaults
-    container_name: ghostdesk-research-agent
-    ports: ["3002:3000", "6082:6080"]
-    volumes:
-      - ghostdesk-research-agent-home:/home/agent
-      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
-      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
-
-  accounting-agent:
-    <<: *ghostdesk-defaults
-    container_name: ghostdesk-accounting-agent
-    ports: ["3003:3000", "6083:6080"]
-    volumes:
-      - ghostdesk-accounting-agent-home:/home/agent
-      - ./tls/server.crt:/etc/ghostdesk/tls/server.crt:ro
-      - ./tls/server.key:/etc/ghostdesk/tls/server.key:ro
-
-volumes:
-  ghostdesk-sales-agent-home:
-  ghostdesk-research-agent-home:
-  ghostdesk-accounting-agent-home:
-```
-
-```bash
-docker compose up -d   # Your workforce is ready
-```
-
-Each agent runs in parallel, independently, on its own desktop. Connect each to a different LLM, give each a different system prompt, install different apps — full specialization.
-
-### Secure by design
-
-Every agent is sandboxed in its own container. No access to the host machine. No access to other agents. Network, filesystem, and process isolation come free from Docker.
-
-This makes GhostDesk a natural fit for enterprises:
-
-| Concern | How GhostDesk handles it |
-|---------|--------------------------|
-| **Data isolation** | Each agent lives in its own container — no shared filesystem, no shared memory |
-| **Access control** | Restrict network access per agent with Docker networking. An agent with CRM access doesn't see finance tools |
-| **Auditability** | Watch any agent live via VNC, record sessions, review screenshots |
-| **Blast radius** | If an agent goes wrong, kill the container. Nothing else is affected |
-| **Compliance** | No data touches your host. Containers can run in air-gapped environments |
-
-### Specialize each agent
-
-Give each agent a role, like you would a new hire:
-
-- **Sales agent** — monitors the CRM, enriches leads, updates the pipeline
-- **Research agent** — browses the web, compiles competitive intelligence, writes reports
-- **Accounting agent** — processes invoices in legacy ERP software, reconciles spreadsheets
-- **QA agent** — clicks through your app, files bug reports with screenshots
-- **Support agent** — handles tickets, looks up customer info across multiple internal tools
-
-Each agent gets its own system prompt defining its mission, its own installed applications, and its own network permissions. Manage AI agents like employees — each with their own desktop, their own tools, and their own clearance level.
-
-### Supervise in real time
-
-Every agent exposes a VNC/noVNC endpoint. Open a browser tab and watch your agent work — or open ten tabs and monitor your entire workforce. Intervene at any time: take over the mouse, correct course, or chat with the orchestrating LLM.
+> window seam, `grim` for capture, `wl-clipboard` for the clipboard — see
+> [Build from source](#build-from-source) for the command and the caveat.
 
 ---
 
@@ -765,30 +809,72 @@ Electron-based apps (VS Code, Slack, Discord…) need Linux user namespaces for 
 
 ---
 
-## Custom image
+## Build from source
 
-The `base` tag provides GhostDesk without any pre-installed GUI application — just the virtual desktop, VNC, and the MCP server. Use it to build your own image with only the tools you need:
-
-```dockerfile
-FROM ghcr.io/yv17labs/ghostdesk:base
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        chromium-browser \
-        libreoffice-calc \
-    && rm -rf /var/lib/apt/lists/*
-```
+The workspace builds with a plain `cargo build`.
+[`rust-toolchain.toml`](rust-toolchain.toml) pins the channel, so `rustup`
+resolves the same compiler everyone else has and there is no version to pick.
+The one native dependency is the WebP encoder, which is C — already buildable
+on a Linux dev box and with Xcode's command-line tools; on Windows it is the
+Visual Studio Build Tools with the *Desktop development with C++* workload.
 
 ```bash
-docker build -t my-agent .
+git clone https://github.com/YV17labs/GhostDesk.git
+cd GhostDesk
+
+cargo build --release        # -> target/release/ghostdesk
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo fmt --all --check
 ```
 
-See the project's [Dockerfile](Dockerfile) for a complete example.
+The [Justfile](Justfile) wraps those and a few more — `just --list` prints the
+set: `just check`, `just lint`, `just test unit`, and `just stack`, which
+brings the desktop up (Sway, mako, wayvnc, websockify, the MCP server) under
+one supervisord. `cargo install --path apps/ghostdesk --locked` is the same
+build installed into `~/.cargo/bin`, and it is the command the
+[macOS](#run-on-macos-without-the-container) and
+[Windows](#run-on-windows-without-the-container) sections call.
 
-| Tag | Description |
-|-----|-------------|
-| `latest`, `X.Y.Z`, `X.Y` | Full image — Firefox, foot terminal, mousepad, galculator, passwordless sudo |
-| `base`, `base-X.Y.Z`, `base-X.Y` | Minimal image — no GUI app, meant to be extended |
+### Running what you built, on a Linux host
+
+The container ships a desktop; a Linux binary expects to find one. Give it a
+Sway session on the Wayland socket for the window seam, `grim` for capture and
+`wl-clipboard` for the clipboard, then:
+
+```bash
+NESTRS_ENV_PREFIX=GHOSTDESK GHOSTDESK_IDLE__TIMEOUT_SECS=0 target/release/ghostdesk
+```
+
+Both variables are load-bearing for the same two reasons they are on
+[macOS](#run-on-macos-without-the-container): the prefix is what makes every
+`GHOSTDESK_*` name reach the server, and the idle sweep would otherwise close
+your own windows after thirty minutes of MCP silence. The container exists so
+that you do not have to assemble that stack — reach for it unless you are
+working on the Linux backend itself.
+
+### The repository
+
+```
+apps/ghostdesk/     the binary: the composition root, and the endpoint's app-local half
+crates/features/    one folder per domain — auth, clipboard, host, idle, input,
+                    programs, screen — each with its own mcp/ adapter, the only
+                    place that knows about the wire
+crates/platform/    the OS substrate, and no framework types: input.rs, screen.rs,
+                    window.rs, clipboard.rs and desktop.rs are the five contracts,
+                    host.rs picks the backend for the compile target, and linux/,
+                    macos/ and windows/ are the three that answer them
+docker/             base image, services, entrypoint
+```
+
+A fourth desktop is a fourth directory under `crates/platform/src/` and no
+change above it — that is the boundary [Built in Rust](#built-in-rust)
+describes, read from the filesystem.
+
+[CONTRIBUTING.md](CONTRIBUTING.md) carries the devcontainer setup, the test
+layout and the PR process; [AGENTS.md](AGENTS.md) carries the naming rules the
+workspace is checked against; [CHANGELOG.md](CHANGELOG.md) records what changed
+per release.
 
 ---
 
