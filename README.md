@@ -31,9 +31,9 @@
 
 ---
 
-**One binary, one MCP endpoint, three desktops.** The fourteen tools are the
-same everywhere — an agent calls `mouse_click` and `app_launch` without
-knowing which desktop it is on.
+**One binary, one MCP endpoint, three desktops.** The tool surface is the same
+everywhere — an agent calls `mouse_click` and `app_launch` without knowing
+which desktop it is on.
 
 | | **Linux** | **macOS** | **Windows** |
 |---|---|---|---|
@@ -50,15 +50,14 @@ container, and therefore no isolation. Jump to
 [Windows](#run-on-windows-without-the-container), or read
 [what differs](#what-differs-from-the-container) between the three.
 
----
+<details>
+<summary><strong>Table of contents</strong></summary>
 
-## Table of contents
-
-- [Why GhostDesk?](#why-ghostdesk)
-- [How it works](#how-it-works)
 - [Quick start](#quick-start)
 - [Tools](#tools)
 - [Model requirements](#model-requirements)
+- [Why GhostDesk?](#why-ghostdesk)
+- [How it works](#how-it-works)
 - [Secure local run (TLS + auth)](#secure-local-run-tls--auth)
 - [Running many agents](#running-many-agents)
 - [Custom image](#custom-image)
@@ -71,68 +70,7 @@ container, and therefore no isolation. Jump to
 - [Build from source](#build-from-source)
 - [License](#license)
 
----
-
-## Why GhostDesk?
-
-Browser automation tools (Playwright, Puppeteer, Selenium…) were built for human test engineers driving a browser with selectors. They do one thing, and they do it well — inside the browser.
-
-GhostDesk is built from the other end: for **AI agents**, driving **everything a desktop runs**. Browsers, native apps, IDEs, terminals, office suites, legacy software, internal tools. If it renders pixels on screen, your agent can see it and use it — in one conversation, across many applications, without a line of glue code.
-
-You don't write selectors. You write a prompt:
-
-> *"Open the CRM, export last month's leads as CSV, open LibreOffice Calc, build a pivot table, screenshot the chart, and email it to the team."*
-
-The agent opens the browser, logs in, downloads the file, switches to LibreOffice, processes the data, captures the result, composes the email, sends it. One prompt, multiple apps, fully autonomous — no glue code, no per-site scraper, no brittle selector chain.
-
-That is what *agents using a desktop* looks like.
-
-### Runs on models you can actually host
-
-Desktop control needs to be **fast** — an agent that takes twelve seconds to decide where to click is unusable. GhostDesk is tuned so that vision-language models from the Qwen family running on a single workstation GPU are a first-class target, not an afterthought. No API bill, no screenshots of your desktop leaving your network.
-
-Frontier models (Claude, GPT-4o, Gemini) work too and remain the smoothest path — but they are not the bar. See [Model requirements](#model-requirements) for the supported stacks and the one coordinate-space setting that matters.
-
----
-
-## How it works
-
-GhostDesk drives a desktop and exposes it as an MCP server. There are three ways to run it, and the tool surface is identical in all of them:
-
-- **In the container** — a virtual Linux desktop inside Docker, with a taskbar, clock, and pre-installed applications. Sandboxed, disposable, one per agent. This is what the rest of this README shows unless it says otherwise.
-- **As a binary on macOS** — the same server, driving the Mac in front of you. No container, and therefore no sandbox. See [Run on macOS](#run-on-macos-without-the-container).
-- **As a binary on Windows** — the same server again, driving the PC in front of you. Also unsandboxed. See [Run on Windows](#run-on-windows-without-the-container).
-
-The agent perceives the screen by calling `screen_shot()`, which captures the full desktop at native resolution and returns it as WebP (or PNG). An optional `region=` argument can crop to a sub-rectangle when the agent explicitly wants to narrow its focus.
-
-This works with **any application** — web apps, native apps, legacy software, Canvas, WebGL.
-
-### Built in Rust
-
-GhostDesk is a single compiled binary. It links `libc` and nothing else — no
-interpreter, no virtual environment, no package tree to harden at build time.
-
-The tool host mounts itself on the HTTP transport, each domain is a service
-resolved by type, and the whole dependency graph is verified at boot — a
-missing binding is a startup error, never a runtime surprise. The endpoint is
-**closed by default**: a guard has to bind before `/mcp` answers anything at
-all.
-
-The operating system sits behind five traits — input, screen, windows,
-clipboard, application catalogue — and each OS is one directory implementing
-those five, under [crates/platform/src](crates/platform/src). Nothing above
-that boundary names a desktop, which is what made the second one possible at
-all, and the third one routine.
-
-On Linux the compositor is driven from pure Rust: GhostDesk speaks
-`zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` directly over the
-Wayland socket, with an XKB keymap it generates on the fly — which is why
-text entry produces identical output on a French AZERTY host and a US
-QWERTY one. On macOS the same five contracts are answered by Quartz Event
-Services, the Accessibility API, `screencapture` and the pasteboard. On
-Windows they are answered by `SendInput`, `EnumWindows`, GDI, the Win32
-clipboard and the Start Menu — all in process, because Windows is the one of
-the three that ships no capture or clipboard tool to shell out to.
+</details>
 
 ---
 
@@ -204,41 +142,81 @@ The demo run creates no named volume, so this leaves nothing behind.
 
 ## Tools
 
-14 tools at your agent's fingertips, grouped by concern (`verb_noun` naming):
+Fourteen tools, named `verb_noun`, and this is the whole surface — no hidden
+endpoint, no second protocol. Defaults are in parentheses, `?` marks an
+optional parameter, and every coordinate is a **pixel offset in the last
+`screen_shot()`**: the moment the screen changes, coordinates computed from the
+previous capture are stale.
 
 ### Screen
-| Tool | Description |
-|------|-------------|
-| `screen_shot` | Capture the screen as a WebP image (pass `format="png"` for lossless). Pass `region=` to crop to a sub-rectangle at native resolution. Tune `quality=` (1-100, default `50` — invisible on UI content, ~50% smaller than `80`; raise for fine fonts or design surfaces). Set `stabilize=False` to skip page stabilization checks (default: True, waits max 5 sec for page to stabilize) |
 
-### Mouse
-| Tool | Description |
-|------|-------------|
-| `mouse_move` | Move the cursor to coordinates without clicking — reveals hover-only menus, tooltips, and CSS `:hover` states (e.g. Gmail action bar) |
-| `mouse_click` | Click at coordinates |
-| `mouse_double_click` | Double-click at coordinates |
-| `mouse_drag` | Drag from one position to another |
-| `mouse_scroll` | Scroll in any direction (up/down/left/right) |
+| Tool | Parameters | Returns |
+|---|---|---|
+| `screen_shot` | `region?` — `{x, y, width, height}`, cropped at native resolution · `format` `"webp"` \| `"png"` (`webp`) · `stabilize` bool (`true`) — wait up to 5 s for the screen to settle · `quality` 1–100 (`50`, WebP only; raise it for fine fonts or design surfaces) | one image block — `{"type": "image", "data": "<base64>", "mimeType": "image/webp"}` |
 
-### Keyboard
-| Tool | Description |
-|------|-------------|
-| `key_type` | Type text with realistic per-character delays |
-| `key_press` | Press keys or combos (`ctrl+c`, `alt+F4`, `Return`...) |
+### Mouse and keyboard
+
+The seven input tools answer with the same verdict, and `screen_changed` is the
+field worth branching on: `false` means the act landed on nothing. It is a
+signal, not an error — the answer is a fresh capture, never a retry at the same
+coordinates.
+
+```json
+{"action": "Clicked left at (612, 335)", "screen_changed": true, "reaction_time_ms": 180}
+```
+
+| Tool | Parameters |
+|---|---|
+| `mouse_move` | `x` int · `y` int |
+| `mouse_click` | `x` · `y` · `button` `"left"` \| `"middle"` \| `"right"` (`left`) |
+| `mouse_double_click` | `x` · `y` · `button` (`left`) |
+| `mouse_drag` | `from_x` · `from_y` · `to_x` · `to_y` · `button` (`left`) |
+| `mouse_scroll` | `x` · `y` · `direction` `"up"` \| `"down"` \| `"left"` \| `"right"` (`down`) · `amount` 1–5 wheel notches (`3`) |
+| `key_type` | `text` string — Unicode, newlines and tabs, layout-independent |
+| `key_press` | `keys` string — one chord, `+` between tokens. Modifiers: `ctrl`/`control`, `alt`/`option`, `shift`, `super`/`meta`/`win`/`cmd`/`command`. Named keys: `return`/`enter`, `escape`/`esc`, `backspace`, `delete`, `tab`, `space`, `home`/`end`, `pageup`/`pagedown`, `left`/`right`/`up`/`down`, `f1`–`f12` |
+
+Past a sentence or two, `clipboard_set(text)` plus the paste chord beats
+`key_type`: it is instant, and immune to autocomplete and to the app's own key
+handlers.
 
 ### Clipboard
-| Tool | Description |
-|------|-------------|
-| `clipboard_get` | Read clipboard contents |
-| `clipboard_set` | Write to clipboard |
+
+| Tool | Parameters | Returns |
+|---|---|---|
+| `clipboard_get` | — | the clipboard as text — an empty string when it is empty or holds something that is not text |
+| `clipboard_set` | `text` string | `Clipboard set (N characters)` |
 
 ### Apps
-| Tool | Description |
-|------|-------------|
-| `app_list` | List the GUI applications installed on the desktop |
-| `app_running` | List the application windows currently open — call before `app_launch` to avoid relaunching an app that is already there |
-| `app_launch` | Start a GUI application by name |
-| `app_status` | Check if an application is running and read its logs |
+
+| Tool | Parameters | Returns |
+|---|---|---|
+| `app_list` | — | `result[]`, one entry per installed app: `name`, `exec`. This is the launch whitelist, and `exec` is the exact string `app_launch` takes |
+| `app_running` | — | `result[]`, one entry per real client window: `app`, `title`, `pid`, `focused` |
+| `app_launch` | `command` string — an `exec` from `app_list`, arguments not accepted · `wait_for_window` bool (`true`) | `pid`, `log_file`, `action`, plus `window` and `window_wait_ms` once a window appeared — and **the settled screen as an image block**, so no follow-up `screen_shot()` is needed |
+| `app_status` | `pid` int — one returned by `app_launch` · `lines` int (`50`) | `pid`, `running`, `log_file`, `tail` — the tail of the captured stdout/stderr |
+
+`app_list` is a whitelist rather than a hint: `app_launch` refuses anything
+outside it, arguments included, whatever name the model sends.
+
+### On the wire
+
+A call is ordinary MCP over Streamable HTTP — `POST /mcp`, whose `Accept`
+header has to name **both** `application/json` and `text/event-stream` or the
+endpoint answers `406`.
+
+```jsonc
+// the params of a tools/call request
+{"name": "mouse_click", "arguments": {"x": 612, "y": 335}}
+```
+
+The result carries its payload twice — once in `structuredContent`, once as a
+text block holding the same JSON, which is what a client older than structured
+output reads. `screen_shot` is the exception and answers with an image block.
+
+Two headers are GhostDesk's own: `Authorization: Bearer …`, required once a
+cert is mounted ([Secure local run](#secure-local-run-tls--auth)), and
+`GhostDesk-Model-Space`, for models that emit normalised coordinates ([Model
+requirements](#model-requirements)).
 
 ---
 
@@ -247,7 +225,7 @@ The demo run creates no named volume, so this leaves nothing behind.
 Your inference stack must cover four capabilities — all four are mandatory:
 
 1. **Text + vision** — the agent perceives the desktop through screenshots and needs a model that can interpret them.
-2. **Tool use** — GhostDesk exposes 14 tools as function calls; the model must be able to invoke them.
+2. **Tool use** — GhostDesk exposes its tools as function calls; the model must be able to invoke them.
 3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
 4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
 
@@ -320,6 +298,65 @@ build/bin/llama-server \
 ```
 
 `llama-server` exposes an OpenAI-compatible endpoint on `http://127.0.0.1:8080`; point your MCP host's inference backend at it — SpecterChat's endpoint field takes that URL as is — and remember the `GhostDesk-Model-Space: 1000` header for the Qwen family.
+
+---
+
+## Why GhostDesk?
+
+Browser automation tools (Playwright, Puppeteer, Selenium…) were built for human test engineers driving a browser with selectors. They do one thing, and they do it well — inside the browser.
+
+GhostDesk is built from the other end: for **AI agents**, driving **everything a desktop runs**. Browsers, native apps, IDEs, terminals, office suites, legacy software, internal tools. If it renders pixels on screen, your agent can see it and use it — in one conversation, across many applications, without a line of glue code.
+
+You don't write selectors. You write a prompt:
+
+> *"Open the CRM, export last month's leads as CSV, open LibreOffice Calc, build a pivot table, screenshot the chart, and email it to the team."*
+
+The agent opens the browser, logs in, downloads the file, switches to LibreOffice, processes the data, captures the result, composes the email, sends it. One prompt, multiple apps, fully autonomous — no glue code, no per-site scraper, no brittle selector chain.
+
+That is what *agents using a desktop* looks like.
+
+### Runs on models you can actually host
+
+Desktop control needs to be **fast** — an agent that takes twelve seconds to decide where to click is unusable. The local path is first-class here, and it is three concrete things rather than a promise: screenshots ship as WebP so a capture costs a small payload, the coordinate space a model emits is one header away, and the two llama.cpp forks below carry the WebP decoding upstream still lacks. No API bill, and no screenshot of your desktop leaving your network.
+
+Frontier models (Claude, GPT-4o, Gemini) work too and remain the smoothest path — but they are not the bar. See [Model requirements](#model-requirements) for the supported stacks and the one coordinate-space setting that matters.
+
+---
+
+## How it works
+
+GhostDesk drives a desktop and exposes it as an MCP server. The three ways to run it are the three columns at the top of this page — the container, a macOS binary, a Windows binary — and the tool surface is identical in all of them. The container is what the rest of this README shows unless it says otherwise.
+
+The agent perceives the screen by calling `screen_shot()`, which captures the full desktop at native resolution and returns it as WebP (or PNG). An optional `region=` argument can crop to a sub-rectangle when the agent explicitly wants to narrow its focus.
+
+This works with **any application** — web apps, native apps, legacy software, Canvas, WebGL.
+
+### Built in Rust
+
+GhostDesk is a single compiled binary. It links `libc` and nothing else — no
+interpreter, no virtual environment, no package tree to harden at build time.
+
+The tool host mounts itself on the HTTP transport, each domain is a service
+resolved by type, and the whole dependency graph is verified at boot — a
+missing binding is a startup error, never a runtime surprise. The endpoint is
+**closed by default**: a guard has to bind before `/mcp` answers anything at
+all.
+
+The operating system sits behind five traits — input, screen, windows,
+clipboard, application catalogue — and each OS is one directory implementing
+those five, under [crates/platform/src](crates/platform/src). Nothing above
+that boundary names a desktop, which is what made the second one possible at
+all, and the third one routine.
+
+On Linux the compositor is driven from pure Rust: GhostDesk speaks
+`zwlr_virtual_pointer_v1` and `zwp_virtual_keyboard_v1` directly over the
+Wayland socket, with an XKB keymap it generates on the fly — which is why
+text entry produces identical output on a French AZERTY host and a US
+QWERTY one. On macOS the same five contracts are answered by Quartz Event
+Services, the Accessibility API, `screencapture` and the pasteboard. On
+Windows they are answered by `SendInput`, `EnumWindows`, GDI, the Win32
+clipboard and the Start Menu — all in process, because Windows is the one of
+the three that ships no capture or clipboard tool to shell out to.
 
 ---
 
@@ -531,7 +568,7 @@ See the project's [Dockerfile](Dockerfile) for a complete example.
 ## Run on macOS, without the container
 
 The container ships a Linux desktop. GhostDesk is also just a binary, and on
-macOS that binary drives **the Mac in front of you** — same fourteen tools,
+macOS that binary drives **the Mac in front of you** — the same tools, the
 same MCP endpoint, nothing in between. The five OS seams are answered by
 Quartz Event Services for the pointer and keyboard, the Accessibility API for
 windows, `screencapture` for frames, the pasteboard for the clipboard, and
@@ -597,8 +634,8 @@ desktop is the one you are looking at.
 
 ## Run on Windows, without the container
 
-The same binary once more, driving **the PC in front of you** — same fourteen
-tools, same MCP endpoint. The five OS seams are answered by `SendInput` for
+The same binary once more, driving **the PC in front of you** — the same tools
+again, the same MCP endpoint. The five OS seams are answered by `SendInput` for
 the pointer and keyboard, `EnumWindows` and `WM_CLOSE` for windows, GDI for
 frames, the Win32 clipboard, and Start Menu shortcuts for the catalogue.
 
