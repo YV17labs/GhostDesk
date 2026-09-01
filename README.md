@@ -287,27 +287,24 @@ Example MCP client config:
 
 ### Running locally
 
-For self-hosted inference we maintain two llama.cpp forks, both kept current
-with upstream, both adding the WebP decoding upstream still lacks. The day it
-lands there, they are archived and this points at upstream directly.
+Three backends are tested here. Two are llama.cpp forks we maintain, both kept
+current with upstream, both adding the WebP decoding upstream still lacks — the
+day it lands there, they are archived and this points at upstream directly. The
+third is upstream mlx-vlm, on Apple Silicon.
 
 - **[YV17labs/llama-cpp-webp](https://github.com/YV17labs/llama-cpp-webp)** —
   branch `feature/webp`. **Start here.** WebP decoding and nothing else on top
   of upstream, so it stays close to master and inherits its backend work. It is
   the faster of the two on Metal and on CUDA — on an Apple Silicon Mac or an
   NVIDIA card, this is the one to run.
--
-  **[YV17labs/llama-cpp-turboquant-webp](https://github.com/YV17labs/llama-cpp-turboquant-webp)**
+- **[YV17labs/llama-cpp-turboquant-webp](https://github.com/YV17labs/llama-cpp-turboquant-webp)**
   — branch `feature/turboquant-webp`. The same WebP support plus the
   turbo-quant KV cache (`--cache-type-v turbo3`). Still maintained and still
   tracking upstream, but turbo quant is no longer where the interest is, and
   this is no longer the first recommendation.
-
-> **macOS users: use llama.cpp, not mlx-vlm (as of 2026-04-01).** The mlx-vlm
-> stack currently produces inaccurate coordinate outputs for the same models
-> that work correctly under llama.cpp. This is caused by an upstream bug in an
-> Apple dependency, not the model itself. Until the fix lands, llama.cpp is the
-> recommended backend on every platform — including Apple Silicon Macs.
+- **[Blaizzy/mlx-vlm](https://github.com/Blaizzy/mlx-vlm)** — upstream as it
+  ships, since it decodes WebP already and needs nothing from us. Apple
+  Silicon only, and the MLX path rather than a llama.cpp one.
 
 Run whatever local model you like — nothing in GhostDesk is pinned to one. The
 one behind my own runs is
@@ -318,9 +315,9 @@ second is what you feel.
 
 #### The commands
 
-One tested invocation per fork. They do not take the same flags, so each gets
-its own rather than one command with a switch — and the model in them is an
-example, not a requirement: swap in whatever you run.
+One tested invocation per backend. They do not take the same flags, so each
+gets its own rather than one command with a switch — and the model in them is
+an example, not a requirement: swap in whatever you run.
 
 **`llama-cpp-webp`** — `--image-min-tokens 1024` is the one that matters for
 desktop control: it floors how much of the token budget a screenshot gets, and
@@ -362,7 +359,23 @@ build/bin/llama-server \
   --jinja --cache-reuse 256
 ```
 
-`llama-server` exposes an OpenAI-compatible endpoint on
+**`mlx-vlm`** — the flags are the same three ideas under other names:
+`--kv-bits 8 --kv-quant-scheme uniform` quantises the KV cache,
+`--enable-thinking` turns reasoning on, and `--draft-kind mtp` is the
+multi-token-prediction draft head. That last one is the difference that costs
+something: here the head is a second set of weights on disk (`--draft-model`),
+not a switch on the model already loaded.
+
+```bash
+.venv/bin/mlx_vlm.server \
+  --model ~/Models/Qwen3.6-35B-A3B-MLX-4bit \
+  --host 127.0.0.1 --port 8080 \
+  --kv-bits 8 --kv-quant-scheme uniform \
+  --enable-thinking \
+  --draft-model ~/Models/Qwen3.6-35B-A3B-MLX-mtp --draft-kind mtp
+```
+
+Each of the three exposes an OpenAI-compatible endpoint on
 `http://127.0.0.1:8080`; point your MCP host's inference backend at it —
 SpecterChat's endpoint field takes that URL as is — and remember the
 `GhostDesk-Model-Space: 1000` header for the Qwen family.
