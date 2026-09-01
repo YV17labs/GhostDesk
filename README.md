@@ -168,6 +168,8 @@ GhostDesk speaks [MCP](https://modelcontextprotocol.io/) over the Streamable HTT
 }
 ```
 
+**SpecterChat** — the chat client we build for this, open source: [YV17labs/SpecterChat](https://github.com/YV17labs/SpecterChat). Most chat UIs drop the image an MCP tool returns — they render it or they forward it to the model, rarely both — and a `screen_shot()` the model never sees is the whole product missing. SpecterChat displays it inline *and* sends it back as base64. It talks to any OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM Studio), so it pairs with the local stacks below; macOS, Linux and Windows builds are on its releases page.
+
 **Any other MCP-compatible client** — same URL, no headers, no auth. That's the whole demo posture.
 
 ### 3. Watch your agent work
@@ -485,6 +487,8 @@ Your inference stack must cover four capabilities — all four are mandatory:
 3. **MCP client** — the host needs to speak Streamable HTTP MCP to reach the GhostDesk server.
 4. **WebP image support** — GhostDesk returns screenshots as WebP by default to keep payloads small and inference fast. A stack that can only decode PNG or JPEG will not work out of the box.
 
+Points 3 and 4 are where most stacks fall short, and both halves have an answer here: [SpecterChat](https://github.com/YV17labs/SpecterChat) on the client side, and the llama.cpp forks below on the inference side.
+
 ### Coordinate space — `GhostDesk-Model-Space` header
 
 By default no header is needed: Claude and the other major frontier LLMs work out of the box. **Qwen3.x** need the client to send `GhostDesk-Model-Space: 1000` on every MCP request.
@@ -506,32 +510,52 @@ Example MCP client config:
 
 ### Running locally
 
-For self-hosted inference we use and recommend our fork of llama.cpp, which adds WebP decoding and turbo quant on top of upstream: [YV17labs/llama-cpp-turboquant-webp](https://github.com/YV17labs/llama-cpp-turboquant-webp), branch `feature/turboquant-webp`. The day WebP lands upstream we will archive the fork and point there directly.
+For self-hosted inference we maintain two llama.cpp forks, both kept current with upstream, both adding the WebP decoding upstream still lacks. The day it lands there, they are archived and this points at upstream directly.
+
+- **[YV17labs/llama-cpp-webp](https://github.com/YV17labs/llama-cpp-webp)** — branch `feature/webp`. **Start here.** WebP decoding and nothing else on top of upstream, so it stays close to master and inherits its backend work. It is the faster of the two on Metal and on CUDA — on an Apple Silicon Mac or an NVIDIA card, this is the one to run.
+- **[YV17labs/llama-cpp-turboquant-webp](https://github.com/YV17labs/llama-cpp-turboquant-webp)** — branch `feature/turboquant-webp`. The same WebP support plus the turbo-quant KV cache (`--cache-type-v turbo3`). Still maintained and still tracking upstream, but turbo quant is no longer where the interest is, and this is no longer the first recommendation.
 
 > **macOS users: use llama.cpp, not mlx-vlm (as of 2026-04-01).** The mlx-vlm stack currently produces inaccurate coordinate outputs for the same models that work correctly under llama.cpp. This is caused by an upstream bug in an Apple dependency, not the model itself. Until the fix lands, llama.cpp is the recommended backend on every platform — including Apple Silicon Macs.
 
-Run whatever local model you like. Four from the Qwen vision family that I've used and that work well for desktop control:
+Run whatever local model you like — nothing in GhostDesk is pinned to one. The one behind my own runs is **[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)**: 35B parameters with only 3B active per token, and on desktop control that ratio is the whole point — the agent decides where to click on every step, so tokens per second is what you feel.
 
-- **[Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)** — dense 27B; as of today the strongest of the four on complex, multi-step tasks, at the cost of slower inference.
-- **[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)** — 35B parameters, only 3B active per token.
+#### The commands
 
-The exact command I run for my Qwen3.6-35B-A3B tests, against the fork above (`--cache-type-v turbo3` is its turbo-quant KV cache):
+One tested invocation per fork. They do not take the same flags, so each gets its own rather than one command with a switch — and the model in them is an example, not a requirement: swap in whatever you run.
+
+**`llama-cpp-webp`** — `--image-min-tokens 1024` is the one that matters for desktop control: it floors how much of the token budget a screenshot gets, and a screenshot the model reads at too coarse a scale is where off-target clicks come from.
 
 ```bash
 build/bin/llama-server \
-  --model models/Qwen3.6-35B-A3B-Q5_K_M.gguf \
-  --mmproj models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
-  --alias 'Qwen3-6-35B-A3B' \
-  --ctx-size 32768 \
-  --host 127.0.0.1 \
-  --port 8080 \
-  --cache-type-k q8_0 \
-  --cache-type-v turbo3 \
-  --reasoning on \
-  --reasoning-format deepseek
+  --model ~/Models/Qwen3.6-35B-A3B-Q4_K_M.gguf \
+  --mmproj ~/Models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
+  --alias 'Qwen3.6-35B-A3B-Q4_K_M' \
+  --host 127.0.0.1 --port 8080 \
+  --ctx-size 131072 \
+  --cache-type-k q8_0 --cache-type-v q8_0 \
+  --flash-attn on \
+  --image-min-tokens 1024 \
+  --reasoning on --reasoning-format deepseek --reasoning-preserve \
+  --jinja
 ```
 
-`llama-server` exposes an OpenAI-compatible endpoint on `http://127.0.0.1:8080`; point your MCP host's inference backend at it and remember the `GhostDesk-Model-Space: 1000` header for the Qwen family.
+**`llama-cpp-turboquant-webp`** — the KV cache goes to `--cache-type-v turbo3`, and `--cache-reuse 256` keeps the prefix across turns, which a desktop session hits constantly: the conversation grows by one screenshot and one tool result at a time. `--spec-type draft-mtp` turns on the model's own multi-token-prediction draft head, so speculative decoding needs no second model loaded beside it.
+
+```bash
+build/bin/llama-server \
+  --model ~/Models/Qwen3.6-35B-A3B-Q4_K_M.gguf \
+  --mmproj ~/Models/Qwen3.6-35B-A3B-mmproj-F16.gguf \
+  --alias 'Qwen3.6-35B-A3B-Q4_K_M' \
+  --host 127.0.0.1 --port 8080 \
+  --ctx-size 131072 \
+  --cache-type-k q8_0 --cache-type-v turbo3 \
+  --flash-attn on \
+  --spec-type draft-mtp --spec-draft-n-max 3 \
+  --reasoning on --reasoning-format deepseek \
+  --jinja --cache-reuse 256
+```
+
+`llama-server` exposes an OpenAI-compatible endpoint on `http://127.0.0.1:8080`; point your MCP host's inference backend at it — SpecterChat's endpoint field takes that URL as is — and remember the `GhostDesk-Model-Space: 1000` header for the Qwen family.
 
 ---
 
