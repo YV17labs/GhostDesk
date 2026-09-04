@@ -51,7 +51,7 @@ jobs:
             org.opencontainers.image.title=ghostdesk
             org.opencontainers.image.description=MCP server to control a virtual Linux desktop from an LLM agent
             org.opencontainers.image.authors=Yoann Vanitou <yvanitou@gmail.com>
-            org.opencontainers.image.vendor=YV17
+            org.opencontainers.image.vendor=YV17labs
             org.opencontainers.image.licenses=LicenseRef-FSL-1.1-ALv2
 
       - name: Build and push
@@ -110,7 +110,7 @@ jobs:
             org.opencontainers.image.title=ghostdesk
             org.opencontainers.image.description=MCP server to control a virtual Linux desktop from an LLM agent
             org.opencontainers.image.authors=Yoann Vanitou <yvanitou@gmail.com>
-            org.opencontainers.image.vendor=YV17
+            org.opencontainers.image.vendor=YV17labs
             org.opencontainers.image.licenses=LicenseRef-FSL-1.1-ALv2
 
       - name: Build and push
