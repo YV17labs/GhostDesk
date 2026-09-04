@@ -231,7 +231,7 @@ LABEL org.opencontainers.image.title="ghostdesk" \
       org.opencontainers.image.licenses="LicenseRef-FSL-1.1-ALv2" \
       org.opencontainers.image.version="${GHOSTDESK_VERSION}" \
       org.opencontainers.image.revision="${GHOSTDESK_GIT_SHA}" \
-      org.opencontainers.image.vendor="YV17" \
+      org.opencontainers.image.vendor="YV17labs" \
       org.opencontainers.image.authors="Yoann Vanitou <yvanitou@gmail.com>" \
       org.opencontainers.image.base.name="docker.io/library/ubuntu:26.04"
 
