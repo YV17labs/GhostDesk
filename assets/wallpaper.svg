@@ -119,6 +119,6 @@
 
   <!-- Footer attribution (very subtle) -->
   <g text-anchor="middle" font-family="'Inter', 'Helvetica Neue', 'Segoe UI', system-ui, sans-serif">
-    <text x="640" y="990" font-size="9" font-weight="400" fill="#E8E6FF" opacity="0.18" letter-spacing="6">BY  YV17</text>
+    <text x="640" y="990" font-size="9" font-weight="400" fill="#E8E6FF" opacity="0.18" letter-spacing="6">BY  YV17LABS</text>
   </g>
 </svg>
