@@ -4,12 +4,12 @@ use nest_rs::mcp::McpOperationContext;
 
 #[injectable]
 #[derive(Default)]
-pub struct CallTrail;
+pub struct CallTrailGuard;
 
-impl Layer for CallTrail {}
+impl Layer for CallTrailGuard {}
 
 #[async_trait]
-impl Guard for CallTrail {
+impl Guard for CallTrailGuard {
     async fn check_mcp(&self, ctx: &McpOperationContext<'_>) -> Result<(), Denial> {
         tracing::info!(
             target: "ghostdesk::mcp",
@@ -22,10 +22,10 @@ impl Guard for CallTrail {
     }
 }
 
-impl McpGuard for CallTrail {}
+impl McpGuard for CallTrailGuard {}
 
 fn host_name(path: &'static str) -> &'static str {
-    path.rsplit("::").next().unwrap_or(path)
+    path.rsplit_once("::").map_or(path, |(_, name)| name)
 }
 
 #[cfg(test)]

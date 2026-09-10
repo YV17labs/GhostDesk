@@ -2,28 +2,19 @@ use std::time::Duration;
 
 use nest_rs::config::ConfigModule;
 use nest_rs::core::module;
-use nest_rs::guards::{GuardSpec, guard};
 use nest_rs::health::HealthModule;
 use nest_rs::http::{HttpConfig, HttpModule};
-use nest_rs::mcp::{McpIdentity, McpOptions};
+use nest_rs::mcp::McpOptions;
 use nest_rs::schedule::ScheduleModule;
 
-use features::auth::{AuthModule, AuthnGuard};
+use features::auth::AuthModule;
 use features::clipboard::ClipboardMcpModule;
 use features::idle::IdleScheduleModule;
 use features::input::InputMcpModule;
 use features::programs::ProgramsMcpModule;
 use features::screen::ScreenMcpModule;
 
-use crate::mcp::{CallTrail, McpModule, icons, instructions};
-
-fn identity() -> McpIdentity {
-    McpIdentity::new("ghostdesk", env!("CARGO_PKG_VERSION"))
-        .title("GhostDesk")
-        .description("MCP server to control a virtual desktop")
-        .icons(icons())
-        .instructions(instructions(&platform::host::conventions()))
-}
+use crate::mcp::{McpModule, identity};
 
 #[module(
     imports = [
@@ -51,9 +42,3 @@ fn identity() -> McpIdentity {
     ],
 )]
 pub struct GhostdeskModule;
-
-impl GhostdeskModule {
-    pub fn guards() -> [GuardSpec; 2] {
-        [guard::<AuthnGuard>(), guard::<CallTrail>()]
-    }
-}

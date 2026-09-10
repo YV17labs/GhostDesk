@@ -1,16 +1,18 @@
-//! What the desk demands of a caller, asserted against the wiring the binary
-//! ships — `GhostdeskModule::guards()` is the same list `main.rs` installs.
+//! What the desk demands of a caller. The guard list below must stay the one
+//! `main.rs` installs — nothing checks that, so a guard added there is added
+//! here too.
 //!
 //! These are the refusals. A tool call that succeeds proves the endpoint works;
 //! only a call that is turned away proves it is closed, and the guard chain is
 //! the one part of this app whose failure is silent: it serves a desktop.
 
+use nest_rs::guards::guard;
 use nest_rs::http::poem::http::StatusCode;
 use nest_rs::testing::TestApp;
 use nest_rs::testing::mcp::{initialize_request, post_message};
 
-use features::auth::AuthConfig;
-use ghostdesk::GhostdeskModule;
+use features::auth::{AuthConfig, AuthnGuard};
+use ghostdesk::{CallTrailGuard, GhostdeskModule};
 
 use crate::PATH;
 
@@ -21,7 +23,7 @@ const TOKEN: &str = "a-secret-only-the-operator-has";
 /// the posture of the tests running beside it.
 async fn desk(token: Option<&str>) -> TestApp {
     TestApp::builder()
-        .use_guards_global(GhostdeskModule::guards())
+        .use_guards_global([guard::<AuthnGuard>(), guard::<CallTrailGuard>()])
         .module::<GhostdeskModule>()
         .provide(AuthConfig {
             token: token.map(str::to_owned),
