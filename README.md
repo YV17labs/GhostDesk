@@ -101,13 +101,14 @@ The container boots in the dev posture: plain HTTP on both ports, every auth
 gate disarmed on purpose. You'll see warnings in the logs reminding you of that
 — they go away once you follow the secured path below.
 
-### 2. Connect your AI
+### 2. Connect your agent
 
 GhostDesk speaks [MCP](https://modelcontextprotocol.io/) over the Streamable
-HTTP transport — any MCP-compatible client can drive it. Point your client at
-`http://localhost:3000/mcp`:
+HTTP transport — any MCP-compatible client can drive it. Point the one you
+already work from at `http://localhost:3000/mcp`: no headers, no auth, that is
+the whole demo posture.
 
-**Claude Desktop / Claude Code**
+**[Claude Code](https://claude.com/product/claude-code) / Claude Desktop**
 ```json
 {
   "mcpServers": {
@@ -119,20 +120,56 @@ HTTP transport — any MCP-compatible client can drive it. Point your client at
 }
 ```
 
-**SpecterChat** — the chat client we build for this, open source:
-[YV17labs/SpecterChat](https://github.com/YV17labs/SpecterChat). Most chat UIs
-drop the image an MCP tool returns — they render it or they forward it to the
-model, rarely both — and a `screen_shot()` the model never sees is the whole
-product missing. SpecterChat displays it inline *and* sends it back as base64.
-It talks to any OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM
-Studio), so it pairs with the local stacks below; macOS, Linux and Windows
-builds are on its releases page.
+**[Hermes Agent](https://hermes-agent.nousresearch.com),
+[OpenCode](https://opencode.ai/)**, or whatever you already drive your agents
+with — same URL, and it works very well. Behind a hosted frontier model there
+is nothing more to set up: skip to [step 4](#4-watch-your-agent-work).
 
-**Any other MCP-compatible client** — Claude Code, Hermes Agent, OpenCode, or
-whatever you already drive your agents with: same URL, no headers, no auth,
-and it works very well. That's the whole demo posture.
+**[SpecterChat](https://github.com/YV17labs/SpecterChat)** — the chat client
+we build for this, open source. Most chat UIs drop the image an MCP tool
+returns — they render it or they forward it to the model, rarely both — and a
+`screen_shot()` the model never sees is the whole product missing. SpecterChat
+displays it inline *and* sends it back as base64. It talks to any
+OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM Studio), so it pairs
+with the local model in the next step; macOS, Linux and Windows builds are on
+its releases page.
 
-### 3. Watch your agent work
+### 3. Run a model locally — Ollama
+
+For a local model, [Ollama](https://ollama.com/) is the recommended path: one
+installer, one model to pull, nothing to build and nothing to tune. Windows,
+macOS or Linux.
+
+1. **Install Ollama** from [ollama.com/download](https://ollama.com/download)
+   — the official app, downloaded like any other. Once installed it runs in
+   the background, so there is no server to start.
+2. **Pull the model.** In a terminal:
+
+   ```bash
+   ollama pull qwen3.8:27b
+   ```
+
+   On Apple Silicon, pull
+   [`qwen3.8:27b-mlx`](https://ollama.com/library/qwen3.8:27b-mlx) instead.
+3. **Point your client at it.** Endpoint `http://localhost:11434/v1`, the tag
+   you pulled as the model name, and the `GhostDesk-Model-Space: 1000` header
+   on every MCP request — the Qwen family needs it, and the JSON for it is
+   under [Coordinate space](#coordinate-space--ghostdesk-model-space-header).
+
+That is the whole setup. **[`qwen3.8:27b`](https://ollama.com/library/qwen3.8:27b)
+is the default because it is the strongest** — best reasoning, best capability,
+and on desktop control a step the agent gets wrong costs more than the tokens
+it saves. When speed is what you need,
+[`qwen3.6:35b`](https://ollama.com/library/qwen3.6:35b) (on Apple Silicon,
+[`qwen3.6:35b-mlx`](https://ollama.com/library/qwen3.6:35b-mlx)) is the fast
+one: 35B parameters with only 3B active per token
+([Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)), so tokens
+per second is what you feel. All four tags are tested with GhostDesk, and the
+verdict is the same on every backend on this page. Want the flags in your own
+hands? That is [Your own inference
+server](#your-own-inference-server--the-tuning-path).
+
+### 4. Watch your agent work
 
 Open `http://localhost:6080/` in your browser to see the virtual desktop in
 real time. No password prompt — the dev posture skips it.
@@ -157,7 +194,7 @@ Give your agent a first prompt to confirm the wiring is right:
 You should see Firefox launch in the noVNC tab, the URL bar fill in, and the
 page load — all under your agent's control.
 
-### 4. When you're done
+### 5. When you're done
 
 ```bash
 docker stop ghostdesk-demo && docker rm ghostdesk-demo
@@ -261,10 +298,10 @@ Your inference stack must cover four capabilities — all four are mandatory:
    keep payloads small and inference fast. A stack that can only decode PNG or
    JPEG will not work out of the box.
 
-Points 3 and 4 are where most stacks fall short, and both halves have an answer
-here: [SpecterChat](https://github.com/YV17labs/SpecterChat) on the client
-side, and Ollama on the inference side — the turnkey path under [Running
-locally](#running-locally), with the tuning path beside it.
+Points 3 and 4 are where most stacks fall short, and the [Quick
+start](#quick-start) answers both: [SpecterChat](https://github.com/YV17labs/SpecterChat)
+on the client side, Ollama on the inference side. Below is the path for when
+you want the flags in your own hands.
 
 ### Coordinate space — `GhostDesk-Model-Space` header
 
@@ -287,55 +324,11 @@ Example MCP client config:
 }
 ```
 
-### Running locally
+### Your own inference server — the tuning path
 
-Two paths, and one of them is recommended. **[Ollama](https://ollama.com/) +
-[SpecterChat](https://github.com/YV17labs/SpecterChat)** is the turnkey one:
-two installers, one model to pull, nothing to build and nothing to tune.
-SpecterChat is the chat client here; if you already work from an agent that
-speaks MCP — [Claude Code](https://claude.com/product/claude-code),
-[Hermes Agent](https://hermes-agent.nousresearch.com),
-[OpenCode](https://opencode.ai/) — it drives GhostDesk just as well, and the
-Ollama side of this section is unchanged. The other path — running your own
-inference server — is there for tuning the flags yourself, and it is the
-section after this one.
-
-#### Ollama — the turnkey path
-
-Three steps, on Windows, macOS or Linux.
-
-1. **Install Ollama** from [ollama.com/download](https://ollama.com/download)
-   — the official app, downloaded like any other. Once installed it runs in
-   the background, so there is no server to start.
-2. **Pull a model.** In a terminal:
-
-   ```bash
-   ollama pull qwen3.6:35b
-   ```
-
-   Four tags are tested with GhostDesk:
-   [`qwen3.6:35b`](https://ollama.com/library/qwen3.6:35b),
-   [`qwen3.6:35b-mlx`](https://ollama.com/library/qwen3.6:35b-mlx),
-   [`qwen3.8:27b`](https://ollama.com/library/qwen3.8:27b) and
-   [`qwen3.8:27b-mlx`](https://ollama.com/library/qwen3.8:27b-mlx). On Apple
-   Silicon, pull the `-mlx` one.
-3. **Point SpecterChat at it.** Endpoint `http://localhost:11434/v1`, the tag
-   you pulled as the model name, and the `GhostDesk-Model-Space: 1000` header
-   the Qwen family needs ([Coordinate space](#coordinate-space--ghostdesk-model-space-header)).
-
-That is the whole setup. Which of the two models: **`qwen3.6:35b` is the
-fastest, and it is the default** — 35B parameters with only 3B active per
-token ([Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)), and on
-desktop control that ratio is the whole point: the agent decides where to
-click on every step, so tokens per second is what you feel. **`qwen3.8:27b` is
-the strongest** — best reasoning, best capability — for the task where the
-thinking is the hard part and the wait is worth it. The verdict is the same on
-every backend on this page.
-
-#### Your own inference server — the tuning path
-
-Everything below is optional: the same models, the same header, and you take
-on the flags. Three backends are tested here. Two are llama.cpp forks we
+Everything below is optional: the same models as the [Quick
+start](#3-run-a-model-locally--ollama), the same header, and you take on the
+flags. Three backends are tested here. Two are llama.cpp forks we
 maintain, both kept current with upstream, both adding the WebP decoding
 upstream still lacks — the day it lands there, they are archived and this
 points at upstream directly. The third is upstream mlx-vlm, on Apple Silicon.
@@ -356,7 +349,7 @@ points at upstream directly. The third is upstream mlx-vlm, on Apple Silicon.
 
 Run whatever local model you like — nothing in GhostDesk is pinned to one.
 
-##### The commands
+#### The commands
 
 One tested invocation per backend. They do not take the same flags, so each
 gets its own rather than one command with a switch — and the model in them is
@@ -800,7 +793,7 @@ Both variables are load-bearing:
 
 The server binds `127.0.0.1:3000` and serves with no token (posture
 `loopback_open`); point your MCP client at `http://localhost:3000/mcp` exactly
-as in [Connect your AI](#2-connect-your-ai). There is no noVNC endpoint — the
+as in [Connect your agent](#2-connect-your-agent). There is no noVNC endpoint — the
 desktop is the one you are looking at.
 
 ---
@@ -871,7 +864,7 @@ silence.
 
 The server binds `127.0.0.1:3000` and serves with no token (posture
 `loopback_open`); point your MCP client at `http://localhost:3000/mcp` exactly
-as in [Connect your AI](#2-connect-your-ai). There is no noVNC endpoint — the
+as in [Connect your agent](#2-connect-your-agent). There is no noVNC endpoint — the
 desktop is the one you are looking at.
 
 ---
