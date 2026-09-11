@@ -122,23 +122,31 @@ the whole demo posture.
 
 **[Hermes Agent](https://hermes-agent.nousresearch.com),
 [OpenCode](https://opencode.ai/)**, or whatever you already drive your agents
-with — same URL, and it works very well. Behind a hosted frontier model there
-is nothing more to set up: skip to [step 4](#4-watch-your-agent-work).
+with — same URL, and it works very well.
 
 **[SpecterChat](https://github.com/YV17labs/SpecterChat)** — the chat client
 we build for this, open source. Most chat UIs drop the image an MCP tool
 returns — they render it or they forward it to the model, rarely both — and a
 `screen_shot()` the model never sees is the whole product missing. SpecterChat
 displays it inline *and* sends it back as base64. It talks to any
-OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM Studio), so it pairs
-with the local model in the next step; macOS, Linux and Windows builds are on
-its releases page.
+OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM Studio), so it takes
+either side of the next step; macOS, Linux and Windows builds are on its
+releases page.
 
-### 3. Run a model locally — Ollama
+### 3. Choose where the model runs — cloud or local
 
-For a local model, [Ollama](https://ollama.com/) is the recommended path: one
-installer, one model to pull, nothing to build and nothing to tune. Windows,
-macOS or Linux.
+The client is settled; the model behind it is a choice, and neither answer is
+mandatory.
+
+**In the cloud** — Claude, GPT, Gemini and the other frontier models drive
+GhostDesk out of the box: no header, nothing to install, the key your client
+already holds. If that is you, the setup is done — go to [step
+4](#4-watch-your-agent-work).
+
+**On your machine** — [Ollama](https://ollama.com/) is the recommended path:
+one installer, one model to pull, nothing to build and nothing to tune.
+Windows, macOS or Linux. No API bill, and no screenshot of your desktop
+leaving your network.
 
 1. **Install Ollama** from [ollama.com/download](https://ollama.com/download)
    — the official app, downloaded like any other. Once installed it runs in
@@ -327,7 +335,7 @@ Example MCP client config:
 ### Your own inference server — the tuning path
 
 Everything below is optional: the same models as the [Quick
-start](#3-run-a-model-locally--ollama), the same header, and you take on the
+start](#3-choose-where-the-model-runs--cloud-or-local), the same header, and you take on the
 flags. Three backends are tested here. Two are llama.cpp forks we
 maintain, both kept current with upstream, both adding the WebP decoding
 upstream still lacks — the day it lands there, they are archived and this
