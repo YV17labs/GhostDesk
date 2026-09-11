@@ -313,9 +313,12 @@ Three steps, on Windows, macOS or Linux.
    ollama pull qwen3.6:35b
    ```
 
-   Four tags are tested with GhostDesk: `qwen3.6:35b`, `qwen3.6:35b-mlx`,
-   `qwen3.8:27b` and `qwen3.8:27b-mlx`. On Apple Silicon, pull the `-mlx`
-   one.
+   Four tags are tested with GhostDesk:
+   [`qwen3.6:35b`](https://ollama.com/library/qwen3.6:35b),
+   [`qwen3.6:35b-mlx`](https://ollama.com/library/qwen3.6:35b-mlx),
+   [`qwen3.8:27b`](https://ollama.com/library/qwen3.8:27b) and
+   [`qwen3.8:27b-mlx`](https://ollama.com/library/qwen3.8:27b-mlx). On Apple
+   Silicon, pull the `-mlx` one.
 3. **Point SpecterChat at it.** Endpoint `http://localhost:11434/v1`, the tag
    you pulled as the model name, and the `GhostDesk-Model-Space: 1000` header
    the Qwen family needs ([Coordinate space](#coordinate-space--ghostdesk-model-space-header)).
