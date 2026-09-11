@@ -128,8 +128,9 @@ It talks to any OpenAI-compatible endpoint (llama.cpp, vLLM, Ollama, LM
 Studio), so it pairs with the local stacks below; macOS, Linux and Windows
 builds are on its releases page.
 
-**Any other MCP-compatible client** — same URL, no headers, no auth. That's the
-whole demo posture.
+**Any other MCP-compatible client** — Claude Code, Hermes Agent, OpenCode, or
+whatever you already drive your agents with: same URL, no headers, no auth,
+and it works very well. That's the whole demo posture.
 
 ### 3. Watch your agent work
 
@@ -262,7 +263,8 @@ Your inference stack must cover four capabilities — all four are mandatory:
 
 Points 3 and 4 are where most stacks fall short, and both halves have an answer
 here: [SpecterChat](https://github.com/YV17labs/SpecterChat) on the client
-side, and the llama.cpp forks below on the inference side.
+side, and Ollama on the inference side — the turnkey path under [Running
+locally](#running-locally), with the tuning path beside it.
 
 ### Coordinate space — `GhostDesk-Model-Space` header
 
@@ -287,16 +289,56 @@ Example MCP client config:
 
 ### Running locally
 
-Three backends are tested here. Two are llama.cpp forks we maintain, both kept
-current with upstream, both adding the WebP decoding upstream still lacks — the
-day it lands there, they are archived and this points at upstream directly. The
-third is upstream mlx-vlm, on Apple Silicon.
+Two paths, and one of them is recommended. **Ollama + SpecterChat** is the
+turnkey one: two installers, one model to pull, nothing to build and nothing to
+tune. SpecterChat is the chat client here; if you already work from an agent
+that speaks MCP — Claude Code, Hermes Agent, OpenCode — it drives GhostDesk
+just as well, and the Ollama side of this section is unchanged. The other
+path — running your own inference server — is there for tuning the flags
+yourself, and it is the section after this one.
+
+#### Ollama — the turnkey path
+
+Three steps, on Windows, macOS or Linux.
+
+1. **Install Ollama** from [ollama.com/download](https://ollama.com/download)
+   — the official app, downloaded like any other. Once installed it runs in
+   the background, so there is no server to start.
+2. **Pull a model.** In a terminal:
+
+   ```bash
+   ollama pull qwen3.6:35b
+   ```
+
+   Four tags are tested with GhostDesk: `qwen3.6:35b`, `qwen3.6:35b-mlx`,
+   `qwen3.8:27b` and `qwen3.8:27b-mlx`. On Apple Silicon, pull the `-mlx`
+   one.
+3. **Point SpecterChat at it.** Endpoint `http://localhost:11434/v1`, the tag
+   you pulled as the model name, and the `GhostDesk-Model-Space: 1000` header
+   the Qwen family needs ([Coordinate space](#coordinate-space--ghostdesk-model-space-header)).
+
+That is the whole setup. Which of the two models: **`qwen3.6:35b` is the
+fastest, and it is the default** — 35B parameters with only 3B active per
+token ([Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)), and on
+desktop control that ratio is the whole point: the agent decides where to
+click on every step, so tokens per second is what you feel. **`qwen3.8:27b` is
+the strongest** — best reasoning, best capability — for the task where the
+thinking is the hard part and the wait is worth it. The verdict is the same on
+every backend on this page.
+
+#### Your own inference server — the tuning path
+
+Everything below is optional: the same models, the same header, and you take
+on the flags. Three backends are tested here. Two are llama.cpp forks we
+maintain, both kept current with upstream, both adding the WebP decoding
+upstream still lacks — the day it lands there, they are archived and this
+points at upstream directly. The third is upstream mlx-vlm, on Apple Silicon.
 
 - **[YV17labs/llama-cpp-webp](https://github.com/YV17labs/llama-cpp-webp)** —
-  branch `feature/webp`. **Start here.** WebP decoding and nothing else on top
-  of upstream, so it stays close to master and inherits its backend work. It is
-  the faster of the two on Metal and on CUDA — on an Apple Silicon Mac or an
-  NVIDIA card, this is the one to run.
+  branch `feature/webp`. WebP decoding and nothing else on top of upstream, so
+  it stays close to master and inherits its backend work. It is the faster of
+  the two forks on Metal and on CUDA — on an Apple Silicon Mac or an NVIDIA
+  card, this is the one to run.
 - **[YV17labs/llama-cpp-turboquant-webp](https://github.com/YV17labs/llama-cpp-turboquant-webp)**
   — branch `feature/turboquant-webp`. The same WebP support plus the
   turbo-quant KV cache (`--cache-type-v turbo3`). Still maintained and still
@@ -306,14 +348,9 @@ third is upstream mlx-vlm, on Apple Silicon.
   ships, since it decodes WebP already and needs nothing from us. Apple
   Silicon only, and the MLX path rather than a llama.cpp one.
 
-Run whatever local model you like — nothing in GhostDesk is pinned to one. The
-one behind my own runs is
-**[Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)**: 35B
-parameters with only 3B active per token, and on desktop control that ratio is
-the whole point — the agent decides where to click on every step, so tokens per
-second is what you feel.
+Run whatever local model you like — nothing in GhostDesk is pinned to one.
 
-#### The commands
+##### The commands
 
 One tested invocation per backend. They do not take the same flags, so each
 gets its own rather than one command with a switch — and the model in them is
@@ -412,7 +449,8 @@ Desktop control needs to be **fast** — an agent that takes twelve seconds to
 decide where to click is unusable. The local path is first-class here, and it
 is three concrete things rather than a promise: screenshots ship as WebP so a
 capture costs a small payload, the coordinate space a model emits is one header
-away, and the two llama.cpp forks below carry the WebP decoding upstream still
+away, and the inference side is Ollama out of the box — or, for those who
+want the flags, the llama.cpp forks that carry the WebP decoding upstream still
 lacks. No API bill, and no screenshot of your desktop leaving your network.
 
 Frontier models (Claude, GPT-4o, Gemini) work too and remain the smoothest path
