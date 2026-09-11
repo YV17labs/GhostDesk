@@ -289,13 +289,16 @@ Example MCP client config:
 
 ### Running locally
 
-Two paths, and one of them is recommended. **Ollama + SpecterChat** is the
-turnkey one: two installers, one model to pull, nothing to build and nothing to
-tune. SpecterChat is the chat client here; if you already work from an agent
-that speaks MCP — Claude Code, Hermes Agent, OpenCode — it drives GhostDesk
-just as well, and the Ollama side of this section is unchanged. The other
-path — running your own inference server — is there for tuning the flags
-yourself, and it is the section after this one.
+Two paths, and one of them is recommended. **[Ollama](https://ollama.com/) +
+[SpecterChat](https://github.com/YV17labs/SpecterChat)** is the turnkey one:
+two installers, one model to pull, nothing to build and nothing to tune.
+SpecterChat is the chat client here; if you already work from an agent that
+speaks MCP — [Claude Code](https://claude.com/product/claude-code),
+[Hermes Agent](https://hermes-agent.nousresearch.com),
+[OpenCode](https://opencode.ai/) — it drives GhostDesk just as well, and the
+Ollama side of this section is unchanged. The other path — running your own
+inference server — is there for tuning the flags yourself, and it is the
+section after this one.
 
 #### Ollama — the turnkey path
 
