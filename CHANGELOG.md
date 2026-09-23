@@ -4,6 +4,26 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
 
 ## [Unreleased]
 
+### Added
+- **A region and the act that follows it are one statement.** Every pointer
+  tool now takes the `region` its coordinates were read against, and resolves
+  them inside it. A region capture was already cropped correctly; what was
+  missing was the other half, so coordinates read off it were taken for
+  whole-screen ones and the click landed an origin away — 286 px on the
+  measured case, for every model including the frontier ones this was never
+  supposed to affect.
+
+### Changed
+- **The agent is answered in the space it asked in.** A click on `(236, 608)`
+  from a client declaring the 0-1000 space was answered `Clicked left at
+  (302, 623)` — the pixels, in a space the agent does not speak. An agent
+  cannot correct its aim from a number it cannot read, and the one thing this
+  sentence exists for is correction. The audit trail now carries both: the
+  request as `x`/`y`, the pixels it became as `screen_x`/`screen_y`, and for a
+  point read off a region the region itself as `region_x`/`region_y`/
+  `region_width`/`region_height` — so the conversion itself is auditable
+  rather than only its result.
+
 ### Removed
 - **`app_launch` no longer answers with a capture.** It attached the settled
   screen so that launching and looking were one call; what it attached was a

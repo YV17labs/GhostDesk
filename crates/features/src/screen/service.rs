@@ -69,7 +69,7 @@ impl ScreenService {
         stabilize: bool,
         quality: u8,
     ) -> Result<Capture> {
-        let region = region.map(|region| coords::region_to_pixels(region).clamped());
+        let region = region.map(coords::region_to_pixels);
         let started = Instant::now();
 
         let (png, decoded, grab) = if stabilize {

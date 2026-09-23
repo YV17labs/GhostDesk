@@ -1,6 +1,12 @@
 use nest_rs::core::input;
 use platform::screen::Region;
 
+/// A rectangle of the screen, in whatever coordinate space the connection
+/// declared.
+///
+/// On a capture it says what to crop; on the act that follows it says what
+/// the coordinates were read against. The two are one statement made twice,
+/// and half of it points somewhere real but wrong.
 #[input]
 #[derive(Debug, Clone, Copy)]
 pub struct RegionDto {

@@ -1,6 +1,7 @@
 use nest_rs::core::input;
 
 use super::ScrollDirectionDto;
+use crate::screen::RegionDto;
 
 fn default_amount() -> u32 {
     3
@@ -16,6 +17,9 @@ pub struct ScrollDto {
     #[serde(default = "default_amount")]
     #[validate(range(min = 1, max = 5))]
     pub amount: u32,
+
+    #[serde(default)]
+    pub region: Option<RegionDto>,
 }
 
 #[cfg(test)]
@@ -38,6 +42,7 @@ mod tests {
             y: 0,
             direction: ScrollDirectionDto::Up,
             amount,
+            region: None,
         };
 
         assert!(of(0).validate().is_err());

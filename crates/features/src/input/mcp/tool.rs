@@ -33,17 +33,26 @@ impl InputTool {
         Parameters(params): Parameters<MoveDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
         Ok(Json(FeedbackDto::from(
-            self.svc.mouse_move(params.x, params.y).await.answered()?,
+            self.svc
+                .mouse_move(params.x, params.y, params.region.map(Into::into))
+                .await
+                .answered()?,
         )))
     }
 
     #[tool(
-        description = "Click once at screen coordinates (pixels from the last \
-            screen_shot()).\n\n\
+        description = "Click once at a point you read off the last \
+            screen_shot(). If that capture named a region, pass the same \
+            region here.\n\n\
             A screen_changed of false means the click had no visible effect \
             anywhere on screen. Do not retry the same coordinates — the target \
             probably moved (page scrolled, dialog opened) or was never where \
-            you thought. Take a new screen_shot() and recompute.",
+            you thought. Take a new screen_shot() and recompute.\n\n\
+            A screen_changed of true is not proof you hit what you aimed at. \
+            In a list, a table or a row of tabs, the neighbour reacts too, and \
+            it reacts convincingly. When neighbours sit close together, aim on \
+            a region capture of that part of the screen rather than on an \
+            estimate from a whole-screen one — and verify what you opened.",
         annotations(destructive_hint = true, open_world_hint = false)
     )]
     #[public]
@@ -53,7 +62,12 @@ impl InputTool {
     ) -> Result<Json<FeedbackDto>, McpError> {
         Ok(Json(FeedbackDto::from(
             self.svc
-                .mouse_click(params.x, params.y, params.button.into())
+                .mouse_click(
+                    params.x,
+                    params.y,
+                    params.region.map(Into::into),
+                    params.button.into(),
+                )
                 .await
                 .answered()?,
         )))
@@ -72,7 +86,12 @@ impl InputTool {
     ) -> Result<Json<FeedbackDto>, McpError> {
         Ok(Json(FeedbackDto::from(
             self.svc
-                .mouse_double_click(params.x, params.y, params.button.into())
+                .mouse_double_click(
+                    params.x,
+                    params.y,
+                    params.region.map(Into::into),
+                    params.button.into(),
+                )
                 .await
                 .answered()?,
         )))
@@ -97,6 +116,7 @@ impl InputTool {
                 .mouse_drag(
                     (params.from_x, params.from_y),
                     (params.to_x, params.to_y),
+                    params.region.map(Into::into),
                     params.button.into(),
                 )
                 .await
@@ -105,7 +125,7 @@ impl InputTool {
     }
 
     #[tool(
-        description = "Scroll the region under (x, y). direction is \
+        description = "Scroll the area under (x, y). direction is \
             up/down/left/right, amount is the number of wheel notches (clamped \
             to 1-5 per call — chain multiple calls for long pages, with a \
             screenshot between each).\n\n\
@@ -121,7 +141,13 @@ impl InputTool {
     ) -> Result<Json<FeedbackDto>, McpError> {
         Ok(Json(FeedbackDto::from(
             self.svc
-                .mouse_scroll(params.x, params.y, params.direction.into(), params.amount)
+                .mouse_scroll(
+                    params.x,
+                    params.y,
+                    params.region.map(Into::into),
+                    params.direction.into(),
+                    params.amount,
+                )
                 .await
                 .answered()?,
         )))

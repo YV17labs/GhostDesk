@@ -7,8 +7,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::coords::screen;
-
 /// Wire format for a returned capture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFormat {
@@ -35,10 +33,13 @@ pub struct Region {
 }
 
 impl Region {
-    /// Clamp to the screen bounds so a backend never sees a negative offset
-    /// or an extent running past the edge.
-    pub fn clamped(self) -> Self {
-        let (width, height) = screen();
+    /// Clamp to a screen of these bounds so a backend never sees a negative
+    /// offset or an extent running past the edge.
+    ///
+    /// The size is passed rather than read here because the one caller has
+    /// already read it, and reading it twice is how a new width gets paired
+    /// with an old height across a display reconfiguration.
+    pub fn clamped_to(self, width: i64, height: i64) -> Self {
         let x = self.x.clamp(0, width);
         let y = self.y.clamp(0, height);
         Self {
@@ -78,19 +79,21 @@ pub trait ScreenBackend: Send + Sync {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::coords::screen;
 
     #[test]
     fn regions_are_clamped_into_the_screen() {
+        let (width, height) = screen();
         let clamped = Region {
             x: -50,
             y: 10,
             width: 99_999,
             height: 20,
         }
-        .clamped();
+        .clamped_to(width, height);
         assert_eq!(clamped.x, 0);
         assert_eq!(clamped.y, 10);
-        assert_eq!(clamped.width, screen().0);
+        assert_eq!(clamped.width, width);
         assert_eq!(clamped.height, 20);
     }
 }

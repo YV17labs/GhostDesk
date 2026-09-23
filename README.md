@@ -217,14 +217,16 @@ The demo run creates no named volume, so this leaves nothing behind.
 Fourteen tools, named `verb_noun`, and this is the whole surface — no hidden
 endpoint, no second protocol. Defaults are in parentheses, `?` marks an
 optional parameter, and every coordinate is a **pixel offset in the last
-`screen_shot()`**: the moment the screen changes, coordinates computed from the
-previous capture are stale.
+`screen_shot()`** — measured from that capture's own corner, so a capture taken
+with a `region` is answered in coordinates that only mean anything when the
+same `region` travels to the act using them. The moment the screen changes,
+coordinates computed from the previous capture are stale.
 
 ### Screen
 
 | Tool | Parameters | Returns |
 |---|---|---|
-| `screen_shot` | `region?` — `{x, y, width, height}`, cropped at native resolution · `format` `"webp"` \| `"png"` (`webp`) · `stabilize` bool (`true`) — wait up to 5 s for the screen to settle · `quality` 1–100 (`50`, WebP only; raise it for fine fonts or design surfaces) | one image block — `{"type": "image", "data": "<base64>", "mimeType": "image/webp"}` |
+| `screen_shot` | `region?` — `{x, y, width, height}`, cropped at native resolution · `format` `"webp"` \| `"png"` (`webp`) · `stabilize` bool (`true`) — wait up to 5 s for the screen to settle · `quality` 1–100 (`50`, WebP only; raise it for fine fonts or design surfaces) | one image block — `{"type": "image", "data": "<base64>", "mimeType": "image/webp"}`. A `region` capture is preceded by a text block naming that rectangle, since its coordinates start at the rectangle's corner |
 
 ### Mouse and keyboard
 
@@ -239,11 +241,11 @@ coordinates.
 
 | Tool | Parameters |
 |---|---|
-| `mouse_move` | `x` int · `y` int |
-| `mouse_click` | `x` · `y` · `button` `"left"` \| `"middle"` \| `"right"` (`left`) |
-| `mouse_double_click` | `x` · `y` · `button` (`left`) |
-| `mouse_drag` | `from_x` · `from_y` · `to_x` · `to_y` · `button` (`left`) |
-| `mouse_scroll` | `x` · `y` · `direction` `"up"` \| `"down"` \| `"left"` \| `"right"` (`down`) · `amount` 1–5 wheel notches (`3`) |
+| `mouse_move` | `x` int · `y` int · `region?` — the `screen_shot` region these were read off |
+| `mouse_click` | `x` · `y` · `button` `"left"` \| `"middle"` \| `"right"` (`left`) · `region?` |
+| `mouse_double_click` | `x` · `y` · `button` (`left`) · `region?` |
+| `mouse_drag` | `from_x` · `from_y` · `to_x` · `to_y` · `button` (`left`) · `region?` |
+| `mouse_scroll` | `x` · `y` · `direction` `"up"` \| `"down"` \| `"left"` \| `"right"` (`down`) · `amount` 1–5 wheel notches (`3`) · `region?` |
 | `key_type` | `text` string — Unicode, newlines and tabs, layout-independent |
 | `key_press` | `keys` string — one chord, `+` between tokens. Modifiers: `ctrl`/`control`, `alt`/`option`, `shift`, `super`/`meta`/`win`/`cmd`/`command`. Named keys: `return`/`enter`, `escape`/`esc`, `backspace`, `delete`, `tab`, `space`, `home`/`end`, `pageup`/`pagedown`, `left`/`right`/`up`/`down`, `f1`–`f12` |
 

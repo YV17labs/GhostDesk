@@ -77,31 +77,68 @@ fn rescale(value: i64, from: i64, to: i64) -> i64 {
     ((value as f64) * (to as f64) / (from as f64)).round() as i64
 }
 
-/// Model coords → screen pixels. Pass-through when disabled.
-pub fn to_pixels(mx: i64, my: i64) -> (i64, i64) {
-    let space = model_space();
-    if space == 0 {
-        return (mx, my);
-    }
-    let (width, height) = screen();
-    (rescale(mx, space, width), rescale(my, space, height))
-}
-
-/// A model-space region → a pixel region. Pass-through when disabled.
+/// A model-space region → the pixel region a backend can crop.
 ///
-/// Only this direction exists: nothing ever reports coordinates back to the
-/// agent, so a pixels→model counterpart would be an API with no caller.
+/// Converted *and* clamped in one body, because the two are one rule: the
+/// rectangle a capture crops has to be the rectangle a coordinate read off it
+/// resolves against, and a second caller that converted without clamping would
+/// separate them by however much the clamp moved — silently, since a click at
+/// the wrong origin is indistinguishable from one at the right origin.
+///
+/// One direction, and the reason is not that the other has no caller — the
+/// feedback sentence an agent reads quotes coordinates, and it quotes the ones
+/// the agent gave rather than the ones the pointer reached. Nothing converts
+/// back because nothing needs to: the request is kept, so the answer is
+/// phrased from it.
 pub fn region_to_pixels(region: Region) -> Region {
     let space = model_space();
-    if space == 0 {
-        return region;
-    }
     let (width, height) = screen();
-    Region {
-        x: rescale(region.x, space, width),
-        y: rescale(region.y, space, height),
-        width: rescale(region.width, space, width),
-        height: rescale(region.height, space, height),
+    let region = if space == 0 {
+        region
+    } else {
+        Region {
+            x: rescale(region.x, space, width),
+            y: rescale(region.y, space, height),
+            width: rescale(region.width, space, width),
+            height: rescale(region.height, space, height),
+        }
+    };
+    region.clamped_to(width, height)
+}
+
+/// Model coords → screen pixels, read off a capture of `frame` when the
+/// capture named one. Pass-through when no space is in force.
+///
+/// `frame` is the region as the agent asked for it, in the same space as the
+/// point — so both are converted here and neither is the caller's arithmetic
+/// to get wrong. One entry point rather than two, so a new pointer verb cannot
+/// reach for a frameless conversion and get the defect this closed: a capture
+/// of the lower half is cropped correctly, and every coordinate read off it is
+/// then taken for a whole-screen one, landing the click a frame's origin away
+/// from what the agent saw. Pass-through is not exempt — a pixel offset into a
+/// crop is still an offset into a crop.
+pub fn to_pixels(frame: Option<Region>, mx: i64, my: i64) -> (i64, i64) {
+    // No frame is the whole screen, and saying so here is what keeps the two
+    // cases one body: a second arm written out for the frameless path is the
+    // same arithmetic with the origin fixed at zero, and the copy is where the
+    // two would drift.
+    let (width, height) = screen();
+    let frame = frame.map_or(
+        Region {
+            x: 0,
+            y: 0,
+            width,
+            height,
+        },
+        region_to_pixels,
+    );
+
+    match model_space() {
+        0 => (frame.x + mx, frame.y + my),
+        space => (
+            frame.x + rescale(mx, space, frame.width),
+            frame.y + rescale(my, space, frame.height),
+        ),
     }
 }
 
@@ -118,7 +155,7 @@ mod tests {
 
     #[tokio::test]
     async fn pass_through_when_no_space_is_installed() {
-        assert_eq!(to_pixels(383, 22), (383, 22));
+        assert_eq!(to_pixels(None, 383, 22), (383, 22));
         assert_eq!(region_to_pixels(FULL), FULL);
     }
 
@@ -126,7 +163,7 @@ mod tests {
     async fn rescales_from_a_normalised_space() {
         with_model_space(1000, async {
             // 500/1000 of a 1280x1024 screen.
-            assert_eq!(to_pixels(500, 500), (640, 512));
+            assert_eq!(to_pixels(None, 500, 500), (640, 512));
             // The whole normalised square covers the whole screen.
             assert_eq!(
                 region_to_pixels(FULL),
@@ -139,6 +176,42 @@ mod tests {
             );
         })
         .await;
+    }
+
+    #[tokio::test]
+    async fn a_point_read_off_a_region_lands_inside_that_region() {
+        // The lower half of the screen, asked for in the agent's own space.
+        let lower = Region {
+            x: 0,
+            y: 500,
+            width: 1000,
+            height: 500,
+        };
+
+        with_model_space(1000, async {
+            // The middle of that capture is the middle of the lower half —
+            // not the middle of the screen, which is what the whole-screen
+            // conversion would have answered.
+            assert_eq!(to_pixels(Some(lower), 500, 500), (640, 768));
+            assert_ne!(to_pixels(Some(lower), 500, 500), to_pixels(None, 500, 500));
+            // Its top-left corner is the region's origin.
+            assert_eq!(to_pixels(Some(lower), 0, 0), (0, 512));
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn pass_through_still_offsets_a_point_by_its_frames_origin() {
+        // No model space in force, so the agent read pixels off the crop —
+        // and a pixel into a crop is not the pixel it names on the screen.
+        let lower = Region {
+            x: 0,
+            y: 512,
+            width: 1280,
+            height: 512,
+        };
+
+        assert_eq!(to_pixels(Some(lower), 100, 40), (100, 552));
     }
 
     #[tokio::test]

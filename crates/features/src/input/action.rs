@@ -8,6 +8,12 @@ use platform::input::{Button, ScrollDirection};
 /// had, and a trail queried for "every click below this line" cannot afford
 /// one.
 ///
+/// **The coordinates here are the agent's own**, in whatever space the
+/// connection declared — not the pixels they resolved to, which travel beside
+/// them on the same line. That is what lets the sentence the agent
+/// reads back be phrased in the space the agent wrote in — the only space it
+/// can correct its aim from.
+///
 /// The prose an agent reads is deliberately not here: it belongs to the wire
 /// type, phrased from these same values so the two cannot drift.
 #[derive(Debug, Clone)]

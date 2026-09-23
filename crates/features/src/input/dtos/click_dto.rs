@@ -1,6 +1,7 @@
 use nest_rs::core::input;
 
 use super::ButtonDto;
+use crate::screen::RegionDto;
 
 #[input]
 #[derive(Debug)]
@@ -9,6 +10,9 @@ pub struct ClickDto {
     pub y: i64,
     #[serde(default)]
     pub button: ButtonDto,
+
+    #[serde(default)]
+    pub region: Option<RegionDto>,
 }
 
 #[cfg(test)]
