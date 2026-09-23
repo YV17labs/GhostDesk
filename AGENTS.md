@@ -366,6 +366,50 @@ You cannot get any of this wrong silently — the boot enforces it:
 - a config the synchronous `App::new` could never resolve **fails the boot**
   too (`UnresolvedFactoryError`), instead of surfacing as a `None` much later.
 
+## Refusals — no indulgence, and no silence
+
+**A caller that breaks the contract is told, never accommodated.** A model that
+sends `{"x": "[560, 69]"}` where the schema says two integers has made a
+mistake it can see and fix the moment it is named. Code that digs two numbers
+out of that string fixes it *for* the caller — once, invisibly, and every time
+after, because the caller never finds out. That is not generosity; it is the
+defect wearing a helpful face.
+
+**This binds every tool the server exposes, and the example above is only the
+one that was caught first.** A chord that is nearly a chord, an `exec` that is
+nearly an entry in the catalogue, a key name from another desktop, a region
+half off the screen, a text payload in the wrong shape — each is the same
+moment arriving at a different tool, and a per-tool answer is how a
+convention becomes a coin flip. The pointer, the keyboard, the clipboard, the
+catalogue and the capture all refuse the same way, and a new tool inherits the
+posture rather than choosing one.
+
+**Leniency is a silent error, and that is why the two are one rule.** A
+repaired input performs an act nobody asked for, and nothing in the answer
+says a repair happened: a click at a coordinate the caller did not send is,
+from the outside, identical to a click at one it did. The same holds for the
+other direction — a value quietly clamped, a unit quietly converted, a missing
+field quietly defaulted into meaning. If the caller would want to know, it is
+not a default; it is a refusal owed.
+
+**The refusal does, in words, the work the repair would have done.** It names
+what arrived, what was expected, and the call that works instead. The message
+is a product surface here, read by something that can act on it within the
+second — so "invalid input" costs the caller the round trip the sentence was
+supposed to save, and a refusal that cannot be acted on is only a slower
+silence.
+
+`Blame` already holds the seam: `blames_the_caller` is true for exactly the
+errors a caller can rephrase, and a new variant has to declare its side before
+it compiles. **A variant that blames the caller owes them the sentence that
+fixes it** — that obligation is what the flag is for, not the HTTP status it
+happens to pick.
+
+**None of this licenses re-checking a layer below.** Refusing the caller's
+error and re-implementing a library's validation are opposite mistakes, and a
+wrapper that does the second is thick for no one's benefit: each layer answers
+for its own contract, exactly. Thin does not mean forgiving.
+
 ## Providers — three questions, in order
 
 `#[module]` takes only `imports` and `providers`. There is no `controllers`
