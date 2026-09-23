@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{CallToolResult, Json, McpError, Opaque, Parameters, mcp, tools};
+use nest_rs::mcp::{Json, McpError, Parameters, mcp, tools};
 
 use crate::blame::Answered;
 use crate::programs::dtos::{
@@ -8,18 +8,12 @@ use crate::programs::dtos::{
 };
 use crate::programs::service::ProgramsService;
 use crate::programs::window_wait::WindowWait;
-// The one cross-domain reach in the tree, and it is `app_launch`'s whole
-// point: the settled frame rides back with the launch so the agent needs no
-// follow-up `screen_shot()`. Owned in AGENTS.md, *Known deviations*.
-use crate::screen::{CaptureDto, ScreenService};
 
 #[mcp]
 #[derive(Clone)]
 pub struct ProgramsTool {
     #[inject]
     programs_svc: Arc<ProgramsService>,
-    #[inject]
-    screen_svc: Arc<ScreenService>,
 }
 
 #[tools]
@@ -68,23 +62,23 @@ impl ProgramsTool {
             \"firefox\"). Command-line arguments are not allowed — pass the \
             exec field from app_list() verbatim.\n\n\
             By default the call waits (up to 10 s) for the app's first window \
-            and returns the settled screen as an image — interact with that \
-            directly, no follow-up screen_shot() needed. If the result says \
-            the process exited without a window, tail its log with \
+            and reports when it appeared. A window that exists is not a \
+            window that has finished drawing itself, so your next call is \
+            screen_shot() — as it is after any other action. If the result \
+            says the process exited without a window, tail its log with \
             app_status(pid); if it says no window appeared in time, the app \
             is slow to start or has no UI — set wait_for_window: false for \
             the latter kind.\n\n\
             The process runs detached; its stdout and stderr are captured to \
             the log file named in the result, which app_status(pid) tails. \
             Check app_running() first — the target may already be open.",
-        annotations(destructive_hint = false, open_world_hint = false),
-        output_schema = rmcp::handler::server::tool::schema_for_output::<LaunchedDto>()
+        annotations(destructive_hint = false, open_world_hint = false)
     )]
     #[public]
     async fn app_launch(
         &self,
         Parameters(params): Parameters<LaunchDto>,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Json<LaunchedDto>, McpError> {
         let seen_before = if params.wait_for_window {
             Some(
                 self.programs_svc
@@ -102,7 +96,6 @@ impl ProgramsTool {
         let launched = self.programs_svc.launch(&params.command).await.answered()?;
         let mut answer = LaunchedDto::from(launched);
 
-        let mut frame = None;
         if let Some(seen_before) = seen_before {
             match self
                 .programs_svc
@@ -117,15 +110,6 @@ impl ProgramsTool {
                     );
                     answer.window = Some(WindowDto::from(window));
                     answer.window_wait_ms = Some(waited_ms);
-
-                    match self.screen_svc.capture_settled().await {
-                        Ok(capture) => frame = Some(capture),
-                        Err(err) => tracing::warn!(
-                            target: "features::programs",
-                            error = %err,
-                            "window appeared but the settled frame could not be captured",
-                        ),
-                    }
                 }
                 WindowWait::ProcessExited { waited_ms } => {
                     answer.action = format!(
@@ -148,12 +132,7 @@ impl ProgramsTool {
             }
         }
 
-        let structured = serde_json::to_value(&answer).opaque()?;
-        let mut result = CallToolResult::structured(structured);
-        if let Some(capture) = frame {
-            result.content.push(CaptureDto::from(&capture).block());
-        }
-        Ok(result)
+        Ok(Json(answer))
     }
 
     #[tool(

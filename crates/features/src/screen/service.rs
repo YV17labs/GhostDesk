@@ -62,11 +62,6 @@ impl ScreenService {
         frame::decode_rgb(png).map_err(ScreenError::Decode)
     }
 
-    pub async fn capture_settled(&self) -> Result<Capture> {
-        self.capture(None, ImageFormat::Webp, true, frame::DEFAULT_WEBP_QUALITY)
-            .await
-    }
-
     pub async fn capture(
         &self,
         region: Option<Region>,
@@ -200,17 +195,6 @@ mod tests {
             capture.bytes.starts_with(&[0x89, b'P', b'N', b'G']),
             "a backend already answers PNG; re-encoding it would be pure waste",
         );
-    }
-
-    #[tokio::test]
-    async fn the_settled_capture_is_webp() {
-        let capture = service(Arc::new(StillScreen))
-            .capture_settled()
-            .await
-            .expect("captured");
-
-        assert_eq!(capture.format, ImageFormat::Webp);
-        assert!(capture.bytes.starts_with(b"RIFF"));
     }
 
     #[tokio::test]

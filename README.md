@@ -264,7 +264,7 @@ handlers.
 |---|---|---|
 | `app_list` | — | `result[]`, one entry per installed app: `name`, `exec`. This is the launch whitelist, and `exec` is the exact string `app_launch` takes |
 | `app_running` | — | `result[]`, one entry per real client window: `app`, `title`, `pid`, `focused` |
-| `app_launch` | `command` string — an `exec` from `app_list`, arguments not accepted · `wait_for_window` bool (`true`) | `pid`, `log_file`, `action`, plus `window` and `window_wait_ms` once a window appeared — and **the settled screen as an image block**, so no follow-up `screen_shot()` is needed |
+| `app_launch` | `command` string — an `exec` from `app_list`, arguments not accepted · `wait_for_window` bool (`true`) | `pid`, `log_file`, `action`, plus `window` and `window_wait_ms` once a window appeared. No image: a window that exists is not a window that has drawn itself, so the frame is `screen_shot`'s to take when the agent is ready to look |
 | `app_status` | `pid` int — one returned by `app_launch` · `lines` int (`50`) | `pid`, `running`, `log_file`, `tail` — the tail of the captured stdout/stderr |
 
 `app_list` is a whitelist rather than a hint: `app_launch` refuses anything

@@ -2,6 +2,23 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
+## [Unreleased]
+
+### Removed
+- **`app_launch` no longer answers with a capture.** It attached the settled
+  screen so that launching and looking were one call; what it attached was a
+  picture of an application that had not finished starting. A window exists
+  the moment the compositor maps it — before the splash, the first paint, the
+  restored session, the dialog that opens on top. Two identical consecutive
+  frames prove the screen stopped moving, not that the app is ready, and an
+  empty window holds very still. The agent then read that frame as the truth
+  it had been handed and aimed at it, which is precisely the failure SEE →
+  ACT → SEE exists to prevent, arriving from the server's own side. The
+  launch now reports the window it waited for and stops there; the frame is
+  `screen_shot()`'s to take, once the agent is ready to look. `screen_shot`
+  is again the only tool that answers in pixels, and `programs` reaches into
+  no sibling domain to do its work.
+
 ## [v8.1.0] — 2026-08-31
 
 **GhostDesk drives a third desktop.** Windows joins Linux and macOS as a host
