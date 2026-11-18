@@ -129,26 +129,31 @@ fn now_ms() -> u32 {
 
 /// The thread body: open a session, report readiness, then serve commands
 /// until the channel closes.
-#[expect(
-    clippy::let_underscore_must_use,
-    reason = "a send fails only once its receiver is gone — a boot that stopped waiting, a call \
-              that was cancelled — and a waiter that left has nothing left to hear"
-)]
 pub(super) fn run(mut rx: mpsc::UnboundedReceiver<Job>, ready: oneshot::Sender<Result<()>>) {
     let mut session = match Session::open() {
         Ok(session) => {
-            let _ = ready.send(Ok(()));
+            tell(ready, Ok(()));
             session
         }
         Err(err) => {
-            let _ = ready.send(Err(err));
+            tell(ready, Err(err));
             return;
         }
     };
 
     while let Some((command, reply)) = rx.blocking_recv() {
-        let _ = reply.send(session.execute(command));
+        tell(reply, session.execute(command));
     }
+}
+
+/// Answer whoever is waiting on `waiter`, if anyone still is.
+fn tell<T>(waiter: oneshot::Sender<T>, value: T) {
+    #[expect(
+        clippy::let_underscore_must_use,
+        reason = "a send fails only once its receiver is gone — a boot that stopped waiting, a \
+                  call that was cancelled — and a waiter that left has nothing left to hear"
+    )]
+    let _ = waiter.send(value);
 }
 
 /// Connect to the compositor, retrying while the display is merely absent.

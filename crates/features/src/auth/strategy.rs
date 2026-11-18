@@ -26,8 +26,9 @@ impl Strategy for TokenStrategy {
 
         // `Secret`'s own equality, which is constant-time over the bytes: a
         // plain `==` on the strings would say, by how long it took, how much of
-        // the token a caller already has right.
-        (Secret::from(provided) == *expected)
+        // the token a caller already has right. Both sides borrowed, so no
+        // request copies the token to compare it.
+        (Secret::new(provided) == Secret::new(expected.expose_secret().as_str()))
             .then(DeskOperator::authenticated)
             .ok_or_else(|| AuthError::failed("bearer token mismatch"))
     }

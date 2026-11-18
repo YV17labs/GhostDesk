@@ -6,10 +6,8 @@ use nest_rs::core::{
     with_ambient,
 };
 use nest_rs::http::{self, HttpView};
-use nest_rs::mcp::{self, McpOperationKind, McpView};
+use nest_rs::mcp;
 use platform::coords;
-
-use features::idle::IdleService;
 
 const MODEL_SPACE_HEADER: &str = "ghostdesk-model-space";
 
@@ -20,8 +18,8 @@ struct ModelSpace(i64);
 
 impl AmbientValue for ModelSpace {}
 
-/// What a call on the desk runs inside: the space its coordinates are read in,
-/// and the activity the idle watchdog counts.
+/// The space a call's coordinates are read in, from the request that carried
+/// it to the operation that reads it.
 ///
 /// At the unit stage because the space is a header of the `/mcp` request, and
 /// only a layer around that request sees it: the operations inside are
@@ -29,32 +27,20 @@ impl AmbientValue for ModelSpace {}
 /// the MCP operations it carries, two edges, so it sits at the app's root
 /// rather than under `mcp/`.
 #[interceptor(stage = unit)]
-pub struct DesktopInterceptor {
-    #[inject]
-    svc: Arc<IdleService>,
-}
+pub struct ModelSpaceInterceptor;
 
-impl Layer for DesktopInterceptor {
+impl Layer for ModelSpaceInterceptor {
     fn serves(&self, unit: Unit) -> bool {
         unit == http::unit::REQUEST || unit == mcp::unit::OPERATION
     }
 }
 
 #[async_trait]
-impl Interceptor for DesktopInterceptor {
+impl Interceptor for ModelSpaceInterceptor {
     async fn intercept(&self, cx: &mut UnitContext<'_>, next: Next<'_>) -> Outcome {
-        if let Ok(view) = HttpView::of(cx) {
+        if let Some(view) = cx.switch_to::<HttpView>() {
             let space = ModelSpace(declared_space(view.request().header(MODEL_SPACE_HEADER)));
             return with_ambient(Arc::new(space), next.run(cx)).await;
-        }
-
-        // A tool call is what uses the desk; a listing or a handshake is a
-        // client looking at it, which keeps no desktop alive.
-        if cx
-            .switch_to::<McpView>()
-            .is_some_and(|view| view.kind() == Some(McpOperationKind::Tool))
-        {
-            self.svc.mark_activity();
         }
 
         let space = cx.ambient::<ModelSpace>().map_or(0, |space| space.0);

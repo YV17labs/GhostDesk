@@ -35,14 +35,14 @@ impl IdleTasks {
 impl IdleTasks {
     #[every("5s")]
     async fn close_idle_views(&self) -> anyhow::Result<()> {
-        if !self.svc.is_expired() {
+        let Some(threshold) = self.svc.expired_after() else {
             return Ok(());
-        }
+        };
 
         tracing::info!(
             target: "features::idle",
             idle_secs = self.svc.idle_secs(),
-            threshold_secs = self.svc.timeout().map(|timeout| timeout.as_secs()),
+            threshold_secs = threshold.as_secs(),
             "idle threshold reached — closing all views",
         );
 

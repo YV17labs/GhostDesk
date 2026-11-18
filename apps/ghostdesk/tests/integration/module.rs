@@ -1,9 +1,15 @@
-use ghostdesk::GhostdeskModule;
+use std::sync::Arc;
+use std::time::Duration;
+
 use nest_rs::core::Discovery;
 use nest_rs::mcp::{McpHostMeta, endpoint_identity};
 use nest_rs::testing::TestApp;
+use nest_rs::testing::mcp::call_tool_statelessly;
+use serde_json::json;
 
-use crate::PATH;
+use features::idle::IdleService;
+
+use crate::{PATH, desk};
 
 const TOOLS: &[&str] = &[
     "app_launch",
@@ -22,19 +28,8 @@ const TOOLS: &[&str] = &[
     "screen_shot",
 ];
 
-/// Booted as the binary boots it, under the package's own name and version —
-/// what `#[nest_rs::main]` publishes for the binary, `TestApp` publishes for
-/// the suite.
-async fn app() -> TestApp {
-    TestApp::builder()
-        .module::<GhostdeskModule>()
-        .build()
-        .await
-        .expect("the composition root assembles")
-}
-
 /// Every MCP host the app mounts on `PATH`.
-fn hosts(app: &TestApp) -> Vec<std::sync::Arc<McpHostMeta>> {
+fn hosts(app: &TestApp) -> Vec<Arc<McpHostMeta>> {
     Discovery::new(app.container())
         .meta::<McpHostMeta>()
         .into_iter()
@@ -45,7 +40,7 @@ fn hosts(app: &TestApp) -> Vec<std::sync::Arc<McpHostMeta>> {
 
 #[tokio::test]
 async fn every_edge_lands_on_one_endpoint() {
-    let app = app().await;
+    let app = desk(None).await;
     let hosts: Vec<&str> = hosts(&app).iter().map(|meta| meta.host()).collect();
 
     assert_eq!(hosts.len(), 4, "hosts on {PATH}: {hosts:?}");
@@ -59,7 +54,7 @@ async fn every_edge_lands_on_one_endpoint() {
 
 #[tokio::test]
 async fn the_hosts_publish_the_whole_tool_surface_and_no_name_twice() {
-    let app = app().await;
+    let app = desk(None).await;
 
     let mut names: Vec<String> = hosts(&app)
         .iter()
@@ -73,7 +68,7 @@ async fn the_hosts_publish_the_whole_tool_surface_and_no_name_twice() {
 
 #[tokio::test]
 async fn the_app_names_the_endpoint_rather_than_leaving_it_to_a_host() {
-    let app = app().await;
+    let app = desk(None).await;
     let identity = endpoint_identity(app.container(), PATH);
 
     let info = identity
@@ -91,4 +86,21 @@ async fn the_app_names_the_endpoint_rather_than_leaving_it_to_a_host() {
         .instructions()
         .expect("the session brief is declared, not left to be joined from four hosts");
     assert!(brief.contains("Copy is"), "the brief names the shortcuts");
+}
+
+/// A tool call is what keeps a desk alive: the idle clock restarts on one,
+/// whichever tool it is. `app_list` reads the catalogue and touches nothing.
+#[tokio::test]
+async fn a_tool_call_restarts_the_idle_clock() {
+    let app = desk(None).await;
+    let idle = app
+        .container()
+        .get::<IdleService>()
+        .expect("the idle service is composed");
+
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    assert!(idle.idle_secs() >= 1, "the clock runs while nothing calls");
+
+    call_tool_statelessly(app.http(), PATH, "app_list", None, &[], json!({})).await;
+    assert_eq!(idle.idle_secs(), 0, "a tool call is activity");
 }

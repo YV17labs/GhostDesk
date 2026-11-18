@@ -1,4 +1,4 @@
-use nest_rs::core::module;
+use nest_rs::core::{GlobalInterceptors, module};
 use nest_rs::guards::GlobalGuards;
 use nest_rs::health::HealthModule;
 use nest_rs::http::{HttpConfig, HttpModule};
@@ -6,12 +6,12 @@ use nest_rs::mcp::McpModule;
 
 use features::auth::{AuthModule, AuthnGuard};
 use features::clipboard::ClipboardMcpModule;
-use features::idle::{IdleModule, IdleScheduleModule};
+use features::idle::{IdleInterceptor, IdleMcpModule, IdleScheduleModule};
 use features::input::InputMcpModule;
 use features::programs::ProgramsMcpModule;
 use features::screen::ScreenMcpModule;
 
-use crate::interceptor::DesktopInterceptor;
+use crate::interceptor::ModelSpaceInterceptor;
 use crate::mcp::identity;
 
 /// The server is pinned to loopback and to its published port: the framework
@@ -35,9 +35,13 @@ use crate::mcp::identity;
         InputMcpModule,
         ProgramsMcpModule,
         ClipboardMcpModule,
-        IdleModule,
+        IdleMcpModule,
         IdleScheduleModule,
     ],
-    providers = [GlobalGuards<(AuthnGuard,)>, DesktopInterceptor],
+    providers = [
+        GlobalGuards<(AuthnGuard,)>,
+        GlobalInterceptors<(IdleInterceptor,)>,
+        ModelSpaceInterceptor,
+    ],
 )]
 pub struct GhostdeskModule;

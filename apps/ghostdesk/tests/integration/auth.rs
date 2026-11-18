@@ -7,30 +7,12 @@
 //! the one part of this app whose failure is silent: it serves a desktop.
 
 use nest_rs::http::StatusCode;
-use nest_rs::testing::TestApp;
 use nest_rs::testing::mcp::{call_tool_statelessly, initialize_request, post_message, result};
 use serde_json::json;
 
-use features::auth::AuthConfig;
-use ghostdesk::GhostdeskModule;
-
-use crate::PATH;
+use crate::{PATH, desk};
 
 const TOKEN: &str = "a-secret-only-the-operator-has";
-
-/// Seeded rather than read from the environment: the variables are process-wide
-/// and every test in this binary shares them, so a suite that sets one decides
-/// the posture of the tests running beside it.
-async fn desk(token: Option<&str>) -> TestApp {
-    TestApp::builder()
-        .module::<GhostdeskModule>()
-        .provide(AuthConfig {
-            token: token.map(Into::into),
-        })
-        .build()
-        .await
-        .expect("the composition root assembles")
-}
 
 /// Both refusals in one test on purpose: no credential at all and a credential
 /// that fails to verify are the same `401` to the caller, and asserting them
