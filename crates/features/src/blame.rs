@@ -9,8 +9,9 @@
 //! a hurry — silently, since a copy that forgets the refusal branch still
 //! compiles and still answers.
 
-use std::fmt::Display;
+use std::error::Error;
 
+use nest_rs::core::code;
 use nest_rs::mcp::{McpError, Opaque};
 
 /// Which side a failure blames — the one thing an adapter cannot read off a
@@ -25,16 +26,20 @@ pub(crate) trait Answered<T> {
     fn answered(self) -> Result<T, McpError>;
 }
 
-impl<T, E: Blame + Display> Answered<T> for Result<T, E> {
+/// The error is owned and whole, not merely printable: `opaque` hands its
+/// whole chain to the edge, which files it for the operator.
+impl<T, E: Blame + Error + Send + Sync + 'static> Answered<T> for Result<T, E> {
     /// A refusal the caller can act on reaches the model verbatim, so it can
-    /// correct itself and call again; everything else leaves through the
+    /// correct itself and call again, under the class the framework files its
+    /// own argument refusals under; everything else leaves through the
     /// framework's `opaque`, which keeps the real error for the operator and
     /// hands the model a constant.
     fn answered(self) -> Result<T, McpError> {
         match self {
-            Err(err) if err.blames_the_caller() => {
-                Err(McpError::invalid_params(err.to_string(), None))
-            }
+            Err(err) if err.blames_the_caller() => Err(McpError::invalid_params(
+                err.to_string(),
+                Some(serde_json::json!({ "code": code::INVALID_ARGUMENT.as_str() })),
+            )),
             other => other.opaque(),
         }
     }
@@ -60,6 +65,11 @@ mod tests {
             .answered()
             .unwrap_err();
         assert!(err.message.contains("app_list()"), "{}", err.message);
+        assert_eq!(
+            err.data,
+            Some(serde_json::json!({ "code": "INVALID_ARGUMENT" })),
+            "a refusal names its class, as the framework's own do",
+        );
     }
 
     #[test]

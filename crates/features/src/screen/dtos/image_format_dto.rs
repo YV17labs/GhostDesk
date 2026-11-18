@@ -1,8 +1,8 @@
+use nest_rs::core::wire_enum;
 use platform::screen::ImageFormat;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[wire_enum]
+#[derive(Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ImageFormatDto {
     #[default]

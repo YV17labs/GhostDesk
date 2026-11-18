@@ -128,6 +128,11 @@ ARG GHOSTDESK_GIT_SHA=unknown
 # boot under a prefix that would leave them unread.
 ENV NESTRS_ENV_PREFIX=GHOSTDESK
 
+# The profile, declared rather than defaulted into: an undeclared process runs
+# as production all the same, but says so at every boot — and this image is a
+# deployment, so the line would only ever be noise.
+ENV GHOSTDESK_ENV=production
+
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/New_York \
     LANG=en_US.UTF-8 \

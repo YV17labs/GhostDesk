@@ -14,7 +14,6 @@ async-trait.workspace = true
 image.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tracing.workspace = true
 webp.workspace = true
 
 # Each backend's own toolbox, target-gated so a macOS build never compiles a
@@ -25,6 +24,7 @@ webp.workspace = true
 configparser.workspace = true
 rustix.workspace = true
 serde_json.workspace = true
+tracing.workspace = true
 wayland-client.workspace = true
 wayland-protocols-misc.workspace = true
 wayland-protocols-wlr.workspace = true

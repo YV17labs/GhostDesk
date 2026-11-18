@@ -12,6 +12,10 @@ use std::fmt::Write as _;
 /// `ONE_LEVEL` key: no shift/lock/modifier level switching. Modifier state is
 /// announced separately through `virtual_keyboard.modifiers`, so no
 /// `modifier_map` is emitted.
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "writing into a `String` cannot fail; `fmt::Write` answers a `Result` for writers that can"
+)]
 pub fn build_keymap(keysyms: &[u32]) -> String {
     if keysyms.is_empty() {
         // Empty keymaps are legal — the compositor just gets a no-op layout.

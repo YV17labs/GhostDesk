@@ -1,6 +1,6 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use nest_rs::core::injectable;
 use platform::window::WindowManager;
@@ -32,11 +32,14 @@ impl IdleService {
     }
 
     pub fn is_expired(&self) -> bool {
-        self.config.armed() && self.idle_secs() >= self.config.timeout_secs
+        self.config
+            .timeout
+            .is_some_and(|timeout| self.idle_secs() >= timeout.as_secs())
     }
 
-    pub fn timeout_secs(&self) -> u64 {
-        self.config.timeout_secs
+    /// `None` when the watchdog is disarmed.
+    pub fn timeout(&self) -> Option<Duration> {
+        self.config.timeout
     }
 
     pub async fn cleanup_views(&self) -> usize {
@@ -97,9 +100,9 @@ mod tests {
     use super::*;
     use crate::testing::NoWindows;
 
-    fn service(timeout_secs: u64) -> IdleService {
+    fn service(timeout: Option<Duration>) -> IdleService {
         IdleService {
-            config: Arc::new(IdleConfig { timeout_secs }),
+            config: Arc::new(IdleConfig { timeout }),
             windows: Arc::new(NoWindows),
             last_activity_ms: AtomicU64::new(ORIGIN.elapsed().as_millis() as u64),
         }
@@ -107,21 +110,22 @@ mod tests {
 
     #[test]
     fn a_fresh_desktop_is_not_expired() {
-        let idle = service(1800);
+        let idle = service(Some(Duration::from_secs(1800)));
         idle.mark_activity();
         assert_eq!(idle.idle_secs(), 0);
         assert!(!idle.is_expired());
     }
 
     #[test]
-    fn a_zero_timeout_disarms_the_watchdog() {
-        let idle = service(0);
+    fn no_timeout_disarms_the_watchdog() {
+        let idle = service(None);
+        idle.last_activity_ms.store(0, Ordering::Relaxed);
         assert!(!idle.is_expired());
     }
 
     #[test]
     fn silence_past_the_threshold_expires_the_session() {
-        let idle = service(1);
+        let idle = service(Some(Duration::from_secs(1)));
         idle.last_activity_ms.store(0, Ordering::Relaxed);
         std::thread::sleep(std::time::Duration::from_millis(1100));
         assert!(idle.idle_secs() >= 1);

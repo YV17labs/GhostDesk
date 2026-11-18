@@ -1,9 +1,9 @@
-use schemars::JsonSchema;
-use serde::Serialize;
+use nest_rs::core::output;
 
 use crate::programs::running_window::RunningWindow;
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[output]
+#[derive(Debug, Clone)]
 pub struct WindowDto {
     pub app: String,
     pub title: String,

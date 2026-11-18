@@ -146,6 +146,10 @@ impl Gdi {
 }
 
 impl Drop for Gdi {
+    #[expect(
+        clippy::let_underscore_must_use,
+        reason = "a handle that will not delete leaves a drop nothing to do but return"
+    )]
     fn drop(&mut self) {
         // SAFETY: each handle is this struct's own, and none is used again.
         unsafe {
@@ -189,6 +193,11 @@ fn blit(source: Region, out_width: i32, out_height: i32) -> Result<Vec<u8>> {
 }
 
 /// Blit the source rectangle in, scaling if the output is smaller.
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "the brush origin only re-aligns the halftone pattern; a context that refuses it \
+              still stretches, and `StretchBlt` below is what reports a failed copy"
+)]
 fn copy_pixels(gdi: &Gdi, source: Region, out_width: i32, out_height: i32) -> Result<()> {
     let (x, y) = (source.x as i32, source.y as i32);
     let (width, height) = (source.width as i32, source.height as i32);

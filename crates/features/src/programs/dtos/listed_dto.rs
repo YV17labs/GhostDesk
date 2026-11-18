@@ -1,7 +1,7 @@
-use schemars::JsonSchema;
-use serde::Serialize;
+use nest_rs::core::output;
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[output]
+#[derive(Debug, Clone)]
 pub struct ListedDto<T> {
     pub result: Vec<T>,
 }
