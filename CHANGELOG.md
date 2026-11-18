@@ -89,6 +89,13 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
   optional dependencies of nest-rs the desk never enables. Two `unmaintained`
   notices remain, `chrono` (through rmcp and schemars) and `humantime`
   (lockfile only), with no release to move to.
+- **neatvnc `v1.0.1 → v1.0.4`** — v1.0.4 validates the pixel depth an RFB
+  client requests and bounds-checks websocket HTTP header fields (a stack
+  overflow upstream, not reachable here: the desk serves websockets through
+  websockify, not neatvnc); v1.0.2 and v1.0.3 fix stream ordering, stalls and
+  leaks.
+- **wayvnc `v0.10.1 → v0.10.2`** — resource-cleanup fixes that prevent crashes
+  when an output disappears or a client is torn down.
 
 ## [v8.1.0] — 2026-08-31
 

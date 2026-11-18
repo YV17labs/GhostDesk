@@ -9,8 +9,8 @@ ARG UBUNTU_VERSION=26.04
 # Same pins as docker/base/Dockerfile; keep them in lockstep.
 FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
 
-ARG WAYVNC_REF=v0.10.1
-ARG NEATVNC_REF=v1.0.1
+ARG WAYVNC_REF=v0.10.2
+ARG NEATVNC_REF=v1.0.4
 ARG AML_REF=v1.0.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
