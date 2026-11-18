@@ -20,9 +20,7 @@ repository = "https://github.com/YV17labs/ghostdesk"
 # different question, and the one that answered "healthy" through a desktop
 # nobody could drive.
 #
-# `rmcp` is not a dependency, and no file names it: `#[tools]` emits the SDK's
-# macros in generated code carrying its own scope, so the SDK is always the
-# exact major nest-rs was built against — never a second rmcp in the graph.
+# No `rmcp` line: the SDK is `nest_rs::mcp::rmcp`, at the major nest-rs builds on.
 nest-rs = { version = "7.0", features = ["authn", "health", "mcp", "schedule"] }
 
 tokio = { version = "1.54", features = ["full"] }

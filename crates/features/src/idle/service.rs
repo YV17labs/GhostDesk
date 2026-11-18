@@ -31,10 +31,12 @@ impl IdleService {
         now.saturating_sub(last) / 1000
     }
 
-    pub fn is_expired(&self) -> bool {
+    /// The threshold the desk has sat idle past, or `None` while it is in use
+    /// or the watchdog is disarmed.
+    pub fn expired_after(&self) -> Option<Duration> {
         self.config
             .timeout
-            .is_some_and(|timeout| self.idle_secs() >= timeout.as_secs())
+            .filter(|timeout| self.idle_secs() >= timeout.as_secs())
     }
 
     /// `None` when the watchdog is disarmed.
@@ -113,14 +115,14 @@ mod tests {
         let idle = service(Some(Duration::from_secs(1800)));
         idle.mark_activity();
         assert_eq!(idle.idle_secs(), 0);
-        assert!(!idle.is_expired());
+        assert_eq!(idle.expired_after(), None);
     }
 
     #[test]
     fn no_timeout_disarms_the_watchdog() {
         let idle = service(None);
         idle.last_activity_ms.store(0, Ordering::Relaxed);
-        assert!(!idle.is_expired());
+        assert_eq!(idle.expired_after(), None);
     }
 
     #[test]
@@ -129,6 +131,6 @@ mod tests {
         idle.last_activity_ms.store(0, Ordering::Relaxed);
         std::thread::sleep(std::time::Duration::from_millis(1100));
         assert!(idle.idle_secs() >= 1);
-        assert!(idle.is_expired());
+        assert_eq!(idle.expired_after(), Some(Duration::from_secs(1)));
     }
 }

@@ -193,11 +193,6 @@ fn blit(source: Region, out_width: i32, out_height: i32) -> Result<Vec<u8>> {
 }
 
 /// Blit the source rectangle in, scaling if the output is smaller.
-#[expect(
-    clippy::let_underscore_must_use,
-    reason = "the brush origin only re-aligns the halftone pattern; a context that refuses it \
-              still stretches, and `StretchBlt` below is what reports a failed copy"
-)]
 fn copy_pixels(gdi: &Gdi, source: Region, out_width: i32, out_height: i32) -> Result<()> {
     let (x, y) = (source.x as i32, source.y as i32);
     let (width, height) = (source.width as i32, source.height as i32);
@@ -222,6 +217,11 @@ fn copy_pixels(gdi: &Gdi, source: Region, out_width: i32, out_height: i32) -> Re
     unsafe { SetStretchBltMode(gdi.memory, HALFTONE) };
     // SAFETY: documented to be required after selecting `HALFTONE`, or the
     // scaled image is offset by the brush origin.
+    #[expect(
+        clippy::let_underscore_must_use,
+        reason = "the brush origin only re-aligns the halftone pattern; a context that refuses \
+                  it still stretches, and `StretchBlt` below is what reports a failed copy"
+    )]
     let _ = unsafe { SetBrushOrgEx(gdi.memory, 0, 0, None) };
 
     // SAFETY: as above; the destination extent is the bitmap's own.
