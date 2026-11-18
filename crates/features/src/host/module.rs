@@ -1,6 +1,4 @@
-use std::any::TypeId;
-
-use nest_rs::core::{ContainerBuilder, Module};
+use nest_rs::core::{ContainerBuilder, Module, Registering};
 use platform::clipboard::Clipboard;
 use platform::desktop::AppCatalog;
 use platform::host;
@@ -11,10 +9,7 @@ use platform::window::WindowManager;
 pub struct HostModule;
 
 impl Module for HostModule {
-    fn register(mut builder: ContainerBuilder) -> ContainerBuilder {
-        if !builder.mark_registered(TypeId::of::<HostModule>()) {
-            return builder;
-        }
+    fn register(builder: ContainerBuilder, _: Registering<Self>) -> ContainerBuilder {
         builder
             .provide_dyn::<dyn InputBackend>(host::input())
             .provide_dyn::<dyn ScreenBackend>(host::screen())

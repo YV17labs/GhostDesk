@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{Json, McpError, Parameters, Valid, mcp, tools};
+use nest_rs::mcp::{Json, McpError, Parameters, mcp, tools};
 
 use crate::blame::Answered;
 use crate::input::dtos::{ClickDto, DragDto, FeedbackDto, MoveDto, PressDto, ScrollDto, TypeDto};
@@ -27,7 +27,6 @@ impl InputTool {
             instead: fall back to mouse_click.",
         annotations(destructive_hint = false, open_world_hint = false)
     )]
-    #[public]
     async fn mouse_move(
         &self,
         Parameters(params): Parameters<MoveDto>,
@@ -55,7 +54,6 @@ impl InputTool {
             estimate from a whole-screen one — and verify what you opened.",
         annotations(destructive_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn mouse_click(
         &self,
         Parameters(params): Parameters<ClickDto>,
@@ -79,7 +77,6 @@ impl InputTool {
             editable text.",
         annotations(destructive_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn mouse_double_click(
         &self,
         Parameters(params): Parameters<ClickDto>,
@@ -106,7 +103,6 @@ impl InputTool {
             pixel-precise drag.",
         annotations(destructive_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn mouse_drag(
         &self,
         Parameters(params): Parameters<DragDto>,
@@ -134,10 +130,9 @@ impl InputTool {
             direction.",
         annotations(destructive_hint = false, open_world_hint = false)
     )]
-    #[public]
     async fn mouse_scroll(
         &self,
-        Parameters(Valid(params)): Parameters<Valid<ScrollDto>>,
+        Parameters(params): Parameters<ScrollDto>,
     ) -> Result<Json<FeedbackDto>, McpError> {
         Ok(Json(FeedbackDto::from(
             self.svc
@@ -166,7 +161,6 @@ impl InputTool {
             have focus. Click into it first and retry.",
         annotations(destructive_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn key_type(
         &self,
         Parameters(params): Parameters<TypeDto>,
@@ -193,7 +187,6 @@ impl InputTool {
             screenshot.",
         annotations(destructive_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn key_press(
         &self,
         Parameters(params): Parameters<PressDto>,

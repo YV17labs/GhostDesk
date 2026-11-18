@@ -131,6 +131,13 @@ apart, so refusing on it would refuse the ordinary deployment along with the
 dangerous one. **What the server cannot decide, the operator must: do not publish
 this port without a token.**
 
+**An open posture opens no MCP session.** The framework binds each session to the
+subject of the credential that opened it, and serves a later request naming it only
+to that same subject; an anonymous caller names none, so its `initialize` is refused
+`403` rather than handed a session any other anonymous caller could name. A client on
+MCP `2026-07-28` calls statelessly and needs none. With a token every caller is the
+one operator, and its sessions are its own.
+
 ### Dev posture (no cert)
 
 Neither secret is required, and the two are treated differently when set anyway:

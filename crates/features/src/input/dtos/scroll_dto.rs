@@ -35,7 +35,7 @@ mod tests {
 
     #[test]
     fn a_notch_count_outside_the_band_is_refused() {
-        use nest_rs::core::validator::Validate;
+        use nest_rs::pipes::validator::Validate;
 
         let of = |amount: u32| ScrollDto {
             x: 0,

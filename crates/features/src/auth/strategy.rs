@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
 use nest_rs::authn::{AuthError, Strategy, bearer_token};
-use nest_rs::core::{async_trait, injectable};
-use nest_rs::http::poem::Request;
-use subtle::ConstantTimeEq;
+use nest_rs::core::{Secret, async_trait, injectable};
+use nest_rs::http::Request;
 
 use super::config::AuthConfig;
 use super::desk_operator::DeskOperator;
@@ -19,28 +18,32 @@ impl Strategy for TokenStrategy {
     type Principal = DeskOperator;
 
     async fn authenticate(&self, req: &mut Request) -> Result<DeskOperator, AuthError> {
-        let Some(expected) = self.config.token.as_deref() else {
+        let Some(expected) = self.config.token.as_ref() else {
             return Ok(DeskOperator::anonymous());
         };
 
-        let provided = bearer_token(req).ok_or(AuthError::MissingCredentials)?;
+        let provided = bearer_token(req.headers()).ok_or(AuthError::MissingCredentials)?;
 
-        bool::from(provided.as_bytes().ct_eq(expected.as_bytes()))
+        // `Secret`'s own equality, which is constant-time over the bytes: a
+        // plain `==` on the strings would say, by how long it took, how much of
+        // the token a caller already has right.
+        (Secret::from(provided) == *expected)
             .then(DeskOperator::authenticated)
-            .ok_or_else(|| AuthError::Failed("bearer token mismatch".into()))
+            .ok_or_else(|| AuthError::failed("bearer token mismatch"))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use nest_rs::authn::PrincipalIdentity;
+    use nest_rs::http::header::AUTHORIZATION;
 
     use super::*;
 
     fn strategy(token: Option<&str>) -> TokenStrategy {
         TokenStrategy {
             config: Arc::new(AuthConfig {
-                token: token.map(str::to_owned),
+                token: token.map(Into::into),
             }),
         }
     }
@@ -49,14 +52,11 @@ mod tests {
         token: Option<&str>,
         header: Option<&str>,
     ) -> Result<DeskOperator, AuthError> {
-        let mut req = Request::default();
+        let mut req = Request::builder();
         if let Some(header) = header {
-            req.headers_mut().insert(
-                nest_rs::http::poem::http::header::AUTHORIZATION,
-                header.parse().expect("a header value"),
-            );
+            req = req.header(AUTHORIZATION, header.parse().expect("a header value"));
         }
-        strategy(token).authenticate(&mut req).await
+        strategy(token).authenticate(&mut req.finish()).await
     }
 
     #[tokio::test]
@@ -81,11 +81,11 @@ mod tests {
     async fn a_wrong_or_missing_token_is_refused() {
         assert!(matches!(
             authenticate(Some("s3cret"), Some("Bearer nope")).await,
-            Err(AuthError::Failed(_)),
+            Err(AuthError::Failed { .. }),
         ));
         assert!(matches!(
             authenticate(Some("s3cret"), Some("Bearer s3cre")).await,
-            Err(AuthError::Failed(_)),
+            Err(AuthError::Failed { .. }),
         ));
         assert!(matches!(
             authenticate(Some("s3cret"), None).await,

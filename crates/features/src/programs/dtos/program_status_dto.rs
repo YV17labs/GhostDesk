@@ -1,9 +1,9 @@
-use schemars::JsonSchema;
-use serde::Serialize;
+use nest_rs::core::output;
 
 use crate::programs::program_status::ProgramStatus;
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[output]
+#[derive(Debug, Clone)]
 pub struct ProgramStatusDto {
     pub pid: u32,
     pub running: bool,

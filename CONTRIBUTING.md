@@ -142,8 +142,9 @@ carries the naming rules in full.
 ```
 GhostDesk/
 ├── apps/ghostdesk/          # The binary — composition, and the endpoint's app-local half
-│   ├── src/module.rs        # GhostdeskModule: HTTP + MCP + Schedule + Health + the domains
-│   └── src/mcp/             # identity, session brief, per-call context, call trail
+│   ├── src/module.rs        # GhostdeskModule: HTTP + MCP + Health, the guard pool, the domains
+│   ├── src/interceptor.rs   # per-call context: the coordinate space, the idle clock
+│   └── src/mcp/             # identity, session brief
 ├── crates/features/         # One folder per domain, each with its own mcp/ adapter
 │   ├── auth/                # bearer strategy behind the framework's AuthnGuard
 │   ├── clipboard/           # read and write the desktop's clipboard

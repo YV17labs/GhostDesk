@@ -1,4 +1,5 @@
 use nest_rs::authn::PrincipalIdentity;
+use nest_rs::core::AmbientValue;
 
 const DESK_OPERATOR: &str = "desk-operator";
 
@@ -20,6 +21,10 @@ impl DeskOperator {
         }
     }
 }
+
+/// The guard attaches the operator to the unit it admits, so whatever runs
+/// inside reads who is at the desk without being handed it.
+impl AmbientValue for DeskOperator {}
 
 impl PrincipalIdentity for DeskOperator {
     fn actor_id(&self) -> Option<String> {

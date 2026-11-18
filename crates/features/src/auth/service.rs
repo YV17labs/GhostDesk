@@ -73,7 +73,7 @@ impl AuthService {
 
 #[cfg(test)]
 mod tests {
-    use nest_rs::http::TlsConfig;
+    use nest_rs::http::HttpTls;
     use nest_rs::testing::LogCapture;
 
     use super::*;
@@ -81,10 +81,10 @@ mod tests {
     fn service(tls: bool, token: bool, host: &str) -> AuthService {
         AuthService {
             config: Arc::new(AuthConfig {
-                token: token.then(|| "s3cret".to_string()),
+                token: token.then(|| "s3cret".into()),
             }),
             http: Arc::new(HttpConfig {
-                tls: tls.then(|| TlsConfig::new("cert-pem", "key-pem")),
+                tls: tls.then(|| HttpTls::new("cert-pem", "key-pem")),
                 host: host.to_string(),
                 ..Default::default()
             }),

@@ -129,6 +129,11 @@ fn now_ms() -> u32 {
 
 /// The thread body: open a session, report readiness, then serve commands
 /// until the channel closes.
+#[expect(
+    clippy::let_underscore_must_use,
+    reason = "a send fails only once its receiver is gone — a boot that stopped waiting, a call \
+              that was cancelled — and a waiter that left has nothing left to hear"
+)]
 pub(super) fn run(mut rx: mpsc::UnboundedReceiver<Job>, ready: oneshot::Sender<Result<()>>) {
     let mut session = match Session::open() {
         Ok(session) => {
@@ -380,6 +385,10 @@ mod tests {
     /// Both halves of the wait in one test: the deadline that ends it when
     /// nothing answers, and the first successful connect, which ends it at once.
     #[test]
+    #[expect(
+        clippy::let_underscore_must_use,
+        reason = "the test clears its fake display best-effort, before and after"
+    )]
     fn the_wait_ends_when_a_display_appears_and_not_before() {
         let dir = std::env::temp_dir().join(format!("ghostdesk-probe-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("a directory for the fake display");

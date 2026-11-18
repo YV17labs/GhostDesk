@@ -1,4 +1,4 @@
-use nest_rs::mcp::ContentBlock;
+use nest_rs::mcp::model::ContentBlock;
 
 use crate::screen::capture::Capture;
 
