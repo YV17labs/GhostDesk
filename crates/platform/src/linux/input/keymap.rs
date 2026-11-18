@@ -6,8 +6,6 @@
 //! produce identical output, because the compositor's system keymap is never
 //! consulted.
 
-use std::fmt::Write as _;
-
 /// Slot `i` maps XKB keycode `8 + i` (evdev keycode `i`) to `keysyms[i]` as a
 /// `ONE_LEVEL` key: no shift/lock/modifier level switching. Modifier state is
 /// announced separately through `virtual_keyboard.modifiers`, so no
@@ -31,15 +29,18 @@ pub fn build_keymap(keysyms: &[u32]) -> String {
 
     let last = 8 + keysyms.len() - 1;
 
-    let mut keycodes = String::new();
-    let mut symbols = String::new();
-    for (slot, keysym) in keysyms.iter().enumerate() {
-        let _ = writeln!(keycodes, "    <K{slot}> = {};", 8 + slot);
-        let _ = writeln!(
-            symbols,
-            "    key <K{slot}> {{ type = \"ONE_LEVEL\", symbols[Group1] = [ 0x{keysym:08x} ] }};"
-        );
-    }
+    let keycodes: String = (0..keysyms.len())
+        .map(|slot| format!("    <K{slot}> = {};\n", 8 + slot))
+        .collect();
+    let symbols: String = keysyms
+        .iter()
+        .enumerate()
+        .map(|(slot, keysym)| {
+            format!(
+                "    key <K{slot}> {{ type = \"ONE_LEVEL\", symbols[Group1] = [ 0x{keysym:08x} ] }};\n"
+            )
+        })
+        .collect();
 
     format!(
         "xkb_keymap {{\n\

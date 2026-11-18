@@ -4,7 +4,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/MCP-compatible-blueviolet?style=for-the-badge" alt="MCP Compatible">
-  <img src="https://img.shields.io/badge/rust-1.97+-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust 1.97+">
+  <img src="https://img.shields.io/badge/rust-1.100+-orange?style=for-the-badge&logo=rust&logoColor=white" alt="Rust 1.100+">
   <img src="https://img.shields.io/badge/built%20with-NestRS-7B6FDE?style=for-the-badge" alt="Built with NestRS">
   <img src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue?style=for-the-badge" alt="FSL-1.1-ALv2 License">
   <img src="https://img.shields.io/badge/platform-Docker%20%7C%20Linux%20%7C%20macOS%20%7C%20Windows-orange?style=for-the-badge" alt="Platform">
@@ -806,6 +806,13 @@ The server binds `127.0.0.1:3000` and serves with no token (posture
 as in [Connect your agent](#2-connect-your-agent). There is no noVNC endpoint — the
 desktop is the one you are looking at.
 
+With no token, the server serves clients on MCP's `2026-07-28` revision, which
+call statelessly. A client still on an older revision opens a session first,
+and a session is bound to the identity of the credential that opened it — with
+no credential there is none to bind, so its handshake is refused `403`. Set
+`GHOSTDESK_AUTH__TOKEN` and give that client the bearer, as in
+[Connect your agent](#2-connect-your-agent).
+
 ---
 
 ## Run on Windows, without the container
@@ -877,6 +884,13 @@ The server binds `127.0.0.1:3000` and serves with no token (posture
 as in [Connect your agent](#2-connect-your-agent). There is no noVNC endpoint — the
 desktop is the one you are looking at.
 
+With no token, the server serves clients on MCP's `2026-07-28` revision, which
+call statelessly. A client still on an older revision opens a session first,
+and a session is bound to the identity of the credential that opened it — with
+no credential there is none to bind, so its handshake is refused `403`. Set
+`GHOSTDESK_AUTH__TOKEN` and give that client the bearer, as in
+[Connect your agent](#2-connect-your-agent).
+
 ---
 
 ## What differs from the container
@@ -929,6 +943,12 @@ namespaces; `screen`, `idle` and `auth` are GhostDesk's, one per feature module
 that owns settings. A single underscore (`GHOSTDESK_VNC_PASSWORD`) marks a
 container-level knob the entrypoint consumes itself, never reaching the server.
 
+`GHOSTDESK_ENV` names the profile, and a process that declares none runs as
+`production`: no `.env.development` is read and logs are JSON. The image
+declares `production`, the devcontainer and `nestrs run dev` declare
+`development`; a native run declares nothing and needs nothing more, but
+`GHOSTDESK_LOG_FORMAT=text` makes its lines readable in a terminal.
+
 `NESTRS_ENV_PREFIX` is the one name no prefix can rename, and it has to be on
 the process before the server starts — a `.env` file is read after it has
 already chosen which cascade to read. Both images bake it and the `Justfile`
@@ -960,7 +980,7 @@ contract.
 | `GHOSTDESK_TLS_KEY` | `/etc/ghostdesk/tls/server.key` | Path to the TLS private key (matching `GHOSTDESK_TLS_CERT`). |
 | `GHOSTDESK_SCREEN__WIDTH` | `1280` | Virtual screen width in pixels. The fallback for a virtual screen with no display to ask — ignored on macOS and Windows, where the display reports its own pixel size. |
 | `GHOSTDESK_SCREEN__HEIGHT` | `1024` | Virtual screen height in pixels. Same fallback rule as the row above. |
-| `GHOSTDESK_IDLE__TIMEOUT_SECS` | `1800` | Seconds of MCP silence before all open client windows (Firefox, foot, mousepad…) are closed to free memory. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable — **which you want on any native run**, macOS or Windows, where the windows it would close are your own. |
+| `GHOSTDESK_IDLE__TIMEOUT_SECS` | `1800` | Seconds without a tool call before all open client windows (Firefox, foot, mousepad…) are closed to free memory, from `1` to `604800` (a week) — a value outside fails the boot naming the variable. Sway, mako, wayvnc and the MCP server itself are spared. Set to `0` to disable — **which you want on any native run**, macOS or Windows, where the windows it would close are your own. |
 | `TZ` | `America/New_York` | IANA timezone (POSIX standard, e.g. `Europe/Paris`) |
 | `LANG` | `en_US.UTF-8` | POSIX locale (e.g. `fr_FR.UTF-8`) |
 

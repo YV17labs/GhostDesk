@@ -181,9 +181,19 @@ impl ProgramsService {
         let pid = child.id().ok_or(ProgramsError::Vanished)?;
         let log_file = self.registry.adopt(pid, &staged)?;
 
+        // Reaped here so it never lingers as a zombie. Its liveness is read off
+        // the pid, so the exit status has no reader — but a wait that fails
+        // leaves the zombie behind, and that is worth a line.
         tokio::spawn(async move {
             let mut child = child;
-            let _ = child.wait().await;
+            if let Err(error) = child.wait().await {
+                tracing::warn!(
+                    target: "features::programs",
+                    pid,
+                    error = %error,
+                    "launched process could not be reaped",
+                );
+            }
         });
 
         tracing::info!(

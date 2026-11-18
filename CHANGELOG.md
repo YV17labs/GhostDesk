@@ -14,6 +14,33 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
   supposed to affect.
 
 ### Changed
+- **Built on nest-rs 7.0, and Rust 1.100.** The tool surface, the endpoint
+  and every variable an operator sets keep their names; what moves is what
+  the framework now decides on the server's behalf:
+  - **A desk with no token opens no MCP session.** A session is bound to the
+    identity of the credential that opened it, and an anonymous caller names
+    none, so two of them would be served each other's. A client on MCP
+    `2026-07-28` calls statelessly and is unaffected; one on an older revision
+    has its `initialize` refused `403` until `GHOSTDESK_AUTH__TOKEN` is set and
+    it sends the bearer.
+  - **A process that declares no `GHOSTDESK_ENV` runs as production**, where it
+    ran as development: no `.env.development`, JSON logs. The image declares
+    `production` and the devcontainer `development`; a native run sets
+    `GHOSTDESK_LOG_FORMAT=text` for lines a terminal reads.
+  - **The log filter is `RUST_LOG`**, unprefixed — `GHOSTDESK_LOG` is read by
+    nothing and the boot says so. The MCP SDK is kept silent by the framework
+    itself, since below `warn` it quotes what a client sent; naming `rmcp` in
+    the filter is now what opens it.
+  - **A request runs at most 20 seconds**, the framework's bound and the
+    shutdown window's, where the server pinned 120. Every tool answers well
+    inside it; an MCP operation has its own bound,
+    `GHOSTDESK_MCP__OPERATION_TIMEOUT_SECS`, 20 by default.
+  - **A refusal the agent can act on names its class**, `data.code:
+    "INVALID_ARGUMENT"`, as the framework's own argument refusals do.
+  - **`GHOSTDESK_IDLE__TIMEOUT_SECS` has a range**: 1 to 604800 seconds, or `0`
+    to disarm; a value outside fails the boot naming the variable.
+  - **The endpoint's description is the binary's own**, read off its
+    manifest: *MCP server to control a virtual desktop from an LLM agent*.
 - **The agent is answered in the space it asked in.** A click on `(236, 608)`
   from a client declaring the 0-1000 space was answered `Clicked left at
   (302, 623)` — the pixels, in a space the agent does not speak. An agent
@@ -25,6 +52,10 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
   rather than only its result.
 
 ### Removed
+- **The `mcp operation` line on `ghostdesk::mcp`.** The framework now files
+  one `mcp.operation` line per operation on `nest_rs::operation` — the
+  JSON-RPC method, the tool, the outcome, the duration and the `actor_id` — so
+  the server's own copy said nothing that line does not.
 - **`app_launch` no longer answers with a capture.** It attached the settled
   screen so that launching and looking were one call; what it attached was a
   picture of an application that had not finished starting. A window exists

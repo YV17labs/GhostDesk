@@ -15,15 +15,15 @@ pub struct IdleTasks {
 impl IdleTasks {
     #[on_application_bootstrap]
     async fn announce(&self) {
-        match self.svc.timeout_secs() {
-            0 => tracing::info!(
+        match self.svc.timeout() {
+            None => tracing::info!(
                 target: "features::idle",
                 timeout_secs = 0,
                 "watchdog disabled",
             ),
-            timeout => tracing::info!(
+            Some(timeout) => tracing::info!(
                 target: "features::idle",
-                timeout_secs = timeout,
+                timeout_secs = timeout.as_secs(),
                 "watchdog armed",
             ),
         }
@@ -35,14 +35,14 @@ impl IdleTasks {
 impl IdleTasks {
     #[every("5s")]
     async fn close_idle_views(&self) -> anyhow::Result<()> {
-        if !self.svc.is_expired() {
+        let Some(threshold) = self.svc.expired_after() else {
             return Ok(());
-        }
+        };
 
         tracing::info!(
             target: "features::idle",
             idle_secs = self.svc.idle_secs(),
-            threshold_secs = self.svc.timeout_secs(),
+            threshold_secs = threshold.as_secs(),
             "idle threshold reached — closing all views",
         );
 

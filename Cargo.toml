@@ -5,7 +5,7 @@ members = ["apps/*", "crates/*"]
 [workspace.package]
 version = "8.1.0"
 edition = "2024"
-rust-version = "1.97"
+rust-version = "1.100"
 license = "LicenseRef-FSL-1.1-ALv2"
 repository = "https://github.com/YV17labs/ghostdesk"
 
@@ -19,17 +19,15 @@ repository = "https://github.com/YV17labs/ghostdesk"
 # rather than asking the supervisor whether the processes exist — which is a
 # different question, and the one that answered "healthy" through a desktop
 # nobody could drive.
-nest-rs = { version = "6.1", features = ["authn", "health", "mcp", "schedule"] }
+#
+# No `rmcp` line: the SDK is `nest_rs::mcp::rmcp`, at the major nest-rs builds on.
+nest-rs = { version = "7.0", features = ["authn", "health", "mcp", "schedule"] }
 
-# `rmcp`'s `#[tool_router]` / `#[tool_handler]` expand to bare `rmcp::` paths.
-# They are relative, so `use nest_rs::mcp::rmcp;` resolves them at the exact
-# major nest-rs was built against — never a second rmcp in the graph.
-tokio = { version = "1.53", features = ["full"] }
+tokio = { version = "1.54", features = ["full"] }
 async-trait = "0.1"
 anyhow = "1.0"
 thiserror = "2.0"
 tracing = "0.1"
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Wayland. The compositor is driven directly over two unstable extensions —
@@ -108,17 +106,8 @@ rustix = { version = "1.1", features = ["fs", "process"] }
 configparser = "3.1"
 shlex = "1.3"
 
-# Constant-time bearer-token comparison — a plain `==` leaks the length and
-# the matching prefix through its early return.
-subtle = "2.6"
-
 # The logo mark travels to clients as a `data:` URI.
 base64 = "0.23"
-
-# Tool input schemas. Must resolve to the same crate rmcp re-exports, or the
-# derive produces a different trait than `Parameters<T>` expects — hence the
-# same `major.minor` nest-rs builds against.
-schemars = "1.2"
 
 # The product's own crates. `features` holds the domains and the MCP edge each
 # one publishes; `platform` is the OS substrate they drive, and the only crate
@@ -135,8 +124,12 @@ unsafe_code = "deny"
 
 # Config literals always close with `..Default::default()` so an import site
 # stays forward-compatible as the options struct gains fields.
+#
+# A `Result` bound to `_` is a failure nobody reads, and `let _ =` is the one
+# spelling that silences `must_use` without saying why.
 [workspace.lints.clippy]
 needless_update = "allow"
+let_underscore_must_use = "deny"
 
 # Release: the binary the image ships. Compile time is not the constraint here.
 [profile.release]

@@ -28,7 +28,6 @@ impl ProgramsTool {
             pass to app_launch().",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn app_list(&self) -> Result<Json<ListedDto<ProgramDto>>, McpError> {
         Ok(Json(ListedDto::new(
             self.programs_svc
@@ -48,7 +47,6 @@ impl ProgramsTool {
             doubling memory use.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn app_running(&self) -> Result<Json<ListedDto<WindowDto>>, McpError> {
         let windows = self.programs_svc.running().await.answered()?;
         Ok(Json(ListedDto::new(
@@ -74,7 +72,6 @@ impl ProgramsTool {
             Check app_running() first — the target may already be open.",
         annotations(destructive_hint = false, open_world_hint = false)
     )]
-    #[public]
     async fn app_launch(
         &self,
         Parameters(params): Parameters<LaunchDto>,
@@ -144,7 +141,6 @@ impl ProgramsTool {
             a long-running app write progress to its output.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn app_status(
         &self,
         Parameters(params): Parameters<StatusDto>,

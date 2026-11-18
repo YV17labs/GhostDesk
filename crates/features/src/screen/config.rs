@@ -1,4 +1,4 @@
-use nest_rs::config::{Config, ConfigService, config};
+use nest_rs::config::config;
 
 #[config(namespace = "screen")]
 #[derive(Clone, Debug)]
@@ -16,14 +16,5 @@ impl Default for ScreenConfig {
             width: 1280,
             height: 1024,
         }
-    }
-}
-
-impl Config for ScreenConfig {
-    fn from_env(env: &ConfigService, base: Self) -> nest_rs::config::Result<Self> {
-        Ok(Self {
-            width: env.parse("WIDTH")?.unwrap_or(base.width),
-            height: env.parse("HEIGHT")?.unwrap_or(base.height),
-        })
     }
 }

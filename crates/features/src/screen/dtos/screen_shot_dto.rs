@@ -29,7 +29,7 @@ pub struct ScreenShotDto {
 
 #[cfg(test)]
 mod tests {
-    use nest_rs::core::validator::Validate;
+    use nest_rs::pipes::validator::Validate;
 
     use super::*;
 

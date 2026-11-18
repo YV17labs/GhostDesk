@@ -1,10 +1,10 @@
-use schemars::JsonSchema;
-use serde::Serialize;
+use nest_rs::core::output;
 
 use super::WindowDto;
 use crate::programs::launched::Launched;
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[output]
+#[derive(Debug, Clone)]
 pub struct LaunchedDto {
     pub pid: u32,
     pub log_file: String,

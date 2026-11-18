@@ -2,27 +2,20 @@ use nest_rs::authn::PrincipalIdentity;
 
 const DESK_OPERATOR: &str = "desk-operator";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PrincipalIdentity)]
 pub struct DeskOperator {
-    authenticated: bool,
+    #[principal(actor)]
+    actor: Option<&'static str>,
 }
 
 impl DeskOperator {
     pub(super) const fn authenticated() -> Self {
         Self {
-            authenticated: true,
+            actor: Some(DESK_OPERATOR),
         }
     }
 
     pub(super) const fn anonymous() -> Self {
-        Self {
-            authenticated: false,
-        }
-    }
-}
-
-impl PrincipalIdentity for DeskOperator {
-    fn actor_id(&self) -> Option<String> {
-        self.authenticated.then(|| DESK_OPERATOR.to_owned())
+        Self { actor: None }
     }
 }

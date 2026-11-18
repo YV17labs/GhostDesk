@@ -1,10 +1,10 @@
-use schemars::JsonSchema;
-use serde::Serialize;
+use nest_rs::core::output;
 
 use crate::input::action::Action;
 use crate::input::feedback::Feedback;
 
-#[derive(Debug, Clone, Serialize, JsonSchema)]
+#[output]
+#[derive(Debug, Clone)]
 pub struct FeedbackDto {
     pub action: String,
     pub screen_changed: bool,

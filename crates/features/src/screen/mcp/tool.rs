@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{CallToolResult, ContentBlock, McpError, Parameters, Valid, mcp, tools};
+use nest_rs::mcp::model::{CallToolResult, ContentBlock};
+use nest_rs::mcp::{McpError, Parameters, mcp, tools};
 
 use crate::blame::Answered;
 use crate::screen::dtos::{CaptureDto, RegionDto, ScreenShotDto};
@@ -32,10 +33,9 @@ impl ScreenTool {
             mission complete.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn screen_shot(
         &self,
-        Parameters(Valid(params)): Parameters<Valid<ScreenShotDto>>,
+        Parameters(params): Parameters<ScreenShotDto>,
     ) -> Result<CallToolResult, McpError> {
         let capture = self
             .svc

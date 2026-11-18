@@ -62,6 +62,11 @@ ARG TARGETARCH
 # a debugger launched from VS Code.
 ENV NESTRS_ENV_PREFIX=GHOSTDESK
 
+# The profile, for the same reason and on the same paths. A process declaring
+# none runs as production, so the stack supervisord starts here — the server a
+# developer is iterating on — would read no `.env.development` without it.
+ENV GHOSTDESK_ENV=development
+
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=America/Montreal \
     LANG=fr_CA.UTF-8 \

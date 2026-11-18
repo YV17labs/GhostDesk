@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use nest_rs::mcp::{CallToolResult, ContentBlock, McpError, Parameters, mcp, tools};
+use nest_rs::mcp::model::{CallToolResult, ContentBlock};
+use nest_rs::mcp::{McpError, Parameters, mcp, tools};
 
 use crate::blame::Answered;
 use crate::clipboard::dto::ClipboardSetDto;
@@ -24,7 +25,6 @@ impl ClipboardTool {
             selection between two apps without traversing the filesystem.",
         annotations(read_only_hint = true, open_world_hint = false)
     )]
-    #[public]
     async fn clipboard_get(&self) -> Result<CallToolResult, McpError> {
         Ok(CallToolResult::success(vec![ContentBlock::text(
             self.svc.get().await,
@@ -44,7 +44,6 @@ impl ClipboardTool {
             open_world_hint = false
         )
     )]
-    #[public]
     async fn clipboard_set(
         &self,
         Parameters(params): Parameters<ClipboardSetDto>,
