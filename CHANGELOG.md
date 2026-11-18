@@ -2,7 +2,18 @@
 
 All notable changes to GhostDesk are documented here. This project follows [Semantic Versioning](https://semver.org/) and [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) conventions.
 
-## [Unreleased]
+## [v9.0.0] — 2026-11-18
+
+**A point read off a region lands where it was read.** Every pointer tool
+takes the `region` its coordinates came from, and the answer comes back in the
+space the agent asked in — the two halves of one statement, where v8 only
+said the first. Underneath, the desk moves to nest-rs 7.0, and that is what
+makes this a major: a client on an MCP revision older than `2026-07-28` needs
+`GHOSTDESK_AUTH__TOKEN` set before it can open a session, a process that
+declares no `GHOSTDESK_ENV` runs as production, the log filter is `RUST_LOG`,
+and `app_launch` reports the window it waited for instead of attaching a
+capture. The tools keep their names, and `region` is optional, so a client
+that never reads a region calls them as before.
 
 ### Added
 - **A region and the act that follows it are one statement.** Every pointer
@@ -603,7 +614,8 @@ Initial public release.
 - Google Sheets automation demo; Wikipedia agent demo GIF.
 - VS Code devcontainer with MCP server auto-start.
 
-[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v8.1.0...HEAD
+[Unreleased]: https://github.com/yv17labs/ghostdesk/compare/v9.0.0...HEAD
+[v9.0.0]: https://github.com/yv17labs/ghostdesk/compare/v8.1.0...v9.0.0
 [v8.1.0]: https://github.com/yv17labs/ghostdesk/compare/v8.0.0...v8.1.0
 [v8.0.0]: https://github.com/yv17labs/ghostdesk/compare/v7.5.0...v8.0.0
 [v7.5.0]: https://github.com/yv17labs/ghostdesk/compare/v7.4.2...v7.5.0

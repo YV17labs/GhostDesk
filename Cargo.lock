@@ -1132,7 +1132,7 @@ dependencies = [
 
 [[package]]
 name = "features"
-version = "8.1.0"
+version = "9.0.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -1351,7 +1351,7 @@ dependencies = [
 
 [[package]]
 name = "ghostdesk"
-version = "8.1.0"
+version = "9.0.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -2955,7 +2955,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "platform"
-version = "8.1.0"
+version = "9.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
