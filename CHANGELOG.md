@@ -55,6 +55,10 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
   against 2.0, so the tree now carries one shlex instead of two. The rest of
   the lockfile moves within its constraints — thiserror 2.0.21, serde_json
   1.0.154, configparser 3.3.0 among them.
+- **The devcontainer installs `nest-rs-cli` 7.0.0**, the release the workspace
+  builds on; it still installed 6.1.0.
+- **Both image Dockerfiles follow the `docker/dockerfile:1` frontend**, as the
+  devcontainer's already did, instead of holding at 1.7.
 
 ### Removed
 - **The `mcp operation` line on `ghostdesk::mcp`.** The framework now files

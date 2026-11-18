@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 # ghostdesk:base — headless Wayland desktop for a single LLM agent.
 # See SECURITY.md for threat model, auth requirements, and rotation.
 

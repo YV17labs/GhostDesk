@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 # ghostdesk:latest — distribution image on top of :base.
 # Adds Firefox + Wayland-native GUI apps (foot, mousepad, galculator),
 # colour emoji fonts, and passwordless sudo for `agent`. See SECURITY.md
