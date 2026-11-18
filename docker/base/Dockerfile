@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1
 # ghostdesk:base — headless Wayland desktop for a single LLM agent.
 # See SECURITY.md for threat model, auth requirements, and rotation.
 
@@ -53,8 +53,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 # VNC Auth), so these three are built from upstream release tags.
 FROM ubuntu:${UBUNTU_VERSION} AS vnc-builder
 
-ARG WAYVNC_REF=v0.10.1
-ARG NEATVNC_REF=v1.0.1
+ARG WAYVNC_REF=v0.10.2
+ARG NEATVNC_REF=v1.0.4
 ARG AML_REF=v1.0.0
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

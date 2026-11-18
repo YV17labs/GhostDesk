@@ -104,7 +104,7 @@ rustix = { version = "1.1", features = ["fs", "process"] }
 
 # `.desktop` entries are INI; `Exec=` values are shell-quoted.
 configparser = "3.1"
-shlex = "1.3"
+shlex = "2.0"
 
 # The logo mark travels to clients as a `data:` URI.
 base64 = "0.23"

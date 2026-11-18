@@ -50,6 +50,15 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
   point read off a region the region itself as `region_x`/`region_y`/
   `region_width`/`region_height` — so the conversion itself is auditable
   rather than only its result.
+- **`shlex 1.3 → 2.0`.** The major removes only the deprecated `join`/`quote`
+  and an unsound `DerefMut`; the desk calls `split` alone. `cc` already built
+  against 2.0, so the tree now carries one shlex instead of two. The rest of
+  the lockfile moves within its constraints — thiserror 2.0.21, serde_json
+  1.0.154, configparser 3.3.0 among them.
+- **The devcontainer installs `nest-rs-cli` 7.0.0**, the release the workspace
+  builds on; it still installed 6.1.0.
+- **Both image Dockerfiles follow the `docker/dockerfile:1` frontend**, as the
+  devcontainer's already did, instead of holding at 1.7.
 
 ### Removed
 - **The `mcp operation` line on `ghostdesk::mcp`.** The framework now files
@@ -69,6 +78,28 @@ All notable changes to GhostDesk are documented here. This project follows [Sema
   `screen_shot()`'s to take, once the agent is ready to look. `screen_shot`
   is again the only tool that answers in pixels, and `programs` reaches into
   no sibling domain to do its work.
+
+### Security
+- **The locked tree is clear of every RustSec vulnerability.** `cargo update`,
+  within the existing constraints, retires the eight `cargo audit` reported:
+  `rustls-webpki 0.103.15 → 0.103.17` (RUSTSEC-2026-0382 — certificate
+  verification could accept distrusted intermediates), `ctutils 0.4.2 → 0.4.8`
+  (RUSTSEC-2026-0385 — non-constant-time comparisons, under argon2 and rmcp),
+  and the zstd stack behind the HTTP compression layer, `zstd 0.13.3 → 0.14.4`,
+  `zstd-safe 7.2.4 → 8.3.0` and `zstd-sys 2.0.16 → 2.1.3` (RUSTSEC-2026-0391,
+  -0398, -0403, -0410, plus ten unsoundness notices). `rustix 1.1.4 → 1.1.6`
+  clears RUSTSEC-2026-0486. `libsqlite3-sys`, `webpki-roots` and `arrow-data`
+  are cleared too, though nothing compiled them: they sit in the lockfile as
+  optional dependencies of nest-rs the desk never enables. Two `unmaintained`
+  notices remain, `chrono` (through rmcp and schemars) and `humantime`
+  (lockfile only), with no release to move to.
+- **neatvnc `v1.0.1 → v1.0.4`** — v1.0.4 validates the pixel depth an RFB
+  client requests and bounds-checks websocket HTTP header fields (a stack
+  overflow upstream, not reachable here: the desk serves websockets through
+  websockify, not neatvnc); v1.0.2 and v1.0.3 fix stream ordering, stalls and
+  leaks.
+- **wayvnc `v0.10.1 → v0.10.2`** — resource-cleanup fixes that prevent crashes
+  when an output disappears or a client is torn down.
 
 ## [v8.1.0] — 2026-08-31
 
