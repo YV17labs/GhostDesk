@@ -19,11 +19,7 @@
   <em>If a human can do it on a desktop, your agent can too.</em>
 </p>
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/304ba0b6-4ba8-49df-9825-a3bb78c2727e" controls muted playsinline width="960">
-    Your browser does not support the video tag.
-  </video>
-</p>
+https://github.com/user-attachments/assets/304ba0b6-4ba8-49df-9825-a3bb78c2727e
 
 <p align="center">
   <em>GhostDesk demo — from a single prompt (<strong>"open the browser, go to Google News, and tell me the latest headlines in the Technology section"</strong>), the agent launches Firefox, navigates to Google News, switches to the Technology section, and reports the latest stories back.</em>
